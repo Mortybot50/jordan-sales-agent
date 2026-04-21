@@ -27,6 +27,7 @@ import { useContact, useUpdateContact } from '@/lib/queries/contacts'
 import { useContactDeals, useCreateDeal } from '@/lib/queries/deals'
 import { useContactActivities, useCreateActivity } from '@/lib/queries/activities'
 import { useStages } from '@/lib/queries/stages'
+import { useGenerateDraft } from '@/lib/queries/drafts'
 import { useAuth } from '@/hooks/useAuth'
 import { dealFormSchema, type DealFormValues } from '@/lib/schemas/deal'
 import { activityFormSchema, type ActivityFormValues } from '@/lib/schemas/activity'
@@ -61,8 +62,11 @@ import {
   StickyNote,
   Calendar,
   Activity,
+  Sparkles,
+  Loader2,
 } from 'lucide-react'
 import type { ActivityType } from '@/lib/queries/activities'
+import type { DraftType } from '@/lib/queries/drafts'
 
 const contactEditSchema = z.object({
   full_name: z.string().min(1, 'Name is required'),
@@ -118,6 +122,11 @@ export function ContactDetailPage() {
   const [editing, setEditing] = useState(false)
   const [dealDialogOpen, setDealDialogOpen] = useState(false)
   const [activityDialogOpen, setActivityDialogOpen] = useState(false)
+  const [draftDialogOpen, setDraftDialogOpen] = useState(false)
+  const [draftType, setDraftType] = useState<DraftType>('cold_outreach')
+  const [draftHint, setDraftHint] = useState('')
+
+  const generateDraft = useGenerateDraft()
 
   const editForm = useForm<ContactEditValues>({
     resolver: zodResolver(contactEditSchema),
@@ -251,7 +260,18 @@ export function ContactDetailPage() {
               scoreBadge(contact.lead_score.score)}
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setDraftDialogOpen(true)}
+            disabled={generateDraft.isPending}
+          >
+            {generateDraft.isPending
+              ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Generating…</>
+              : <><Sparkles className="w-4 h-4 mr-1.5" />Generate Draft</>
+            }
+          </Button>
           {!editing ? (
             <Button variant="outline" size="sm" onClick={startEdit}>
               <Pencil className="w-4 h-4 mr-1.5" />
@@ -623,6 +643,73 @@ export function ContactDetailPage() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Generate Draft Dialog */}
+      <Dialog open={draftDialogOpen} onOpenChange={setDraftDialogOpen}>
+        <DialogContent className="max-w-md" aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>Generate AI Draft</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-1">
+            {!import.meta.env.VITE_SUPABASE_URL && (
+              <p className="text-sm text-amber-600 bg-amber-50 rounded px-3 py-2">
+                Anthropic API key not yet configured — ask admin.
+              </p>
+            )}
+            <div className="space-y-1">
+              <Label>Draft type</Label>
+              <Select value={draftType} onValueChange={(v) => setDraftType(v as DraftType)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cold_outreach">Cold Outreach</SelectItem>
+                  <SelectItem value="follow_up">Follow-up</SelectItem>
+                  <SelectItem value="reply">Reply (to their last message)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Context hint <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              <Textarea
+                rows={3}
+                placeholder="e.g. mention the nearby venue install, ask about Thursday call"
+                value={draftHint}
+                onChange={(e) => setDraftHint(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setDraftDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={generateDraft.isPending}
+                onClick={async () => {
+                  if (!id) return
+                  try {
+                    await generateDraft.mutateAsync({
+                      contact_id: id,
+                      draft_type: draftType,
+                      context_hint: draftHint || undefined,
+                    })
+                    setDraftDialogOpen(false)
+                    setDraftHint('')
+                    navigate('/drafts')
+                  } catch {
+                    // error shown by mutation
+                  }
+                }}
+              >
+                {generateDraft.isPending
+                  ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Generating…</>
+                  : <><Sparkles className="w-4 h-4 mr-1.5" />Generate</>
+                }
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
