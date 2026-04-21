@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from '@/components/ui/sonner'
-import { useAuth } from '@/hooks/useAuth'
+// import { useAuth } from '@/hooks/useAuth' // TODO(auth): restore when re-enabling auth gate
 import { LoginPage } from '@/pages/LoginPage'
 import { AppShell } from '@/components/layout/AppShell'
 import { DashboardPage } from '@/pages/DashboardPage'
@@ -10,21 +10,9 @@ import { DraftsPage } from '@/pages/DraftsPage'
 import { BriefingPage } from '@/pages/BriefingPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 
+// TODO(auth): re-enable auth gate before production release
+// Auth is temporarily bypassed for dev/demo — remove the early return below to restore.
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { session, loading } = useAuth()
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground text-sm">Loading…</p>
-      </div>
-    )
-  }
-
-  if (!session) {
-    return <Navigate to="/login" replace />
-  }
-
   return <>{children}</>
 }
 
