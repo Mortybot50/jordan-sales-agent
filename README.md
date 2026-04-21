@@ -10,9 +10,9 @@ AI-powered sales agent and CRM for Jordan, Purezza commercial water filtration r
 
 | Resource | URL |
 |----------|-----|
-| **GitHub** | https://github.com/mortybot/jordan-sales-agent |
-| **Vercel (prod)** | _TBD — deploy in progress_ |
-| **Supabase project ref** | _TBD — pending MCP approval_ |
+| **GitHub** | https://github.com/Mortybot50/jordan-sales-agent |
+| **Vercel (prod)** | https://jordan-sales-agent.vercel.app |
+| **Supabase project ref** | _TBD — pending Supabase MCP approval_ |
 | **Plan doc** | `~/.openclaw/roles/dev/plans/jordan-sales-agent-plan.md` |
 
 ---
