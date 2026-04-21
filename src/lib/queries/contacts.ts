@@ -107,13 +107,13 @@ export function useContact(id: string) {
         .from('contacts')
         .select(`
           *,
-          venue:venues(id, name, venue_type, address, suburb, postcode, website, cover_count, phone, notes)
+          venue:venues(id, name, venue_type, address, suburb, postcode, website, cover_count, phone, notes, licence_type, avg_spend_tier, neighbourhood, kitchen_type, competitor_water_usage, licensing_status, seasonality_window)
         `)
         .eq('id', id)
         .maybeSingle()
 
       if (error) throw error
-      return data
+      return data as unknown as Contact | null
     },
     enabled: !!id,
   })

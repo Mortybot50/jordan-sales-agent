@@ -45,6 +45,7 @@ export function venueTypeLabel(type: string | null | undefined): string {
     pub: 'Pub',
     qsr: 'QSR',
     function_centre: 'Function Centre',
+    franchise_chain: 'Franchise Chain',
     other: 'Other',
   }
   return type ? (labels[type] ?? type) : '—'

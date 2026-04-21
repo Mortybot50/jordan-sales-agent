@@ -34,11 +34,6 @@ import { supabase } from '@/lib/supabase'
 import { Plus, Trash2, ChevronUp, ChevronDown, CheckCircle2, XCircle, CheckCircle, ExternalLink } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
-const VENUE_TYPES = [
-  'restaurant', 'cafe', 'hotel', 'event_space', 'bar',
-  'club', 'pub', 'qsr', 'function_centre', 'other',
-] as const
-
 // --- Profile Tab ---
 function ProfileTab() {
   const { user } = useAuth()
@@ -386,6 +381,14 @@ function PipelineStagesTab() {
   )
 }
 
+const ALL_VENUE_TYPES = [
+  'restaurant', 'cafe', 'hotel', 'event_space', 'bar',
+  'club', 'pub', 'qsr', 'function_centre', 'franchise_chain', 'other',
+] as const
+
+const LICENCE_TYPES = ['on_premises', 'general_late', 'packaged_liquor', 'restaurant_&_cafe'] as const
+const SPEND_TIERS = ['$', '$$', '$$$', '$$$$'] as const
+
 // --- ICP Tab ---
 function IcpTab() {
   const { user } = useAuth()
@@ -393,28 +396,41 @@ function IcpTab() {
 
   const icp = user?.icp_config ?? {}
 
+  const [suburbInput, setSuburbInput] = useState('')
+
   const form = useForm<IcpFormValues>({
     resolver: zodResolver(icpFormSchema),
     defaultValues: {
       venue_types: (icp.venue_types as string[]) ?? [],
       excluded_types: (icp.excluded_types as string[]) ?? [],
-      min_cover_count: (icp.min_cover_count as number | null) ?? null,
-      max_cover_count: (icp.max_cover_count as number | null) ?? null,
-      geo_radius_km: (icp.geo_radius_km as number | null) ?? null,
-      geo_postcode: (icp.geo_postcode as string) ?? '',
+      cover_count_min: (icp.cover_count_min as number | null) ?? (icp.min_cover_count as number | null) ?? null,
+      cover_count_max: (icp.cover_count_max as number | null) ?? (icp.max_cover_count as number | null) ?? null,
+      suburbs: (icp.suburbs as string[]) ?? [],
+      licence_types: (icp.licence_types as string[]) ?? [],
+      avg_spend_tiers: (icp.avg_spend_tiers as string[]) ?? [],
     },
   })
 
   const selectedTypes = form.watch('venue_types') ?? []
   const excludedTypes = form.watch('excluded_types') ?? []
+  const suburbs = form.watch('suburbs') ?? []
+  const selectedLicence = form.watch('licence_types') ?? []
+  const selectedTiers = form.watch('avg_spend_tiers') ?? []
 
-  function toggleType(type: string, field: 'venue_types' | 'excluded_types') {
+  function toggleArr(val: string, field: 'venue_types' | 'excluded_types' | 'licence_types' | 'avg_spend_tiers') {
     const current = form.getValues(field) ?? []
-    if (current.includes(type)) {
-      form.setValue(field, current.filter((t) => t !== type))
-    } else {
-      form.setValue(field, [...current, type])
-    }
+    form.setValue(field, current.includes(val) ? current.filter((t) => t !== val) : [...current, val])
+  }
+
+  function addSuburb() {
+    const trimmed = suburbInput.trim()
+    if (!trimmed || suburbs.includes(trimmed)) { setSuburbInput(''); return }
+    form.setValue('suburbs', [...suburbs, trimmed])
+    setSuburbInput('')
+  }
+
+  function removeSuburb(s: string) {
+    form.setValue('suburbs', suburbs.filter((x) => x !== s))
   }
 
   async function onSubmit(values: IcpFormValues) {
@@ -424,10 +440,11 @@ function IcpTab() {
       icp_config: {
         venue_types: values.venue_types ?? [],
         excluded_types: values.excluded_types ?? [],
-        min_cover_count: values.min_cover_count ?? null,
-        max_cover_count: values.max_cover_count ?? null,
-        geo_radius_km: values.geo_radius_km ?? null,
-        geo_postcode: values.geo_postcode ?? null,
+        cover_count_min: values.cover_count_min ?? null,
+        cover_count_max: values.cover_count_max ?? null,
+        suburbs: values.suburbs ?? [],
+        licence_types: values.licence_types ?? [],
+        avg_spend_tiers: values.avg_spend_tiers ?? [],
       },
     })
   }
@@ -437,11 +454,11 @@ function IcpTab() {
       <div className="space-y-2">
         <Label>Target venue types</Label>
         <div className="flex flex-wrap gap-1.5">
-          {VENUE_TYPES.map((type) => (
+          {ALL_VENUE_TYPES.map((type) => (
             <button
               key={type}
               type="button"
-              onClick={() => toggleType(type, 'venue_types')}
+              onClick={() => toggleArr(type, 'venue_types')}
               className={cn(
                 'px-2.5 py-1 rounded-lg text-xs border transition-colors',
                 selectedTypes.includes(type)
@@ -458,11 +475,11 @@ function IcpTab() {
       <div className="space-y-2">
         <Label>Excluded venue types</Label>
         <div className="flex flex-wrap gap-1.5">
-          {VENUE_TYPES.map((type) => (
+          {ALL_VENUE_TYPES.map((type) => (
             <button
               key={type}
               type="button"
-              onClick={() => toggleType(type, 'excluded_types')}
+              onClick={() => toggleArr(type, 'excluded_types')}
               className={cn(
                 'px-2.5 py-1 rounded-lg text-xs border transition-colors',
                 excludedTypes.includes(type)
@@ -484,8 +501,8 @@ function IcpTab() {
           <Input
             type="number"
             min={0}
-            placeholder="50"
-            {...form.register('min_cover_count')}
+            placeholder="40"
+            {...form.register('cover_count_min', { valueAsNumber: true })}
           />
         </div>
         <div className="space-y-1">
@@ -493,29 +510,75 @@ function IcpTab() {
           <Input
             type="number"
             min={0}
-            placeholder="500"
-            {...form.register('max_cover_count')}
+            placeholder="300"
+            {...form.register('cover_count_max', { valueAsNumber: true })}
           />
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label>Geo radius (km)</Label>
+      <div className="space-y-2">
+        <Label>Target suburbs <span className="text-muted-foreground text-xs">(leave empty = all)</span></Label>
+        <div className="flex gap-2">
           <Input
-            type="number"
-            min={0}
-            max={500}
-            placeholder="25"
-            {...form.register('geo_radius_km')}
+            placeholder="e.g. Fitzroy"
+            value={suburbInput}
+            onChange={(e) => setSuburbInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSuburb() } }}
+            className="flex-1"
           />
+          <Button type="button" variant="outline" size="sm" onClick={addSuburb}>Add</Button>
         </div>
-        <div className="space-y-1">
-          <Label>Centre postcode</Label>
-          <Input
-            placeholder="3000"
-            {...form.register('geo_postcode')}
-          />
+        {suburbs.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-1.5">
+            {suburbs.map((s) => (
+              <span key={s} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent text-xs">
+                {s}
+                <button type="button" onClick={() => removeSuburb(s)} className="hover:text-destructive">×</button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label>Licence types</Label>
+        <div className="flex flex-wrap gap-1.5">
+          {LICENCE_TYPES.map((lt) => (
+            <button
+              key={lt}
+              type="button"
+              onClick={() => toggleArr(lt, 'licence_types')}
+              className={cn(
+                'px-2.5 py-1 rounded-lg text-xs border transition-colors capitalize',
+                selectedLicence.includes(lt)
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'border-input hover:bg-accent'
+              )}
+            >
+              {lt.replace(/_/g, ' ')}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Avg spend tier</Label>
+        <div className="flex gap-1.5">
+          {SPEND_TIERS.map((tier) => (
+            <button
+              key={tier}
+              type="button"
+              onClick={() => toggleArr(tier, 'avg_spend_tiers')}
+              className={cn(
+                'px-3 py-1 rounded-lg text-xs border font-mono transition-colors',
+                selectedTiers.includes(tier)
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'border-input hover:bg-accent'
+              )}
+            >
+              {tier}
+            </button>
+          ))}
         </div>
       </div>
 

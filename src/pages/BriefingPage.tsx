@@ -36,7 +36,7 @@ import { useUpdateDealStage } from '@/lib/queries/deals'
 import { useStages } from '@/lib/queries/stages'
 import { useAuth } from '@/hooks/useAuth'
 import { formatRelative, venueTypeLabel } from '@/lib/utils'
-import { RefreshCw, CheckCircle, Clock, UserSearch, Repeat, Reply, Archive, MoveRight, ListTodo, ChevronDown, ChevronUp } from 'lucide-react'
+import { RefreshCw, CheckCircle, Clock, UserSearch, Repeat, Reply, Archive, MoveRight, ListTodo, ChevronDown, ChevronUp, Filter } from 'lucide-react'
 import { addDays, endOfDay } from 'date-fns'
 
 export function BriefingPage() {
@@ -52,6 +52,7 @@ export function BriefingPage() {
 
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date())
   const [refreshing, setRefreshing] = useState(false)
+  const [icpFilterOn, setIcpFilterOn] = useState(true)
 
   // Reply dialog state
   const [replyTarget, setReplyTarget] = useState<BriefingReply | null>(null)
@@ -69,6 +70,23 @@ export function BriefingPage() {
   const { data: todayTasks, isLoading: tasksLoading } = useTodayBriefingTasks()
   const { data: candidates, isLoading: candidatesLoading } = useNewCandidates()
   const { data: reengagement, isLoading: reengagementLoading } = useReengagementOpportunities()
+
+  const icp = (user?.icp_config ?? {}) as {
+    venue_types?: string[]
+    cover_count_min?: number | null
+    cover_count_max?: number | null
+    suburbs?: string[]
+  }
+
+  const filteredCandidates = icpFilterOn && candidates
+    ? candidates.filter((c) => {
+        const venueTypesOk = !icp.venue_types?.length ||
+          (c.venue_type_guess && icp.venue_types.includes(c.venue_type_guess))
+        const suburbsOk = !icp.suburbs?.length ||
+          (c.suburb && icp.suburbs.map((s) => s.toLowerCase()).includes(c.suburb.toLowerCase()))
+        return venueTypesOk && suburbsOk
+      })
+    : candidates
 
   async function handleRefresh() {
     setRefreshing(true)
@@ -356,24 +374,44 @@ export function BriefingPage() {
                 <span className="text-sm font-semibold">New Auto-sourced Candidates</span>
                 {!candidatesLoading && (
                   <Badge variant="outline" className="ml-2 text-xs">
-                    {candidates?.length ?? 0}
+                    {filteredCandidates?.length ?? 0}
                   </Badge>
                 )}
               </div>
             </div>
           </AccordionTrigger>
           <AccordionContent className="px-0 pb-0">
+            <div className="px-4 pt-3 pb-1 flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">
+                {icpFilterOn
+                  ? `${filteredCandidates?.length ?? 0} of ${candidates?.length ?? 0} match your ICP`
+                  : `${candidates?.length ?? 0} total`}
+              </span>
+              <button
+                className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded border transition-colors ${
+                  icpFilterOn
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'text-muted-foreground border-border hover:text-foreground'
+                }`}
+                onClick={(e) => { e.stopPropagation(); setIcpFilterOn((v) => !v) }}
+              >
+                <Filter className="w-3 h-3" />
+                Matches my ICP
+              </button>
+            </div>
             {candidatesLoading && (
               <p className="text-sm text-muted-foreground px-4 py-4">Loading…</p>
             )}
-            {!candidatesLoading && (!candidates || candidates.length === 0) && (
+            {!candidatesLoading && (!filteredCandidates || filteredCandidates.length === 0) && (
               <p className="text-sm text-muted-foreground px-4 py-4">
-                Nothing here today.
+                {icpFilterOn && (candidates?.length ?? 0) > 0
+                  ? 'No candidates match your ICP. Toggle filter off to see all.'
+                  : 'Nothing here today.'}
               </p>
             )}
-            {candidates && candidates.length > 0 && (
+            {filteredCandidates && filteredCandidates.length > 0 && (
               <div className="divide-y">
-                {candidates.map((candidate) => (
+                {filteredCandidates.map((candidate) => (
                   <div
                     key={candidate.id}
                     className="flex items-center gap-3 px-4 py-3"

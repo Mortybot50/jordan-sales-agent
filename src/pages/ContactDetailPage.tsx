@@ -221,6 +221,13 @@ export function ContactDetailPage() {
     suburb: string | null
     website: string | null
     cover_count: number | null
+    licence_type: string | null
+    avg_spend_tier: string | null
+    neighbourhood: string | null
+    kitchen_type: string | null
+    competitor_water_usage: string | null
+    licensing_status: string | null
+    seasonality_window: string | null
   } | null | undefined
 
   const encodedAddress = encodeURIComponent(
@@ -418,6 +425,48 @@ export function ContactDetailPage() {
                 <div>
                   <dt className="text-xs text-muted-foreground">Covers</dt>
                   <dd>{venue.cover_count}</dd>
+                </div>
+              )}
+              {venue.neighbourhood && (
+                <div>
+                  <dt className="text-xs text-muted-foreground">Neighbourhood</dt>
+                  <dd>{venue.neighbourhood}</dd>
+                </div>
+              )}
+              {venue.licence_type && (
+                <div>
+                  <dt className="text-xs text-muted-foreground">Licence</dt>
+                  <dd className="capitalize">{venue.licence_type.replace(/_/g, ' ')}</dd>
+                </div>
+              )}
+              {venue.avg_spend_tier && (
+                <div>
+                  <dt className="text-xs text-muted-foreground">Avg spend</dt>
+                  <dd className="font-mono">{venue.avg_spend_tier}</dd>
+                </div>
+              )}
+              {venue.kitchen_type && (
+                <div>
+                  <dt className="text-xs text-muted-foreground">Kitchen</dt>
+                  <dd className="capitalize">{venue.kitchen_type.replace(/_/g, ' ')}</dd>
+                </div>
+              )}
+              {venue.licensing_status && (
+                <div>
+                  <dt className="text-xs text-muted-foreground">Licensing status</dt>
+                  <dd className="capitalize">{venue.licensing_status.replace(/_/g, ' ')}</dd>
+                </div>
+              )}
+              {venue.seasonality_window && (
+                <div>
+                  <dt className="text-xs text-muted-foreground">Seasonality</dt>
+                  <dd>{venue.seasonality_window}</dd>
+                </div>
+              )}
+              {venue.competitor_water_usage && (
+                <div>
+                  <dt className="text-xs text-muted-foreground">Current water supplier</dt>
+                  <dd>{venue.competitor_water_usage}</dd>
                 </div>
               )}
               {venue.website && (
