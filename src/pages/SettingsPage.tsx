@@ -61,7 +61,6 @@ function ProfileTab() {
       calendly_url: values.calendly_url || undefined,
       email_signature: values.email_signature || undefined,
     })
-    toast.success('Profile saved')
   }
 
   return (
@@ -100,6 +99,38 @@ function ProfileTab() {
           placeholder="Jordan Smith&#10;Sales Manager · Purezza&#10;jordan@purezza.com.au"
           {...form.register('email_signature')}
         />
+      </div>
+
+      <Separator />
+
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground uppercase tracking-wide">Calendly Webhook URL</Label>
+        <p className="text-xs text-muted-foreground">
+          Register this URL in Calendly → Integrations → Webhooks to auto-log bookings:
+        </p>
+        <div className="flex items-center gap-2">
+          <Input
+            readOnly
+            value={`${window.location.origin}/api/webhooks/calendly`}
+            className="font-mono text-xs bg-muted"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => {
+              navigator.clipboard.writeText(`${window.location.origin}/api/webhooks/calendly`)
+              toast.success('Copied')
+            }}
+          >
+            Copy
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Events: <code className="text-xs bg-muted px-1 rounded">invitee.created</code> and{' '}
+          <code className="text-xs bg-muted px-1 rounded">invitee.canceled</code>
+        </p>
       </div>
 
       <Button type="submit" disabled={updateProfile.isPending}>
@@ -399,7 +430,6 @@ function IcpTab() {
         geo_postcode: values.geo_postcode ?? null,
       },
     })
-    toast.success('ICP config saved')
   }
 
   return (
