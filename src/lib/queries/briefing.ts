@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import { subHours, subDays, startOfDay, endOfDay } from 'date-fns'
+import { subHours, subDays, endOfDay } from 'date-fns'
 
 export interface BriefingReply {
   id: string
   contact_id: string | null
+  deal_id: string | null
   contact_name: string
   venue_name: string | null
   subject: string | null
@@ -21,10 +22,11 @@ export function useOvernightReplies() {
       const { data, error } = await supabase
         .from('activities')
         .select(`
-          id, contact_id, subject, body, occurred_at,
+          id, contact_id, deal_id, subject, body, occurred_at,
           contact:contacts(id, full_name, venue:venues(name))
         `)
         .in('activity_type', ['reply_received', 'email_inbound'])
+        .is('archived_at', null)
         .gte('occurred_at', since)
         .order('occurred_at', { ascending: false })
 
@@ -35,6 +37,7 @@ export function useOvernightReplies() {
         return {
           id: a.id,
           contact_id: a.contact_id,
+          deal_id: (a as { deal_id?: string | null }).deal_id ?? null,
           contact_name: c?.full_name ?? 'Unknown',
           venue_name: c?.venue?.name ?? null,
           subject: a.subject,
@@ -67,7 +70,6 @@ export function useTodayBriefingTasks() {
           contact:contacts(full_name, venue:venues(name)),
           deal:deals(title)
         `)
-        .gte('due_at', startOfDay(today).toISOString())
         .lte('due_at', endOfDay(today).toISOString())
         .is('completed_at', null)
         .order('due_at')

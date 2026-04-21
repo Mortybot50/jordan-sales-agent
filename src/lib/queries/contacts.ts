@@ -126,6 +126,7 @@ export interface CreateContactInput {
   email?: string
   phone?: string
   linkedin_url?: string
+  notes?: string
   venue_id?: string
   org_id: string
 }
@@ -143,6 +144,7 @@ export function useCreateContact() {
           email: input.email || null,
           phone: input.phone || null,
           linkedin_url: input.linkedin_url || null,
+          notes: input.notes || null,
           venue_id: input.venue_id ?? null,
         })
         .select()

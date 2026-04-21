@@ -226,3 +226,22 @@ export function useDeleteDeal() {
     onError: (err: Error) => toast.error(err.message),
   })
 }
+
+export function useUpdateDealStage() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ dealId, stageId }: { dealId: string; stageId: string }) => {
+      const { error } = await supabase
+        .from("deals")
+        .update({ stage_id: stageId, updated_at: new Date().toISOString() })
+        .eq("id", dealId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["deals"] })
+      qc.invalidateQueries({ queryKey: ["briefing"] })
+      toast.success("Deal stage updated")
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+}

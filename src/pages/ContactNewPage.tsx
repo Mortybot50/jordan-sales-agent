@@ -18,6 +18,7 @@ import { useCreateContact } from '@/lib/queries/contacts'
 import { useCreateVenue, useVenues } from '@/lib/queries/venues'
 import { useAuth } from '@/hooks/useAuth'
 import { venueTypeLabel, cn } from '@/lib/utils'
+import { Textarea } from '@/components/ui/textarea'
 import { ArrowLeft } from 'lucide-react'
 
 const VENUE_TYPES = [
@@ -79,6 +80,7 @@ export function ContactNewPage() {
       email: values.email || undefined,
       phone: values.phone || undefined,
       linkedin_url: values.linkedin_url || undefined,
+      notes: values.notes || undefined,
       venue_id: venueId,
     })
 
@@ -193,6 +195,16 @@ export function ContactNewPage() {
               {errors.linkedin_url && (
                 <p className="text-xs text-destructive">{errors.linkedin_url.message}</p>
               )}
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="notes">Notes</Label>
+              <Textarea
+                id="notes"
+                {...register('notes')}
+                rows={3}
+                placeholder="Key context, past interactions, intro source…"
+              />
             </div>
           </CardContent>
         </Card>

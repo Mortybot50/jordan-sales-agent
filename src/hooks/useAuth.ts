@@ -46,26 +46,45 @@ export function useAuth(): AuthState {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let mounted = true
+
     supabase.auth.getSession().then(async ({ data: { session: s } }) => {
-      setSession(s)
-      if (s?.user) {
-        const profile = await fetchUserProfile(s.user.id)
-        setUser(profile)
+      if (!mounted) return
+      try {
+        setSession(s)
+        if (s?.user) {
+          const profile = await fetchUserProfile(s.user.id)
+          if (mounted) setUser(profile)
+        }
+      } catch (err) {
+        console.error('[useAuth] Failed to load session profile:', err)
+      } finally {
+        if (mounted) setLoading(false)
       }
-      setLoading(false)
+    }).catch((err) => {
+      console.error('[useAuth] getSession failed:', err)
+      if (mounted) setLoading(false)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, s) => {
+      if (!mounted) return
       setSession(s)
       if (s?.user) {
-        const profile = await fetchUserProfile(s.user.id)
-        setUser(profile)
+        try {
+          const profile = await fetchUserProfile(s.user.id)
+          if (mounted) setUser(profile)
+        } catch (err) {
+          console.error('[useAuth] Failed to load profile on auth change:', err)
+        }
       } else {
         setUser(null)
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
   }, [])
 
   return { session, user, loading }

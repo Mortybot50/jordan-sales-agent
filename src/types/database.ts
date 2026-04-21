@@ -17,6 +17,7 @@ export type Database = {
       activities: {
         Row: {
           activity_type: string
+          archived_at: string | null
           body: string | null
           contact_id: string | null
           created_at: string | null
@@ -29,6 +30,7 @@ export type Database = {
         }
         Insert: {
           activity_type: string
+          archived_at?: string | null
           body?: string | null
           contact_id?: string | null
           created_at?: string | null
@@ -41,6 +43,7 @@ export type Database = {
         }
         Update: {
           activity_type?: string
+          archived_at?: string | null
           body?: string | null
           contact_id?: string | null
           created_at?: string | null

@@ -32,13 +32,13 @@ export function useDashboardKPIs() {
         { data: closedWonStages },
       ] = await Promise.all([
         supabase.from('activities').select('id', { count: 'exact', head: true })
-          .eq('activity_type', 'email_sent')
+          .eq('activity_type', 'email_outbound')
           .gte('occurred_at', weekStart).lte('occurred_at', weekEnd),
         supabase.from('activities').select('id', { count: 'exact', head: true })
           .in('activity_type', ['reply_received', 'email_inbound'])
           .gte('occurred_at', weekStart).lte('occurred_at', weekEnd),
         supabase.from('activities').select('id', { count: 'exact', head: true })
-          .eq('activity_type', 'email_sent')
+          .eq('activity_type', 'email_outbound')
           .gte('occurred_at', monthStart).lte('occurred_at', monthEnd),
         supabase.from('activities').select('id', { count: 'exact', head: true })
           .in('activity_type', ['meeting_note', 'meeting_booked'])

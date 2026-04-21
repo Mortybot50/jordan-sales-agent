@@ -26,24 +26,40 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
   render() {
     const { error } = this.state
     if (error) {
+      console.error('[ErrorBoundary]', error)
       return (
         <div style={{
           minHeight: '100vh', background: '#0f172a', color: '#f8fafc',
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem',
         }}>
-          <div style={{ maxWidth: 640, width: '100%' }}>
+          <div style={{ maxWidth: 640, width: '100%', textAlign: 'center' as const }}>
             <h1 style={{ color: '#f87171', fontFamily: 'sans-serif', marginBottom: '1rem' }}>
-              Application Error
+              Something went wrong
             </h1>
-            <pre style={{
-              background: '#1e293b', padding: '1.5rem', borderRadius: 8,
-              fontFamily: 'monospace', fontSize: 13, overflowX: 'auto',
-              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-              color: '#fbbf24', margin: 0,
-            }}>
-              {error.message}
-              {error.stack ? '\n\n' + error.stack : ''}
-            </pre>
+            <p style={{ color: '#94a3b8', fontFamily: 'sans-serif', marginBottom: '1.5rem' }}>
+              Refresh the page. If the problem persists, contact support.
+            </p>
+            {import.meta.env.DEV && (
+              <pre style={{
+                background: '#1e293b', padding: '1.5rem', borderRadius: 8,
+                fontFamily: 'monospace', fontSize: 13, overflowX: 'auto',
+                whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                color: '#fbbf24', margin: '0 0 1.5rem', textAlign: 'left' as const,
+              }}>
+                {error.message}
+                {error.stack ? '\n\n' + error.stack : ''}
+              </pre>
+            )}
+            <button
+              onClick={() => window.location.reload()}
+              style={{
+                background: '#3b82f6', color: '#fff', border: 'none',
+                padding: '0.5rem 1.25rem', borderRadius: 6, cursor: 'pointer',
+                fontFamily: 'sans-serif', fontSize: 14,
+              }}
+            >
+              Reload page
+            </button>
           </div>
         </div>
       )

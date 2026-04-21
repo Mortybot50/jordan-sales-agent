@@ -420,16 +420,28 @@ export function ContactDetailPage() {
             </dl>
 
             {encodedAddress && (
-              <div className="rounded-lg overflow-hidden border h-48">
-                <iframe
-                  src={`https://www.google.com/maps?q=${encodedAddress}&output=embed`}
-                  width="100%"
-                  height="100%"
-                  style={{ border: 0 }}
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                  title="Venue location"
-                />
+              <div className="rounded-lg overflow-hidden border">
+                {import.meta.env.VITE_GOOGLE_MAPS_API_KEY ? (
+                  <iframe
+                    src={`https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&q=${encodedAddress}`}
+                    width="100%"
+                    height="192"
+                    style={{ border: 0, display: 'block' }}
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    title="Venue location"
+                  />
+                ) : (
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodedAddress}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-3 py-3 text-sm text-primary hover:underline"
+                  >
+                    <MapPin className="w-4 h-4 shrink-0" />
+                    View on Google Maps
+                  </a>
+                )}
               </div>
             )}
           </CardContent>
@@ -553,7 +565,7 @@ export function ContactDetailPage() {
 
       {/* Add Deal Dialog */}
       <Dialog open={dealDialogOpen} onOpenChange={setDealDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Add to Pipeline</DialogTitle>
           </DialogHeader>
@@ -616,7 +628,7 @@ export function ContactDetailPage() {
 
       {/* Log Activity Dialog */}
       <Dialog open={activityDialogOpen} onOpenChange={setActivityDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Log Activity</DialogTitle>
           </DialogHeader>

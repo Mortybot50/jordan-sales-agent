@@ -9,17 +9,35 @@ import {
 } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   useOvernightReplies,
   useTodayBriefingTasks,
   useNewCandidates,
   useReengagementOpportunities,
+  type BriefingReply,
 } from '@/lib/queries/briefing'
 import { useCompleteTask, useCreateTask } from '@/lib/queries/tasks'
+import { useCreateActivity, useArchiveActivity } from '@/lib/queries/activities'
+import { useUpdateDealStage } from '@/lib/queries/deals'
+import { useStages } from '@/lib/queries/stages'
 import { useAuth } from '@/hooks/useAuth'
 import { formatRelative, venueTypeLabel } from '@/lib/utils'
-import { RefreshCw, CheckCircle, Clock, UserSearch, Repeat } from 'lucide-react'
-import { endOfDay } from 'date-fns'
+import { RefreshCw, CheckCircle, Clock, UserSearch, Repeat, Reply, Archive, MoveRight, ListTodo, ChevronDown, ChevronUp } from 'lucide-react'
+import { addDays, endOfDay } from 'date-fns'
 
 export function BriefingPage() {
   const navigate = useNavigate()
@@ -27,9 +45,25 @@ export function BriefingPage() {
   const { user } = useAuth()
   const completeTask = useCompleteTask()
   const createTask = useCreateTask()
+  const createActivity = useCreateActivity()
+  const archiveActivity = useArchiveActivity()
+  const updateDealStage = useUpdateDealStage()
+  const { data: stages } = useStages()
 
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date())
   const [refreshing, setRefreshing] = useState(false)
+
+  // Reply dialog state
+  const [replyTarget, setReplyTarget] = useState<BriefingReply | null>(null)
+  const [replyText, setReplyText] = useState('')
+  const [replySubmitting, setReplySubmitting] = useState(false)
+
+  // Expanded reply bodies
+  const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set())
+
+  // Move stage dialog state
+  const [moveTarget, setMoveTarget] = useState<BriefingReply | null>(null)
+  const [moveStageId, setMoveStageId] = useState('')
 
   const { data: replies, isLoading: repliesLoading } = useOvernightReplies()
   const { data: todayTasks, isLoading: tasksLoading } = useTodayBriefingTasks()
@@ -55,6 +89,57 @@ export function BriefingPage() {
       contact_id: contactId,
       due_at: endOfDay(new Date()).toISOString(),
       task_type: 'reengagement',
+    })
+  }
+
+  function toggleReplyExpand(id: string) {
+    setExpandedReplies((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function handleReplySubmit() {
+    if (!replyTarget || !user || !replyText.trim()) return
+    setReplySubmitting(true)
+    try {
+      await createActivity.mutateAsync({
+        org_id: user.org_id,
+        contact_id: replyTarget.contact_id ?? undefined,
+        deal_id: replyTarget.deal_id ?? undefined,
+        activity_type: 'email_manual',
+        subject: `Re: ${replyTarget.subject ?? ''}`,
+        body: replyText.trim(),
+      })
+      setReplyTarget(null)
+      setReplyText('')
+    } finally {
+      setReplySubmitting(false)
+    }
+  }
+
+  function handleArchive(id: string) {
+    archiveActivity.mutate(id)
+  }
+
+  async function handleMoveStage() {
+    if (!moveTarget?.deal_id || !moveStageId) return
+    await updateDealStage.mutateAsync({ dealId: moveTarget.deal_id, stageId: moveStageId })
+    setMoveTarget(null)
+    setMoveStageId('')
+  }
+
+  function handleCreateTask(reply: BriefingReply) {
+    if (!user) return
+    createTask.mutate({
+      org_id: user.org_id,
+      title: `Follow up: ${reply.contact_name}`,
+      contact_id: reply.contact_id ?? undefined,
+      deal_id: reply.deal_id ?? undefined,
+      due_at: addDays(new Date(), 1).toISOString(),
+      task_type: 'follow_up',
     })
   }
 
@@ -111,14 +196,12 @@ export function BriefingPage() {
             {replies && replies.length > 0 && (
               <div className="divide-y">
                 {replies.map((reply) => (
-                  <div key={reply.id} className="px-4 py-3 space-y-1.5">
+                  <div key={reply.id} className="px-4 py-3 space-y-2">
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="text-sm font-medium">{reply.contact_name}</p>
                         {reply.venue_name && (
-                          <p className="text-xs text-muted-foreground">
-                            {reply.venue_name}
-                          </p>
+                          <p className="text-xs text-muted-foreground">{reply.venue_name}</p>
                         )}
                       </div>
                       <span className="text-xs text-muted-foreground shrink-0">
@@ -129,13 +212,62 @@ export function BriefingPage() {
                       <p className="text-sm font-medium">{reply.subject}</p>
                     )}
                     {reply.body && (
-                      <p className="text-sm text-muted-foreground line-clamp-2">
-                        {reply.body}
-                      </p>
+                      <div>
+                        <p className={`text-sm text-muted-foreground ${expandedReplies.has(reply.id) ? '' : 'line-clamp-2'}`}>
+                          {reply.body}
+                        </p>
+                        {reply.body.length > 120 && (
+                          <button
+                            className="text-xs text-primary flex items-center gap-0.5 mt-0.5 hover:underline"
+                            onClick={() => toggleReplyExpand(reply.id)}
+                          >
+                            {expandedReplies.has(reply.id) ? <><ChevronUp className="w-3 h-3" />Less</> : <><ChevronDown className="w-3 h-3" />More</>}
+                          </button>
+                        )}
+                      </div>
                     )}
-                    <p className="text-xs text-amber-600 bg-amber-50 rounded px-2 py-1 inline-block">
-                      AI draft pending — AI layer ships Week 3
-                    </p>
+                    <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-xs gap-1"
+                        onClick={() => { setReplyTarget(reply); setReplyText('') }}
+                      >
+                        <Reply className="w-3 h-3" />
+                        Reply
+                      </Button>
+                      {reply.deal_id && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2 text-xs gap-1"
+                          onClick={() => { setMoveTarget(reply); setMoveStageId('') }}
+                        >
+                          <MoveRight className="w-3 h-3" />
+                          Move stage
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-xs gap-1"
+                        onClick={() => handleCreateTask(reply)}
+                        disabled={createTask.isPending}
+                      >
+                        <ListTodo className="w-3 h-3" />
+                        Create task
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                        onClick={() => handleArchive(reply.id)}
+                        disabled={archiveActivity.isPending}
+                      >
+                        <Archive className="w-3 h-3" />
+                        Archive
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -353,6 +485,67 @@ export function BriefingPage() {
           </AccordionContent>
         </AccordionItem>
       </Accordion>
+      {/* Reply dialog */}
+      <Dialog open={!!replyTarget} onOpenChange={(v) => !v && setReplyTarget(null)}>
+        <DialogContent className="max-w-md" aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>Reply to {replyTarget?.contact_name}</DialogTitle>
+          </DialogHeader>
+          {replyTarget?.subject && (
+            <p className="text-xs text-muted-foreground">Re: {replyTarget.subject}</p>
+          )}
+          <Textarea
+            rows={5}
+            placeholder="Type your reply…"
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value)}
+            autoFocus
+          />
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setReplyTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              className="flex-1"
+              disabled={!replyText.trim() || replySubmitting}
+              onClick={handleReplySubmit}
+            >
+              {replySubmitting ? 'Logging…' : 'Log reply'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Move deal stage dialog */}
+      <Dialog open={!!moveTarget} onOpenChange={(v) => !v && setMoveTarget(null)}>
+        <DialogContent className="max-w-sm" aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>Move deal to stage</DialogTitle>
+          </DialogHeader>
+          <Select value={moveStageId} onValueChange={setMoveStageId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select a stage" />
+            </SelectTrigger>
+            <SelectContent>
+              {stages?.map((s) => (
+                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setMoveTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              className="flex-1"
+              disabled={!moveStageId || updateDealStage.isPending}
+              onClick={handleMoveStage}
+            >
+              {updateDealStage.isPending ? 'Moving…' : 'Move'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

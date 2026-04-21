@@ -28,7 +28,7 @@ import { useStages, useCreateStage, useDeleteStage, useUpdateStage } from '@/lib
 import { useDeals } from '@/lib/queries/deals'
 import { profileFormSchema, icpFormSchema, type ProfileFormValues, type IcpFormValues } from '@/lib/schemas/user'
 import { venueTypeLabel, cn } from '@/lib/utils'
-import { Plus, Trash2, GripVertical, CheckCircle2, XCircle } from 'lucide-react'
+import { Plus, Trash2, ChevronUp, ChevronDown, CheckCircle2, XCircle } from 'lucide-react'
 
 const VENUE_TYPES = [
   'restaurant', 'cafe', 'hotel', 'event_space', 'bar',
@@ -147,6 +147,24 @@ function PipelineStagesTab() {
     setEditingId(null)
   }
 
+  async function handleMoveUp(id: string) {
+    const idx = stages?.findIndex((s) => s.id === id) ?? -1
+    if (idx <= 0 || !stages) return
+    const above = stages[idx - 1]
+    const current = stages[idx]
+    await updateStage.mutateAsync({ id: current.id, position: above.position })
+    await updateStage.mutateAsync({ id: above.id, position: current.position })
+  }
+
+  async function handleMoveDown(id: string) {
+    const idx = stages?.findIndex((s) => s.id === id) ?? -1
+    if (idx < 0 || idx >= (stages?.length ?? 0) - 1 || !stages) return
+    const below = stages[idx + 1]
+    const current = stages[idx]
+    await updateStage.mutateAsync({ id: current.id, position: below.position })
+    await updateStage.mutateAsync({ id: below.id, position: current.position })
+  }
+
   async function handleDelete() {
     if (!deleteTarget) return
     await deleteStage.mutateAsync({
@@ -164,9 +182,28 @@ function PipelineStagesTab() {
         {(!stages || stages.length === 0) && (
           <p className="text-sm text-muted-foreground px-4 py-4">No stages yet.</p>
         )}
-        {stages?.map((stage) => (
+        {stages?.map((stage, index) => (
           <div key={stage.id} className="flex items-center gap-3 px-4 py-2.5">
-            <GripVertical className="w-4 h-4 text-muted-foreground/40 shrink-0" />
+            <div className="flex flex-col shrink-0">
+              <button
+                type="button"
+                className="p-0 h-4 w-4 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-default transition-colors"
+                onClick={() => handleMoveUp(stage.id)}
+                disabled={index === 0 || updateStage.isPending}
+                title="Move up"
+              >
+                <ChevronUp className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                className="p-0 h-4 w-4 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-default transition-colors"
+                onClick={() => handleMoveDown(stage.id)}
+                disabled={index === (stages?.length ?? 0) - 1 || updateStage.isPending}
+                title="Move down"
+              >
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+            </div>
             {stage.color && (
               <div
                 className="w-2.5 h-2.5 rounded-full shrink-0"
@@ -261,7 +298,7 @@ function PipelineStagesTab() {
         open={!!deleteTarget}
         onOpenChange={(v) => !v && setDeleteTarget(null)}
       >
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Delete "{deleteStageData?.name}"?</DialogTitle>
           </DialogHeader>
@@ -520,7 +557,7 @@ export function SettingsPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Pipeline Stages</CardTitle>
               <p className="text-xs text-muted-foreground">
-                Click a stage name to edit it inline. Drag handles are visual — full reorder coming in a future update.
+                Click a stage name to rename it. Use ↑/↓ to reorder.
               </p>
             </CardHeader>
             <CardContent>

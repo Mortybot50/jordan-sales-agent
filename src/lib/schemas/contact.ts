@@ -15,6 +15,7 @@ export const contactFormSchema = z.object({
   email: z.string().email('Enter a valid email').optional().or(z.literal('')),
   phone: z.string().optional(),
   linkedin_url: z.string().url('Enter a valid URL').optional().or(z.literal('')),
+  notes: z.string().optional(),
   venue_id: z.string().uuid().optional(),
   // When creating a new venue inline
   new_venue: venueInlineSchema.optional(),

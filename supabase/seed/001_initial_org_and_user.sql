@@ -64,16 +64,19 @@ BEGIN
   ON CONFLICT DO NOTHING
   RETURNING id INTO v_venue_id;
 
-  -- Create default pipeline stages
+  -- Create default pipeline stages (10 stages)
   INSERT INTO public.pipeline_stages (org_id, name, position, is_closed, color)
   VALUES
-    (v_org_id, 'New',             1, false, '#94a3b8'),
-    (v_org_id, 'Contacted',       2, false, '#60a5fa'),
-    (v_org_id, 'Meeting Booked',  3, false, '#a78bfa'),
-    (v_org_id, 'Proposal Sent',   4, false, '#f59e0b'),
-    (v_org_id, 'Negotiation',     5, false, '#fb923c'),
-    (v_org_id, 'Closed Won',      6, true,  '#22c55e'),
-    (v_org_id, 'Closed Lost',     7, true,  '#ef4444')
+    (v_org_id, 'New',            1,   false, '#94a3b8'),
+    (v_org_id, 'Contacted',      2,   false, '#60a5fa'),
+    (v_org_id, 'Replied',        2.5, false, '#34d399'),
+    (v_org_id, 'Meeting Booked', 3,   false, '#a78bfa'),
+    (v_org_id, 'Site Visit',     3.5, false, '#f472b6'),
+    (v_org_id, 'Proposal Sent',  4,   false, '#f59e0b'),
+    (v_org_id, 'Demo Completed', 4.5, false, '#fb923c'),
+    (v_org_id, 'Negotiation',    5,   false, '#fbbf24'),
+    (v_org_id, 'Closed Won',     6,   true,  '#22c55e'),
+    (v_org_id, 'Closed Lost',    7,   true,  '#ef4444')
   ON CONFLICT DO NOTHING;
 
   RAISE NOTICE 'Pipeline stages created for org %', v_org_id;

@@ -7,7 +7,7 @@ export type ActivityType =
   | 'email_sent' | 'email_opened' | 'email_clicked' | 'reply_received'
   | 'call_note' | 'meeting_note' | 'task_completed' | 'stage_change'
   | 'bounce' | 'unsubscribe' | 'email_inbound' | 'email_outbound'
-  | 'deal_created' | 'note' | 'meeting_booked'
+  | 'deal_created' | 'note' | 'meeting_booked' | 'email_manual'
 
 export interface Activity {
   id: string
@@ -113,6 +113,26 @@ export function useCreateActivity() {
     },
     onError: (err: Error) => {
       toast.error(`Failed to log activity: ${err.message}`)
+    },
+  })
+}
+
+export function useArchiveActivity() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('activities')
+        .update({ archived_at: new Date().toISOString() })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['briefing'] })
+      qc.invalidateQueries({ queryKey: ['activities'] })
+    },
+    onError: (err: Error) => {
+      toast.error(`Failed to archive: ${err.message}`)
     },
   })
 }
