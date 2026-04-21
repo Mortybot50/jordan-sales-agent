@@ -856,25 +856,34 @@ export type Database = {
       }
       users: {
         Row: {
+          calendly_url: string | null
           created_at: string | null
           email: string | null
+          email_signature: string | null
           full_name: string | null
+          icp_config: Json | null
           id: string
           org_id: string
           role: string | null
         }
         Insert: {
+          calendly_url?: string | null
           created_at?: string | null
           email?: string | null
+          email_signature?: string | null
           full_name?: string | null
+          icp_config?: Json | null
           id: string
           org_id: string
           role?: string | null
         }
         Update: {
+          calendly_url?: string | null
           created_at?: string | null
           email?: string | null
+          email_signature?: string | null
           full_name?: string | null
+          icp_config?: Json | null
           id?: string
           org_id?: string
           role?: string | null
@@ -1028,6 +1037,7 @@ export type Database = {
     }
     Functions: {
       auth_org_id: { Args: never; Returns: string }
+      custom_access_token_hook: { Args: { event: Json }; Returns: Json }
     }
     Enums: {
       [_ in never]: never

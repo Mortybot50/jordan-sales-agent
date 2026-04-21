@@ -1,18 +1,33 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from '@/components/ui/sonner'
-// import { useAuth } from '@/hooks/useAuth' // TODO(auth): restore when re-enabling auth gate
+import { useAuth } from '@/hooks/useAuth'
 import { LoginPage } from '@/pages/LoginPage'
 import { AppShell } from '@/components/layout/AppShell'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { PipelinePage } from '@/pages/PipelinePage'
 import { ContactsPage } from '@/pages/ContactsPage'
+import { ContactDetailPage } from '@/pages/ContactDetailPage'
+import { ContactNewPage } from '@/pages/ContactNewPage'
+import { ContactImportPage } from '@/pages/ContactImportPage'
 import { DraftsPage } from '@/pages/DraftsPage'
 import { BriefingPage } from '@/pages/BriefingPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 
-// TODO(auth): re-enable auth gate before production release
-// Auth is temporarily bypassed for dev/demo — remove the early return below to restore.
 function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { session, loading } = useAuth()
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="text-muted-foreground text-sm">Loading…</div>
+      </div>
+    )
+  }
+
+  if (!session) {
+    return <Navigate to="/login" replace />
+  }
+
   return <>{children}</>
 }
 
@@ -33,6 +48,9 @@ export default function App() {
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="pipeline" element={<PipelinePage />} />
           <Route path="contacts" element={<ContactsPage />} />
+          <Route path="contacts/new" element={<ContactNewPage />} />
+          <Route path="contacts/import" element={<ContactImportPage />} />
+          <Route path="contacts/:id" element={<ContactDetailPage />} />
           <Route path="drafts" element={<DraftsPage />} />
           <Route path="briefing" element={<BriefingPage />} />
           <Route path="settings" element={<SettingsPage />} />
