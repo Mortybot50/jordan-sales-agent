@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Jordan · Sarah Chen — OBSIDIAN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  * { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+  body { background: #0a0a0a; color: #e8e8e8; }
+  .panel { background: #141414; border: 1px solid #222; }
+  .amber { color: #ffb020; }
+  .green { color: #00d27a; }
+  .red { color: #ff3b47; }
+  .cyan { color: #4ec9ff; }
+  .muted { color: #8a8a8a; }
+  .tertiary { color: #5a5a5a; }
+  .nav-item { border-left: 2px solid transparent; }
+  .nav-item:hover { background: #1a1a1a; }
+  .nav-active { background: #1a1a1a; border-left-color: #ffb020; color: #ffb020; }
+  .col-head { border-bottom: 1px solid #2e2e2e; }
+  .tab { padding: 6px 12px; border-bottom: 2px solid transparent; color: #8a8a8a; cursor: pointer; font-size: 11px; letter-spacing: 0.1em; }
+  .tab-active { color: #ffb020; border-bottom-color: #ffb020; }
+  table { border-collapse: collapse; width: 100%; }
+  th { color: #5a5a5a; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; font-size: 10px; text-align: left; padding: 6px 8px; border-bottom: 1px solid #2e2e2e; }
+  td { padding: 7px 8px; border-bottom: 1px solid #1a1a1a; font-size: 11px; vertical-align: top; }
+  tr:hover td { background: #1a1a1a; }
+  .dot { display: inline-block; width: 8px; height: 8px; }
+  .fill-bar { height: 3px; background: #1a1a1a; }
+  .fill-bar > span { display: block; height: 100%; background: #ffb020; }
+  a { color: #4ec9ff; text-decoration: none; }
+  .btn { padding: 6px 10px; border: 1px solid #2e2e2e; font-size: 11px; letter-spacing: 0.1em; cursor: pointer; background: #141414; }
+  .btn-approve { border-color: #00d27a; color: #00d27a; }
+  .btn-approve:hover { background: #0d3a23; }
+  .btn-edit { border-color: #4ec9ff; color: #4ec9ff; }
+  .btn-edit:hover { background: #0d2a3a; }
+  .btn-discard { border-color: #ff3b47; color: #ff3b47; }
+  .btn-discard:hover { background: #3a1a1d; }
+</style>
+</head>
+<body class="bg-[#0a0a0a] text-[#e8e8e8] font-mono">
+
+<!-- TOP STATUS BAR -->
+<div class="border-b border-[#222] px-4 py-2 flex items-center justify-between text-[11px] tracking-wider">
+  <div class="flex items-center gap-4">
+    <span class="amber font-bold">JORDAN</span>
+    <span class="muted">v1.4.2</span>
+    <span class="tertiary">│</span>
+    <span class="muted">22 APR 2026 10:47 AEST</span>
+    <span class="tertiary">│</span>
+    <span class="green">● CONNECTED</span>
+    <span class="tertiary">│</span>
+    <span class="muted">Morty Finlayson</span>
+  </div>
+  <div class="flex items-center gap-4">
+    <span class="muted">LEAD <span class="amber">LD-00847</span></span>
+    <span class="tertiary">│</span>
+    <span class="muted">SCR <span class="amber">84</span> / <span class="red">HOT</span></span>
+    <span class="tertiary">│</span>
+    <span class="cyan">⌘K</span>
+  </div>
+</div>
+
+<div class="flex min-h-[calc(100vh-72px)]">
+
+  <!-- LEFT NAV -->
+  <aside class="w-[180px] border-r border-[#222] text-[12px]">
+    <div class="px-3 py-2 text-[10px] tertiary tracking-[0.2em]">══ WORKSPACE ══</div>
+    <a href="dashboard.html" class="nav-item block px-3 py-2 flex justify-between text-[#e8e8e8]"><span>▸ DASHBOARD</span><span class="tertiary">D</span></a>
+    <a href="pipeline.html" class="nav-item block px-3 py-2 flex justify-between text-[#e8e8e8]"><span>▸ PIPELINE</span><span class="tertiary">P</span></a>
+    <a class="nav-item nav-active block px-3 py-2 flex justify-between"><span>◆ LEADS</span><span class="tertiary">L</span></a>
+    <a class="nav-item block px-3 py-2 flex justify-between text-[#e8e8e8]"><span>▸ DRAFTS <span class="amber">[4]</span></span><span class="tertiary">R</span></a>
+    <a class="nav-item block px-3 py-2 flex justify-between text-[#e8e8e8]"><span>▸ BRIEFING</span><span class="tertiary">B</span></a>
+    <a class="nav-item block px-3 py-2 flex justify-between text-[#e8e8e8]"><span>▸ TEMPLATES</span><span class="tertiary">T</span></a>
+    <a class="nav-item block px-3 py-2 flex justify-between text-[#e8e8e8]"><span>▸ SETTINGS</span><span class="tertiary">,</span></a>
+
+    <div class="px-3 py-2 mt-4 text-[10px] tertiary tracking-[0.2em]">══ ADJACENT LEADS ══</div>
+    <div class="px-3 py-1 text-[11px] amber">◆ Sarah Chen</div>
+    <div class="px-3 py-1 text-[11px] muted">▸ Lena Oyelaran <span class="tertiary">91</span></div>
+    <div class="px-3 py-1 text-[11px] muted">▸ Marcus Holloway <span class="tertiary">89</span></div>
+    <div class="px-3 py-1 text-[11px] muted">▸ Anika Shaw <span class="tertiary">78</span></div>
+    <div class="px-3 py-1 text-[11px] muted">▸ James Whitfield <span class="tertiary">76</span></div>
+
+    <div class="px-3 py-2 mt-4 text-[10px] tertiary tracking-[0.2em]">══ SHORTCUTS ══</div>
+    <div class="px-3 py-1 text-[10px] muted"><span class="amber">J/K</span> prev/next lead</div>
+    <div class="px-3 py-1 text-[10px] muted"><span class="amber">1-4</span> switch tab</div>
+    <div class="px-3 py-1 text-[10px] muted"><span class="amber">A</span> approve draft</div>
+  </aside>
+
+  <!-- MAIN 3-COL -->
+  <main class="flex-1 p-3 pb-16 grid grid-cols-100 gap-3" style="display:grid;grid-template-columns: 20% 55% 25%; gap: 8px;">
+
+    <!-- LEFT 20% — CONTACT CARD -->
+    <section class="space-y-2">
+
+      <div class="panel">
+        <div class="px-3 py-1.5 col-head text-[10px] tracking-[0.2em]">CONTACT</div>
+        <div class="p-3">
+          <div class="amber font-bold text-[14px]">Sarah Chen</div>
+          <div class="muted text-[11px]">Events Manager</div>
+          <div class="text-[12px] mt-0.5">Canva <span class="tertiary">·</span> <span class="muted">Tech</span></div>
+
+          <div class="mt-3 space-y-1 text-[11px]">
+            <div class="flex items-center gap-2">
+              <span class="tertiary w-3">@</span>
+              <a class="truncate">s.chen@canva.com</a>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="tertiary w-3">☎</span>
+              <span class="muted">+61 402 118 449</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="tertiary w-3">in</span>
+              <a>linkedin.com/in/sarahchen</a>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="tertiary w-3">◉</span>
+              <span class="muted">Surry Hills, NSW</span>
+            </div>
+          </div>
+
+          <div class="mt-3 pt-3 border-t border-[#2e2e2e] text-[10px]">
+            <div class="flex justify-between"><span class="tertiary tracking-[0.15em]">LAST CONTACT</span><span class="green">2d ago</span></div>
+            <div class="flex justify-between mt-0.5"><span class="tertiary tracking-[0.15em]">FIRST CONTACT</span><span class="muted">14d ago</span></div>
+            <div class="flex justify-between mt-0.5"><span class="tertiary tracking-[0.15em]">OWNER</span><span class="muted">Morty F.</span></div>
+            <div class="flex justify-between mt-0.5"><span class="tertiary tracking-[0.15em]">SOURCE</span><span class="muted">Referral · Roy Morgan</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCORE AMBER BOX -->
+      <div class="panel" style="border-color:#3a2a0d;">
+        <div class="px-3 py-1.5 col-head text-[10px] tracking-[0.2em] amber" style="border-color:#3a2a0d;">SCORE · HOT</div>
+        <div class="p-3">
+          <div class="flex items-baseline justify-between">
+            <div class="amber text-[36px] font-bold leading-none">84</div>
+            <div class="text-[10px] muted">/100</div>
+          </div>
+          <div class="text-[10px] green mt-1">▲ +6 vs last week</div>
+
+          <div class="mt-3 space-y-1.5 text-[10px]">
+            <div>
+              <div class="flex justify-between"><span class="muted">ENGAGEMENT</span><span class="amber">92</span></div>
+              <div class="fill-bar"><span style="width:92%;"></span></div>
+            </div>
+            <div>
+              <div class="flex justify-between"><span class="muted">BUDGET FIT</span><span class="amber">88</span></div>
+              <div class="fill-bar"><span style="width:88%;"></span></div>
+            </div>
+            <div>
+              <div class="flex justify-between"><span class="muted">TIMING</span><span class="amber">80</span></div>
+              <div class="fill-bar"><span style="width:80%;"></span></div>
+            </div>
+            <div>
+              <div class="flex justify-between"><span class="muted">VENUE MATCH</span><span class="amber">86</span></div>
+              <div class="fill-bar"><span style="width:86%;"></span></div>
+            </div>
+            <div>
+              <div class="flex justify-between"><span class="muted">AUTHORITY</span><span>74</span></div>
+              <div class="fill-bar"><span style="width:74%;background:#8a8a8a;"></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="px-3 py-1.5 col-head text-[10px] tracking-[0.2em]">VENUE PREFERENCES</div>
+        <div class="p-3 text-[11px] space-y-1">
+          <div><span class="amber">●</span> Oak Room South Yarra <span class="tertiary">· primary</span></div>
+          <div><span class="muted">○</span> Cremorne Brewery <span class="tertiary">· backup</span></div>
+          <div class="muted mt-2 text-[10px] leading-snug">
+            Wants mezzanine bar. Plated service &gt; canapés.
+            Needs AV: 2 roaming mics, lectern, 4K screen.
+            Dietary: 18 vego, 4 GF, 2 vegan.
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="px-3 py-1.5 col-head text-[10px] tracking-[0.2em]">TAGS</div>
+        <div class="p-3 text-[10px] flex flex-wrap gap-1">
+          <span class="border border-[#2e2e2e] px-1.5 py-0.5 amber">◆ VIP</span>
+          <span class="border border-[#2e2e2e] px-1.5 py-0.5 muted">corporate</span>
+          <span class="border border-[#2e2e2e] px-1.5 py-0.5 muted">tech</span>
+          <span class="border border-[#2e2e2e] px-1.5 py-0.5 muted">eofy</span>
+          <span class="border border-[#2e2e2e] px-1.5 py-0.5 muted">repeat-lead</span>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- MIDDLE 55% — TIMELINE -->
+    <section class="space-y-2">
+
+      <div class="panel">
+        <!-- TABS -->
+        <div class="flex border-b border-[#2e2e2e] px-2">
+          <div class="tab tab-active">[1] OVERVIEW</div>
+          <div class="tab">[2] ACTIVITY</div>
+          <div class="tab">[3] DRAFTS <span class="amber">2</span></div>
+          <div class="tab">[4] NOTES</div>
+          <div class="tab">[5] FILES <span class="muted">7</span></div>
+          <div class="ml-auto flex items-center gap-3 text-[10px] muted">
+            <span>● LIVE</span>
+            <a>EXPORT ▸</a>
+          </div>
+        </div>
+
+        <!-- OVERVIEW STRIP -->
+        <div class="grid grid-cols-4 divide-x divide-[#2e2e2e] text-[11px]">
+          <div class="p-3">
+            <div class="tertiary tracking-[0.15em] text-[10px]">DEAL</div>
+            <div class="amber font-bold mt-0.5">EOFY Dinner</div>
+            <div class="muted text-[10px]">14 Jun 2026 · 120 pax</div>
+          </div>
+          <div class="p-3">
+            <div class="tertiary tracking-[0.15em] text-[10px]">VALUE</div>
+            <div class="amber font-bold mt-0.5">$48,500</div>
+            <div class="green text-[10px]">▲ up from $42K v0</div>
+          </div>
+          <div class="p-3">
+            <div class="tertiary tracking-[0.15em] text-[10px]">STAGE · DAYS</div>
+            <div class="cyan font-bold mt-0.5">PROPOSAL · 3d</div>
+            <div class="muted text-[10px]">target close 7 May</div>
+          </div>
+          <div class="p-3">
+            <div class="tertiary tracking-[0.15em] text-[10px]">TOUCHES · 14D</div>
+            <div class="amber font-bold mt-0.5">11</div>
+            <div class="green text-[10px]">opens 3 · replies 4</div>
+          </div>
+        </div>
+
+        <!-- ACTIVITY TIMELINE -->
+        <div class="px-3 py-2 col-head text-[10px] tracking-[0.2em] muted">▾ ACTIVITY TIMELINE · 11 EVENTS</div>
+
+        <table>
+          <thead>
+            <tr>
+              <th class="w-[110px]">TIMESTAMP</th>
+              <th class="w-[150px]">EVENT</th>
+              <th>CONTENT</th>
+              <th class="w-[80px] text-right">META</th>
+            </tr>
+          </thead>
+          <tbody>
+
+            <tr>
+              <td><span class="tertiary">10:42</span><br><span class="muted text-[10px]">22 APR</span></td>
+              <td><span class="green">●</span> <span class="amber">OPENED</span><br><span class="muted text-[10px]">proposal v2</span></td>
+              <td>
+                <div>Sarah Chen opened <span class="cyan">oak-room-proposal-v2.pdf</span> for the 3rd time</div>
+                <div class="tertiary text-[10px] mt-0.5">Session 4m 12s · scrolled to p.8 (pricing) · Chrome/Mac</div>
+              </td>
+              <td class="text-right muted text-[10px]">3× · hot</td>
+            </tr>
+
+            <tr>
+              <td><span class="tertiary">09:14</span><br><span class="muted text-[10px]">22 APR</span></td>
+              <td><span class="cyan">◆</span> <span class="amber">CAL HOLD</span><br><span class="muted text-[10px]">site visit</span></td>
+              <td>
+                <div>Site visit booked · Fri 24 Apr · 11:00 · Oak Room South Yarra</div>
+                <div class="tertiary text-[10px] mt-0.5">Attendees: Sarah Chen, Priya Desai (Canva brand), Morty F.</div>
+              </td>
+              <td class="text-right muted text-[10px]">confirmed</td>
+            </tr>
+
+            <tr>
+              <td><span class="tertiary">17:58</span><br><span class="muted text-[10px]">21 APR</span></td>
+              <td><span class="amber">▸</span> <span class="amber">REPLIED</span><br><span class="muted text-[10px]">inbound email</span></td>
+              <td>
+                <div>"Love the revised menu. Can we add a plated alt-protein option? Also — is the mezzanine bar included at this price or add-on?"</div>
+                <div class="tertiary text-[10px] mt-0.5">Jordan drafted response · awaiting review <span class="green">[draft #2]</span></div>
+              </td>
+              <td class="text-right green text-[10px]">reply rate 67%</td>
+            </tr>
+
+            <tr>
+              <td><span class="tertiary">14:22</span><br><span class="muted text-[10px]">21 APR</span></td>
+              <td><span class="cyan">→</span> <span class="muted">EMAIL SENT</span><br><span class="muted text-[10px]">outbound</span></td>
+              <td>
+                <div>"Revised proposal attached — added mezzanine bar, updated canapé list, adjusted pricing to reflect 120 confirmed attendees."</div>
+                <div class="tertiary text-[10px] mt-0.5">Template: proposal-v2-corporate · attachment 1.4MB</div>
+              </td>
+              <td class="text-right muted text-[10px]">sent 14:22</td>
+            </tr>
+
+            <tr>
+              <td><span class="tertiary">11:40</span><br><span class="muted text-[10px]">20 APR</span></td>
+              <td><span class="amber">☎</span> <span class="muted">CALL</span><br><span class="muted text-[10px]">outbound</span></td>
+              <td>
+                <div>18-minute call · Sarah confirmed guest count bumped from 100 ▸ 120, and budget signed-off by CMO</div>
+                <div class="tertiary text-[10px] mt-0.5">Notes: wants EOFY feel not xmas · no speeches before 9pm · parking ≥ 20 spots</div>
+              </td>
+              <td class="text-right muted text-[10px]">18m · logged</td>
+            </tr>
+
+            <tr>
+              <td><span class="tertiary">09:02</span><br><span class="muted text-[10px]">19 APR</span></td>
+              <td><span class="green">●</span> <span class="amber">OPENED</span><br><span class="muted text-[10px]">proposal v1</span></td>
+              <td>
+                <div>Proposal v1 opened · p.1 only · 38 seconds</div>
+                <div class="tertiary text-[10px] mt-0.5">Forward detected: s.chen ▸ cmo@canva.com</div>
+              </td>
+              <td class="text-right muted text-[10px]">1× · shared</td>
+            </tr>
+
+            <tr>
+              <td><span class="tertiary">16:14</span><br><span class="muted text-[10px]">17 APR</span></td>
+              <td><span class="cyan">→</span> <span class="muted">EMAIL SENT</span><br><span class="muted text-[10px]">proposal v1</span></td>
+              <td>
+                <div>Initial proposal · Oak Room · 100 pax · $42,000 inc GST · 14 Jun 2026</div>
+                <div class="tertiary text-[10px] mt-0.5">Held date with venue operations · hold expires 29 Apr</div>
+              </td>
+              <td class="text-right muted text-[10px]">sent 16:14</td>
+            </tr>
+
+            <tr>
+              <td><span class="tertiary">10:30</span><br><span class="muted text-[10px]">14 APR</span></td>
+              <td><span class="amber">◆</span> <span class="amber">ENQUIRY</span><br><span class="muted text-[10px]">inbound form</span></td>
+              <td>
+                <div>First contact · Canva EOFY event enquiry via website form</div>
+                <div class="tertiary text-[10px] mt-0.5">Referred by Roy Morgan (won Mar 2026) · auto-scored 68 HOT</div>
+              </td>
+              <td class="text-right green text-[10px]">referral</td>
+            </tr>
+
+          </tbody>
+        </table>
+
+      </div>
+
+    </section>
+
+    <!-- RIGHT 25% — DEAL FACTS + AI DRAFT -->
+    <section class="space-y-2">
+
+      <!-- DEAL FACTS -->
+      <div class="panel">
+        <div class="px-3 py-1.5 col-head text-[10px] tracking-[0.2em]">DEAL FACTS</div>
+        <div class="p-3 text-[11px] space-y-1">
+          <div class="flex justify-between"><span class="tertiary tracking-[0.1em]">STAGE</span><span class="cyan">PROPOSAL</span></div>
+          <div class="flex justify-between"><span class="tertiary tracking-[0.1em]">VALUE</span><span class="amber font-bold">$48,500</span></div>
+          <div class="flex justify-between"><span class="tertiary tracking-[0.1em]">EVENT DATE</span><span>14 JUN 2026</span></div>
+          <div class="flex justify-between"><span class="tertiary tracking-[0.1em]">GUESTS</span><span>120</span></div>
+          <div class="flex justify-between"><span class="tertiary tracking-[0.1em]">VENUE</span><span>Oak Room S.Y.</span></div>
+          <div class="flex justify-between"><span class="tertiary tracking-[0.1em]">EVENT TYPE</span><span>EOFY Dinner</span></div>
+          <div class="flex justify-between"><span class="tertiary tracking-[0.1em]">HOLD EXPIRES</span><span class="red">29 APR · 7d</span></div>
+
+          <div class="pt-2 mt-2 border-t border-[#2e2e2e]">
+            <div class="flex justify-between text-[10px]">
+              <span class="tertiary tracking-[0.1em]">CLOSE PROBABILITY</span>
+              <span class="green">72%</span>
+            </div>
+            <div class="fill-bar mt-1"><span style="width:72%;background:#00d27a;"></span></div>
+            <div class="text-[10px] muted mt-1">Weighted value <span class="amber">$34,920</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- NEXT ACTION -->
+      <div class="panel" style="border-color:#3a2a0d;">
+        <div class="px-3 py-1.5 col-head text-[10px] tracking-[0.2em] amber" style="border-color:#3a2a0d;">▲ NEXT ACTION · DUE TOMORROW</div>
+        <div class="p-3">
+          <div class="text-[12px] amber">Send updated proposal</div>
+          <div class="text-[11px] muted mt-1 leading-snug">Address mezzanine bar inclusion + alt-protein plated option. Reference Roy Morgan referral in close.</div>
+          <div class="flex justify-between text-[10px] mt-2">
+            <span class="muted">DUE</span>
+            <span class="amber">23 APR · 17:00</span>
+          </div>
+          <div class="flex justify-between text-[10px] mt-0.5">
+            <span class="muted">OWNER</span>
+            <span>Morty F.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI DRAFT -->
+      <div class="panel">
+        <div class="px-3 py-1.5 col-head flex items-center justify-between">
+          <span class="text-[10px] tracking-[0.2em] amber">◆ AI DRAFT · REPLY</span>
+          <span class="text-[10px] tertiary">v2 · 420ms · GPT-4.6</span>
+        </div>
+        <div class="p-3 text-[11px]">
+          <div class="flex justify-between mb-2 text-[10px]">
+            <span class="tertiary">TO:</span>
+            <span class="cyan">s.chen@canva.com</span>
+          </div>
+          <div class="flex justify-between mb-2 text-[10px]">
+            <span class="tertiary">SUBJ:</span>
+            <span class="muted">Re: Oak Room proposal · mezzanine + menu</span>
+          </div>
+
+          <div class="border-t border-[#2e2e2e] pt-2 leading-relaxed muted" style="font-size:11px;">
+            <div>Hi Sarah,</div>
+            <div class="mt-2">Great questions — answers below:</div>
+            <div class="mt-2"><span class="amber">1.</span> The mezzanine bar is included at $48,500 given the 120 headcount. Two bartenders + custom EOFY cocktail menu.</div>
+            <div class="mt-2"><span class="amber">2.</span> Chef has added a plated miso-glazed king oyster mushroom as the alt-protein — pairs with the same red wine reduction used on the eye fillet.</div>
+            <div class="mt-2">I've attached v2 of the proposal reflecting both. The 14 Jun hold is secure through 29 Apr — happy to lock once you've got CMO sign-off.</div>
+            <div class="mt-2">See you Friday at 11 for the walkthrough.</div>
+            <div class="mt-2">Morty</div>
+          </div>
+
+          <div class="mt-3 pt-2 border-t border-[#2e2e2e] text-[10px]">
+            <div class="flex justify-between">
+              <span class="tertiary">CONFIDENCE</span>
+              <span class="green">HIGH · 0.91</span>
+            </div>
+            <div class="flex justify-between mt-0.5">
+              <span class="tertiary">TONE MATCH</span>
+              <span class="green">✓ consistent</span>
+            </div>
+            <div class="flex justify-between mt-0.5">
+              <span class="tertiary">FACTS CHECKED</span>
+              <span class="green">✓ 4 of 4</span>
+            </div>
+          </div>
+
+          <div class="flex gap-2 mt-3">
+            <button class="btn btn-approve flex-1">[A] APPROVE ▸</button>
+            <button class="btn btn-edit">[E] EDIT</button>
+            <button class="btn btn-discard">[X]</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- SIMILAR DEALS -->
+      <div class="panel">
+        <div class="px-3 py-1.5 col-head text-[10px] tracking-[0.2em]">SIMILAR CLOSED DEALS</div>
+        <div class="p-3 text-[11px] space-y-2">
+          <div>
+            <div class="flex justify-between">
+              <span class="amber">Roy Morgan · EOFY</span>
+              <span class="green">WON</span>
+            </div>
+            <div class="text-[10px] muted">Oak Room · 110 pax · $44.2K · Mar 2026</div>
+          </div>
+          <div class="border-t border-[#1a1a1a] pt-2">
+            <div class="flex justify-between">
+              <span class="amber">Atlassian · Xmas</span>
+              <span class="green">WON</span>
+            </div>
+            <div class="text-[10px] muted">Oak Room · 140 pax · $52.8K · Dec 2025</div>
+          </div>
+          <div class="border-t border-[#1a1a1a] pt-2">
+            <div class="flex justify-between">
+              <span class="amber">Xero · Partner Night</span>
+              <span class="red">LOST</span>
+            </div>
+            <div class="text-[10px] muted">Oak Room · 95 pax · $39.4K · Oct 2025 · <span class="tertiary">price</span></div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+</div>
+
+<!-- BOTTOM KEYBOARD HINT -->
+<div class="fixed bottom-0 left-0 right-0 border-t border-[#222] bg-[#0a0a0a] px-4 py-2 flex items-center justify-between text-[10px] tracking-wider z-10">
+  <div class="flex gap-4 muted">
+    <span><span class="amber">[A]</span> approve draft</span>
+    <span><span class="amber">[E]</span> edit draft</span>
+    <span><span class="amber">[X]</span> discard</span>
+    <span><span class="amber">[N]</span> new note</span>
+    <span><span class="amber">[J/K]</span> next/prev lead</span>
+    <span><span class="amber">[/]</span> search</span>
+    <span><span class="amber">[⌘K]</span> command</span>
+    <span><span class="amber">[G then P]</span> pipeline</span>
+  </div>
+  <div class="tertiary">LD-00847 · synced 10:46:58</div>
+</div>
+
+</body>
+</html>

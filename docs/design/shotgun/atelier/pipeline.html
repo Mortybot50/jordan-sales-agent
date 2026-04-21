@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pipeline · Jordan Sales Agent</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  html, body { font-family: 'Inter', system-ui, sans-serif; }
+  .serif { font-family: 'Fraunces', Georgia, serif; font-optical-sizing: auto; font-variation-settings: "opsz" 144; }
+  .serif-text { font-family: 'Fraunces', Georgia, serif; font-variation-settings: "opsz" 24; }
+  .serif-tabular { font-family: 'Fraunces', Georgia, serif; font-variation-settings: "opsz" 144; font-feature-settings: "tnum"; }
+  .kern { letter-spacing: 0.14em; }
+  .kern-wide { letter-spacing: 0.22em; }
+  body { line-height: 1.65; }
+  .card { transition: transform .2s ease, box-shadow .2s ease; }
+  .card:hover { transform: translateY(-2px); box-shadow: 0 2px 6px rgba(26,22,18,0.05), 0 16px 40px rgba(26,22,18,0.09); }
+  .donut { transform: rotate(-90deg); }
+</style>
+</head>
+<body class="bg-[#f5f1ea] text-[#1a1612]">
+  <div class="flex min-h-screen">
+
+    <!-- Sidebar -->
+    <aside class="w-[220px] shrink-0 border-r border-[#ebe5d9] bg-[#f5f1ea] flex flex-col">
+      <div class="px-8 pt-10 pb-8">
+        <div class="serif text-[28px] leading-none">Jordan<span class="text-[#b8923f]">.</span></div>
+        <div class="kern text-[10px] uppercase text-[#9a8f80] mt-2">Sales copilot</div>
+      </div>
+      <nav class="px-8 flex-1 text-[14px]">
+        <div class="kern text-[10px] uppercase text-[#9a8f80] mb-4">Desk</div>
+        <ul class="space-y-3 mb-10">
+          <li><a href="dashboard.html" class="text-[#6b6257]">Today</a></li>
+          <li><a href="#" class="flex items-center gap-2 text-[#1a1612]"><span class="text-[#b8923f] text-[8px]">●</span>Pipeline</a></li>
+          <li><a href="#" class="text-[#6b6257]">Enquiries</a></li>
+          <li><a href="#" class="flex items-center justify-between text-[#6b6257]"><span>Drafts</span><span class="text-[11px] text-[#b8923f]">4</span></a></li>
+          <li><a href="#" class="text-[#6b6257]">Briefing</a></li>
+        </ul>
+        <div class="kern text-[10px] uppercase text-[#9a8f80] mb-4">Studio</div>
+        <ul class="space-y-3">
+          <li><a href="#" class="text-[#6b6257]">Sequences</a></li>
+          <li><a href="#" class="text-[#6b6257]">Venues</a></li>
+          <li><a href="#" class="text-[#6b6257]">Settings</a></li>
+        </ul>
+      </nav>
+      <div class="px-8 py-6 border-t border-[#ebe5d9]">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-full bg-[#7d2b3a] text-white flex items-center justify-center serif text-[14px]">MF</div>
+          <div>
+            <div class="text-[13px] font-medium">Morty Finlayson</div>
+            <div class="text-[11px] text-[#9a8f80]">Sales &middot; Melbourne</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1 flex min-w-0">
+      <div class="flex-1 min-w-0 px-12 py-14">
+
+        <header class="mb-14">
+          <div class="kern text-[11px] uppercase text-[#b8923f] mb-4">The Ledger &middot; Q2 2026</div>
+          <h1 class="serif font-light tracking-tight leading-[1.02] text-[64px] mb-3">Pipeline.</h1>
+          <p class="serif-text italic text-[19px] text-[#6b6257]">
+            Eight open conversations &middot; <span class="text-[#b8923f]">$351,100 in play</span> &middot; up $42.6k this week.
+          </p>
+        </header>
+
+        <!-- Kanban -->
+        <section class="grid grid-cols-5 gap-0 relative">
+
+          <!-- Column: New Enquiry -->
+          <div class="px-4 border-r border-[#ebe5d9]">
+            <div class="mb-5">
+              <div class="kern-wide text-[10px] uppercase text-[#1a1612]">New Enquiry</div>
+              <div class="flex items-baseline gap-2 mt-1">
+                <span class="serif-tabular text-[22px]">2</span>
+                <span class="text-[12px] text-[#6b6257]">&middot; $69.0k</span>
+              </div>
+            </div>
+            <div class="space-y-4">
+              <article class="card bg-white rounded-xl overflow-hidden shadow-[0_1px_3px_rgba(26,22,18,0.04),0_8px_24px_rgba(26,22,18,0.06)]">
+                <img src="https://images.unsplash.com/photo-1464207687429-7505649dae38?w=600&q=80" class="w-full h-14 object-cover" alt="" />
+                <div class="p-4">
+                  <div class="serif text-[16px] leading-tight">Priya Nadar</div>
+                  <div class="text-[11px] text-[#9a8f80] mb-3">Bond Uni Alumni</div>
+                  <div class="text-[12px] text-[#6b6257] leading-relaxed">Networking &middot; 60 guests<br/>Docklands Rooftop &middot; 22 Aug</div>
+                  <div class="mt-3 pt-3 border-t border-[#ebe5d9] flex items-center justify-between">
+                    <span class="serif-tabular text-[15px] text-[#7d2b3a]">$14,800</span>
+                    <span class="flex items-center gap-1.5 text-[10px] kern uppercase text-[#6b6257]"><span class="text-[#b8923f]">●</span>Warm &middot; 71</span>
+                  </div>
+                  <div class="text-[10px] text-[#9a8f80] text-right mt-2">1d in stage</div>
+                </div>
+              </article>
+
+              <article class="card bg-white rounded-xl overflow-hidden shadow-[0_1px_3px_rgba(26,22,18,0.04),0_8px_24px_rgba(26,22,18,0.06)]">
+                <img src="https://images.unsplash.com/photo-1464207687429-7505649dae38?w=600&q=80" class="w-full h-14 object-cover" alt="" />
+                <div class="p-4">
+                  <div class="serif text-[16px] leading-tight">Anika Shaw</div>
+                  <div class="text-[11px] text-[#9a8f80] mb-3">Deloitte</div>
+                  <div class="text-[12px] text-[#6b6257] leading-relaxed">Year End &middot; 180 guests<br/>Docklands Rooftop &middot; 5 Dec</div>
+                  <div class="mt-3 pt-3 border-t border-[#ebe5d9] flex items-center justify-between">
+                    <span class="serif-tabular text-[15px] text-[#7d2b3a]">$54,200</span>
+                    <span class="flex items-center gap-1.5 text-[10px] kern uppercase text-[#6b6257]"><span class="text-[#b8923f]">●</span>Warm &middot; 78</span>
+                  </div>
+                  <div class="text-[10px] text-[#9a8f80] text-right mt-2">0d in stage</div>
+                </div>
+              </article>
+            </div>
+          </div>
+
+          <!-- Column: Qualifying -->
+          <div class="px-4 border-r border-[#ebe5d9]">
+            <div class="mb-5">
+              <div class="kern-wide text-[10px] uppercase text-[#1a1612]">Qualifying</div>
+              <div class="flex items-baseline gap-2 mt-1">
+                <span class="serif-tabular text-[22px]">3</span>
+                <span class="text-[12px] text-[#6b6257]">&middot; $80.4k</span>
+              </div>
+            </div>
+            <div class="space-y-4">
+              <article class="card bg-white rounded-xl overflow-hidden shadow-[0_1px_3px_rgba(26,22,18,0.04),0_8px_24px_rgba(26,22,18,0.06)]">
+                <img src="https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?w=600&q=80" class="w-full h-14 object-cover" alt="" />
+                <div class="p-4">
+                  <div class="serif text-[16px] leading-tight">James Whitfield</div>
+                  <div class="text-[11px] text-[#9a8f80] mb-3">Holland &amp; Smith</div>
+                  <div class="text-[12px] text-[#6b6257] leading-relaxed">Christmas Party &middot; 80 guests<br/>Collingwood Warehouse &middot; 12 Dec</div>
+                  <div class="mt-3 pt-3 border-t border-[#ebe5d9] flex items-center justify-between">
+                    <span class="serif-tabular text-[15px] text-[#7d2b3a]">$22,400</span>
+                    <span class="flex items-center gap-1.5 text-[10px] kern uppercase text-[#6b6257]"><span class="text-[#b8923f]">●</span>Warm &middot; 76</span>
+                  </div>
+                  <div class="text-[10px] text-[#9a8f80] text-right mt-2">5d in stage</div>
+                </div>
+              </article>
+
+              <article class="card bg-white rounded-xl overflow-hidden shadow-[0_1px_3px_rgba(26,22,18,0.04),0_8px_24px_rgba(26,22,18,0.06)]">
+                <img src="https://images.unsplash.com/photo-1519741497674-611481863552?w=600&q=80" class="w-full h-14 object-cover" alt="" />
+                <div class="p-4">
+                  <div class="serif text-[16px] leading-tight">Tom Ferris</div>
+                  <div class="text-[11px] text-[#9a8f80] mb-3">Ferris/Chen Wedding</div>
+                  <div class="text-[12px] text-[#6b6257] leading-relaxed">Wedding &middot; 140 guests<br/>The Oak Room &middot; 18 Oct</div>
+                  <div class="mt-3 pt-3 border-t border-[#ebe5d9] flex items-center justify-between">
+                    <span class="serif-tabular text-[15px] text-[#7d2b3a]">$38,600</span>
+                    <span class="flex items-center gap-1.5 text-[10px] kern uppercase text-[#6b6257]"><span class="text-[#b8923f]">●</span>Warm &middot; 62</span>
+                  </div>
+                  <div class="text-[10px] text-[#9a8f80] text-right mt-2">9d in stage</div>
+                </div>
+              </article>
+
+              <article class="card bg-white rounded-xl overflow-hidden shadow-[0_1px_3px_rgba(26,22,18,0.04),0_8px_24px_rgba(26,22,18,0.06)]">
+                <img src="https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?w=600&q=80" class="w-full h-14 object-cover" alt="" />
+                <div class="p-4">
+                  <div class="serif text-[16px] leading-tight">Dev Kapoor</div>
+                  <div class="text-[11px] text-[#9a8f80] mb-3">Rip Curl</div>
+                  <div class="text-[12px] text-[#6b6257] leading-relaxed">Team Offsite &middot; 65 guests<br/>Collingwood Warehouse &middot; 25 Sep</div>
+                  <div class="mt-3 pt-3 border-t border-[#ebe5d9] flex items-center justify-between">
+                    <span class="serif-tabular text-[15px] text-[#7d2b3a]">$19,400</span>
+                    <span class="flex items-center gap-1.5 text-[10px] kern uppercase text-[#6b6257]"><span class="text-[#9a8f80]">●</span>Cool &middot; 55</span>
+                  </div>
+                  <div class="text-[10px] text-[#9a8f80] text-right mt-2">14d in stage</div>
+                </div>
+              </article>
+            </div>
+          </div>
+
+          <!-- Column: Proposal -->
+          <div class="px-4 border-r border-[#ebe5d9]">
+            <div class="mb-5">
+              <div class="kern-wide text-[10px] uppercase text-[#1a1612]">Proposal</div>
+              <div class="flex items-baseline gap-2 mt-1">
+                <span class="serif-tabular text-[22px]">2</span>
+                <span class="text-[12px] text-[#6b6257]">&middot; $133.5k</span>
+              </div>
+            </div>
+            <div class="space-y-4">
+              <a href="lead-detail.html" class="block card bg-white rounded-xl overflow-hidden shadow-[0_1px_3px_rgba(26,22,18,0.04),0_8px_24px_rgba(26,22,18,0.06)] ring-1 ring-[#b8923f]/30">
+                <img src="https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=600&q=80" class="w-full h-14 object-cover" alt="" />
+                <div class="p-4">
+                  <div class="serif text-[16px] leading-tight">Sarah Chen</div>
+                  <div class="text-[11px] text-[#9a8f80] mb-3">Canva</div>
+                  <div class="text-[12px] text-[#6b6257] leading-relaxed">EOFY Dinner &middot; 120 guests<br/>The Oak Room &middot; 14 Jun</div>
+                  <div class="mt-3 pt-3 border-t border-[#ebe5d9] flex items-center justify-between">
+                    <span class="serif-tabular text-[15px] text-[#7d2b3a]">$48,500</span>
+                    <span class="flex items-center gap-1.5 text-[10px] kern uppercase text-[#6b6257]"><span class="text-[#7d2b3a]">●</span>Hot &middot; 84</span>
+                  </div>
+                  <div class="text-[10px] text-[#9a8f80] text-right mt-2">3d in stage</div>
+                </div>
+              </a>
+
+              <article class="card bg-white rounded-xl overflow-hidden shadow-[0_1px_3px_rgba(26,22,18,0.04),0_8px_24px_rgba(26,22,18,0.06)]">
+                <img src="https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=600&q=80" class="w-full h-14 object-cover" alt="" />
+                <div class="p-4">
+                  <div class="serif text-[16px] leading-tight">Lena Oyelaran</div>
+                  <div class="text-[11px] text-[#9a8f80] mb-3">Nike APAC</div>
+                  <div class="text-[12px] text-[#6b6257] leading-relaxed">Product Launch &middot; 200 guests<br/>Cremorne Brewery &middot; 3 Jul</div>
+                  <div class="mt-3 pt-3 border-t border-[#ebe5d9] flex items-center justify-between">
+                    <span class="serif-tabular text-[15px] text-[#7d2b3a]">$85,000</span>
+                    <span class="flex items-center gap-1.5 text-[10px] kern uppercase text-[#6b6257]"><span class="text-[#7d2b3a]">●</span>Hot &middot; 91</span>
+                  </div>
+                  <div class="text-[10px] text-[#9a8f80] text-right mt-2">6d in stage</div>
+                </div>
+              </article>
+            </div>
+          </div>
+
+          <!-- Column: Contract Sent -->
+          <div class="px-4 border-r border-[#ebe5d9]">
+            <div class="mb-5">
+              <div class="kern-wide text-[10px] uppercase text-[#1a1612]">Contract Sent</div>
+              <div class="flex items-baseline gap-2 mt-1">
+                <span class="serif-tabular text-[22px]">1</span>
+                <span class="text-[12px] text-[#6b6257]">&middot; $68.2k</span>
+              </div>
+            </div>
+            <div class="space-y-4">
+              <article class="card bg-white rounded-xl overflow-hidden shadow-[0_1px_3px_rgba(26,22,18,0.04),0_8px_24px_rgba(26,22,18,0.06)]">
+                <img src="https://images.unsplash.com/photo-1464207687429-7505649dae38?w=600&q=80" class="w-full h-14 object-cover" alt="" />
+                <div class="p-4">
+                  <div class="serif text-[16px] leading-tight">Marcus Holloway</div>
+                  <div class="text-[11px] text-[#9a8f80] mb-3">Grant Thornton</div>
+                  <div class="text-[12px] text-[#6b6257] leading-relaxed">Partner Retreat &middot; 45 guests<br/>Fitzroy Gardens Pavilion &middot; 8 May</div>
+                  <div class="mt-3 pt-3 border-t border-[#ebe5d9] flex items-center justify-between">
+                    <span class="serif-tabular text-[15px] text-[#7d2b3a]">$68,200</span>
+                    <span class="flex items-center gap-1.5 text-[10px] kern uppercase text-[#6b6257]"><span class="text-[#7d2b3a]">●</span>Hot &middot; 89</span>
+                  </div>
+                  <div class="text-[10px] text-[#9a8f80] text-right mt-2">2d in stage</div>
+                </div>
+              </article>
+            </div>
+          </div>
+
+          <!-- Column: Confirmed -->
+          <div class="px-4">
+            <div class="mb-5">
+              <div class="kern-wide text-[10px] uppercase text-[#2d5a3d]">Confirmed</div>
+              <div class="flex items-baseline gap-2 mt-1">
+                <span class="serif-tabular text-[22px]">&mdash;</span>
+                <span class="text-[12px] text-[#6b6257]">&middot; awaiting</span>
+              </div>
+            </div>
+            <div class="rounded-xl border border-dashed border-[#ebe5d9] p-6 text-center">
+              <div class="text-[#b8923f] text-lg mb-2">❧</div>
+              <p class="serif-text italic text-[13px] text-[#6b6257] leading-snug">The first confirmation of the quarter is nearly here.</p>
+            </div>
+          </div>
+
+        </section>
+
+        <footer class="pt-10 mt-16 border-t border-[#ebe5d9] flex items-center justify-between text-[12px] text-[#9a8f80]">
+          <span>Jordan &middot; Sales copilot for hospitality</span>
+          <span class="kern uppercase">The Ledger &middot; Q2 2026</span>
+        </footer>
+      </div>
+
+      <!-- Right rail -->
+      <aside class="w-[300px] shrink-0 border-l border-[#ebe5d9] bg-[#ebe5d9]/30 px-8 py-14">
+        <div class="kern text-[10px] uppercase text-[#b8923f] mb-3">This month&rsquo;s outlook</div>
+        <div class="serif-tabular text-[40px] text-[#7d2b3a] leading-none">$216.1k</div>
+        <p class="serif-text italic text-[13px] text-[#6b6257] mt-2 mb-8">Weighted forecast for April &ndash; June, across open stages.</p>
+
+        <div class="flex items-center justify-center mb-8">
+          <svg class="donut" width="160" height="160" viewBox="0 0 160 160">
+            <circle cx="80" cy="80" r="62" fill="none" stroke="#ebe5d9" stroke-width="18" />
+            <!-- Sum stroke dasharray based on 2*pi*62 ≈ 389.56 -->
+            <!-- New Enquiry 20% -->
+            <circle cx="80" cy="80" r="62" fill="none" stroke="#b8923f" stroke-width="18" stroke-dasharray="77.9 389.56" stroke-dashoffset="0" />
+            <!-- Qualifying 23% -->
+            <circle cx="80" cy="80" r="62" fill="none" stroke="#c2614b" stroke-width="18" stroke-dasharray="89.6 389.56" stroke-dashoffset="-77.9" />
+            <!-- Proposal 38% -->
+            <circle cx="80" cy="80" r="62" fill="none" stroke="#7d2b3a" stroke-width="18" stroke-dasharray="148.0 389.56" stroke-dashoffset="-167.5" />
+            <!-- Contract Sent 19% -->
+            <circle cx="80" cy="80" r="62" fill="none" stroke="#2d5a3d" stroke-width="18" stroke-dasharray="74.0 389.56" stroke-dashoffset="-315.5" />
+          </svg>
+        </div>
+
+        <ul class="space-y-3 text-[13px]">
+          <li class="flex items-center justify-between">
+            <span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-[#b8923f]"></span>New Enquiry</span>
+            <span class="serif-tabular text-[#6b6257]">$69.0k</span>
+          </li>
+          <li class="flex items-center justify-between">
+            <span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-[#c2614b]"></span>Qualifying</span>
+            <span class="serif-tabular text-[#6b6257]">$80.4k</span>
+          </li>
+          <li class="flex items-center justify-between">
+            <span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-[#7d2b3a]"></span>Proposal</span>
+            <span class="serif-tabular text-[#6b6257]">$133.5k</span>
+          </li>
+          <li class="flex items-center justify-between">
+            <span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-[#2d5a3d]"></span>Contract Sent</span>
+            <span class="serif-tabular text-[#6b6257]">$68.2k</span>
+          </li>
+        </ul>
+
+        <div class="mt-10 pt-6 border-t border-[#ebe5d9]">
+          <div class="kern text-[10px] uppercase text-[#6b6257] mb-2">Closing soonest</div>
+          <div class="serif text-[16px] leading-snug">Marcus Holloway</div>
+          <div class="text-[12px] text-[#6b6257]">8 May &middot; Fitzroy Gardens Pavilion</div>
+        </div>
+      </aside>
+    </main>
+  </div>
+</body>
+</html>

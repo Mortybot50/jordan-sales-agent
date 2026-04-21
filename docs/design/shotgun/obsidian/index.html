@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OBSIDIAN — Jordan Sales Agent Design Direction</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  * { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+  body { background: #0a0a0a; color: #e8e8e8; }
+  .panel { background: #141414; border: 1px solid #222; }
+  .panel:hover { background: #1a1a1a; border-color: #2e2e2e; }
+  .amber { color: #ffb020; }
+  .green { color: #00d27a; }
+  .red { color: #ff3b47; }
+  .cyan { color: #4ec9ff; }
+  .muted { color: #8a8a8a; }
+  .tertiary { color: #5a5a5a; }
+  .divider { border-color: #2e2e2e; }
+  pre.ascii { line-height: 1.1; font-size: 11px; color: #5a5a5a; white-space: pre; }
+  .link-card { transition: none; text-decoration: none; }
+  .link-card:hover { background: #1a1a1a; border-color: #ffb020; }
+  .link-card:hover .arrow { color: #ffb020; }
+  a { color: #4ec9ff; }
+</style>
+</head>
+<body class="bg-[#0a0a0a] text-[#e8e8e8] font-mono min-h-screen">
+
+<div class="border-b border-[#222] px-6 py-2 flex items-center justify-between text-[11px] tracking-wider">
+  <div class="flex items-center gap-6">
+    <span class="amber font-bold">JORDAN</span>
+    <span class="muted">v1.4.2</span>
+    <span class="tertiary">│</span>
+    <span class="muted">22 APR 2026 10:47 AEST</span>
+    <span class="tertiary">│</span>
+    <span class="green">● CONNECTED</span>
+  </div>
+  <div class="muted">DESIGN SHOTGUN · DIRECTION 04/04</div>
+</div>
+
+<main class="max-w-6xl mx-auto px-8 py-12">
+
+  <pre class="ascii amber font-bold mb-6" style="color:#ffb020;">
+  ██████╗ ██████╗ ███████╗██╗██████╗ ██╗ █████╗ ███╗   ██╗
+ ██╔═══██╗██╔══██╗██╔════╝██║██╔══██╗██║██╔══██╗████╗  ██║
+ ██║   ██║██████╔╝███████╗██║██║  ██║██║███████║██╔██╗ ██║
+ ██║   ██║██╔══██╗╚════██║██║██║  ██║██║██╔══██║██║╚██╗██║
+ ╚██████╔╝██████╔╝███████║██║██████╔╝██║██║  ██║██║ ╚████║
+  ╚═════╝ ╚═════╝ ╚══════╝╚═╝╚═════╝ ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝
+  </pre>
+
+  <div class="grid grid-cols-12 gap-6 mb-10">
+    <div class="col-span-8">
+      <div class="text-[11px] tertiary tracking-[0.3em] mb-2">══ DIRECTION BRIEF ══</div>
+      <h1 class="text-3xl amber font-bold mb-4">BLOOMBERG TERMINAL × LINEAR</h1>
+      <p class="text-[13px] leading-relaxed muted max-w-2xl">
+        Ruthlessly information-dense. Keyboard-first. Zero warmth. Built for the operator who measures
+        every deal in seconds-to-close, not in hero imagery. Amber and green on black, JetBrains Mono on
+        everything, hard edges on everything. This is the CRM a futures trader would recognise.
+      </p>
+    </div>
+    <div class="col-span-4">
+      <div class="panel p-4 text-[11px]">
+        <div class="tertiary tracking-wider mb-2">PALETTE</div>
+        <div class="grid grid-cols-6 gap-1 mb-3">
+          <div class="aspect-square" style="background:#0a0a0a;border:1px solid #222;"></div>
+          <div class="aspect-square" style="background:#141414;border:1px solid #222;"></div>
+          <div class="aspect-square" style="background:#1a1a1a;border:1px solid #222;"></div>
+          <div class="aspect-square" style="background:#ffb020;"></div>
+          <div class="aspect-square" style="background:#00d27a;"></div>
+          <div class="aspect-square" style="background:#ff3b47;"></div>
+        </div>
+        <div class="tertiary tracking-wider mb-1">TYPE</div>
+        <div class="amber">JetBrains Mono · 400/500/700</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-3 gap-6 mb-10">
+
+    <a href="dashboard.html" class="link-card panel p-5 block">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-[11px] tertiary tracking-[0.2em]">SCREEN 01</div>
+        <div class="arrow tertiary">→</div>
+      </div>
+      <div class="amber font-bold text-lg mb-3">DASHBOARD</div>
+      <pre class="ascii mb-4" style="font-size:9px;line-height:1.15;">
+┌──┬──────────────────────┐
+│░░│ KPI KPI KPI KPI      │
+│░░├──────────────────────┤
+│░░│ HOT LEADS     │DRAFTS│
+│░░│ ● Sarah Chen  │ 4 ●  │
+│░░│ ● Marcus H.   │ 3 ○  │
+│░░│ ● Lena O.     │ 2 ○  │
+│░░├───────────────┴──────┤
+│░░│ ACTIVITY ▂▃▅▇▆▄▃▂    │
+│░░│ 10:42 opened 3×      │
+│░░│ 09:18 replied ▸      │
+│░░├──────────────────────┤
+│░░│ MORNING BRIEFING     │
+└──┴──────────────────────┘</pre>
+      <div class="text-[11px] muted">KPI strip, hot leads table, AI drafts, activity ticker, briefing.</div>
+    </a>
+
+    <a href="pipeline.html" class="link-card panel p-5 block">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-[11px] tertiary tracking-[0.2em]">SCREEN 02</div>
+        <div class="arrow tertiary">→</div>
+      </div>
+      <div class="amber font-bold text-lg mb-3">PIPELINE</div>
+      <pre class="ascii mb-4" style="font-size:9px;line-height:1.15;">
+┌──┬──┬──┬──┬──┬──┐
+│░░│NL│QL│PR│CS│WN│
+│░░├──┼──┼──┼──┼──┤
+│░░│▓▓│▓▓│▓▓│▓▓│▓▓│
+│░░├──┼──┼──┼──┼──┤
+│░░│■ │■ │■ │■ │  │
+│░░│■ │■ │■ │  │  │
+│░░│→ │→ │→ │→ │→ │
+│░░│  │■ │  │  │  │
+│░░├──┴──┴──┴──┴──┤
+│░░│ HEALTH       │
+└──┴──────────────┘</pre>
+      <div class="text-[11px] muted">Five-stage kanban, conversion stats, stuck-deal flags.</div>
+    </a>
+
+    <a href="lead-detail.html" class="link-card panel p-5 block">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-[11px] tertiary tracking-[0.2em]">SCREEN 03</div>
+        <div class="arrow tertiary">→</div>
+      </div>
+      <div class="amber font-bold text-lg mb-3">LEAD DETAIL</div>
+      <pre class="ascii mb-4" style="font-size:9px;line-height:1.15;">
+┌──┬────┬────────┬────┐
+│░░│CARD│TIMELINE│DEAL│
+│░░│ ●  │10:42 ▸ │ $$ │
+│░░│Sarh│09:18 ▸ │ 72%│
+│░░│Canv│Yest ▸  ├────┤
+│░░│84  │Mon  ▸  │AI  │
+│░░│▓▓▓▓│Sun  ▸  │DRFT│
+│░░│▓▓▓ │Fri  ▸  │[✓] │
+│░░│    │        │[✎] │
+│░░│    │        │[✗] │
+└──┴────┴────────┴────┘</pre>
+      <div class="text-[11px] muted">Contact card, activity timeline, deal facts, AI draft reply.</div>
+    </a>
+
+  </div>
+
+  <div class="grid grid-cols-2 gap-6 mb-10">
+    <div class="panel p-5">
+      <div class="text-[11px] green tracking-[0.2em] mb-2">▲ PRO</div>
+      <div class="text-[13px]">Ruthlessly fast for power users. Scannable at a glance. Every pixel carries signal. Keyboard-first means Jordan becomes a muscle-memory tool, not a web page.</div>
+    </div>
+    <div class="panel p-5">
+      <div class="text-[11px] red tracking-[0.2em] mb-2">▼ CON</div>
+      <div class="text-[13px]">Hostile to anyone who hasn't used Bloomberg or Linear. Hospitality sales reps expect warmth; this delivers none. Steep learning curve. Zero onboarding forgiveness.</div>
+    </div>
+  </div>
+
+  <div class="panel p-5 mb-10">
+    <div class="text-[11px] tertiary tracking-[0.2em] mb-3">══ HARD RULES ══</div>
+    <div class="grid grid-cols-4 gap-4 text-[11px]">
+      <div>
+        <div class="amber mb-1">SURFACES</div>
+        <div class="muted">Panel #141414 on page #0a0a0a. Hover #1a1a1a. Borders #222 / #2e2e2e.</div>
+      </div>
+      <div>
+        <div class="amber mb-1">GEOMETRY</div>
+        <div class="muted">Max 2px radius. No shadows. Grid lines everywhere. Tables, not cards.</div>
+      </div>
+      <div>
+        <div class="amber mb-1">SYMBOLS</div>
+        <div class="muted">Unicode only: ▸ ▾ ● ○ ◆ ▲ ▼ → ← ↑ ↓ ═ │. No icon fonts. No emojis.</div>
+      </div>
+      <div>
+        <div class="amber mb-1">NUMERALS</div>
+        <div class="muted">Tabular nums always. Sparklines via ▁▂▃▄▅▆▇█. Up=green, down=red.</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<div class="fixed bottom-0 left-0 right-0 border-t border-[#222] bg-[#0a0a0a] px-6 py-2 flex items-center justify-between text-[10px] tracking-wider">
+  <div class="flex gap-4 muted">
+    <span><span class="amber">[1]</span> dashboard</span>
+    <span><span class="amber">[2]</span> pipeline</span>
+    <span><span class="amber">[3]</span> lead detail</span>
+    <span><span class="amber">[/]</span> search</span>
+    <span><span class="amber">[⌘K]</span> command</span>
+  </div>
+  <div class="tertiary">OBSIDIAN · v1.0 · Jordan Sales Agent</div>
+</div>
+
+</body>
+</html>

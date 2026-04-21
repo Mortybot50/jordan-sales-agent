@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Sarah Chen · Canva — Atlas / Jordan Sales Agent</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  html,body{font-family:'Inter',ui-sans-serif,system-ui,sans-serif;font-size:13px;}
+  .mono{font-family:'JetBrains Mono',ui-monospace,monospace;}
+  .tnum{font-variant-numeric:tabular-nums;}
+  .hairline{border-color:#e4e7eb;}
+  .kbd{font-family:'JetBrains Mono',monospace;font-size:10px;border:1px solid #e4e7eb;border-bottom-width:2px;border-radius:3px;padding:1px 4px;color:#475569;background:#fafbfc;}
+  .pill{display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;border-radius:3px;font-size:11px;line-height:1;font-weight:500;}
+  .pill-green{background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;}
+  .pill-amber{background:#fffbeb;color:#b45309;border:1px solid #fde68a;}
+  .pill-red{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;}
+  .pill-blue{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;}
+  .pill-slate{background:#f1f5f9;color:#334155;border:1px solid #e2e8f0;}
+  .pill-purple{background:#f5f3ff;color:#6d28d9;border:1px solid #ddd6fe;}
+  .avatar{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#fff;}
+  .nav-item{display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:4px;color:#334155;font-size:13px;cursor:pointer;}
+  .nav-item:hover{background:#f1f5f9;}
+  .nav-active{background:#eff6ff;color:#1e40af;font-weight:500;}
+  .nav-section{font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:#94a3b8;padding:10px 8px 4px;}
+  .field-row{display:grid;grid-template-columns:100px 1fr;gap:8px;padding:4px 8px;border-radius:4px;align-items:center;font-size:12px;}
+  .field-row:hover{background:#f8fafc;}
+  .field-row:hover .edit-icon{opacity:1;}
+  .edit-icon{opacity:0;transition:opacity 0.1s;}
+  .field-label{color:#64748b;font-size:11px;}
+  .tab{padding:6px 10px;font-size:12px;color:#64748b;border-bottom:2px solid transparent;cursor:pointer;}
+  .tab:hover{color:#0f172a;}
+  .tab-active{color:#0f172a;border-bottom-color:#2563eb;font-weight:500;}
+  .activity-row{display:grid;grid-template-columns:72px 24px 110px 1fr 140px;gap:8px;padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;align-items:center;}
+  .activity-row:hover{background:#fafbfc;}
+  .chip{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:500;color:#334155;background:#fff;border:1px solid #e4e7eb;}
+  .chip-active{background:#eff6ff;border-color:#bfdbfe;color:#1e40af;}
+</style>
+</head>
+<body class="bg-[#fafbfc] text-[#0f172a]">
+<div class="flex h-screen overflow-hidden">
+  <!-- Sidebar -->
+  <aside class="w-[240px] bg-white border-r hairline flex flex-col">
+    <div class="h-12 border-b hairline flex items-center px-3 gap-2">
+      <div class="w-5 h-5 rounded-[4px] bg-[#0f172a] flex items-center justify-center">
+        <div class="w-2 h-2 bg-[#2563eb] rounded-[1px]"></div>
+      </div>
+      <span class="font-semibold tracking-tight text-[13px]">Jordan</span>
+      <span class="ml-auto text-[10px] mono text-[#94a3b8]">v1.4</span>
+    </div>
+    <nav class="flex-1 overflow-y-auto px-2 py-2">
+      <div class="nav-section flex items-center gap-1"><i data-lucide="chevron-down" class="w-3 h-3"></i>Overview</div>
+      <a href="dashboard.html" class="nav-item"><i data-lucide="layout-grid" class="w-[14px] h-[14px]"></i>Dashboard</a>
+      <div class="nav-item"><i data-lucide="sun" class="w-[14px] h-[14px]"></i>Morning briefing</div>
+
+      <div class="nav-section flex items-center gap-1"><i data-lucide="chevron-down" class="w-3 h-3"></i>Sales</div>
+      <a href="pipeline.html" class="nav-item"><i data-lucide="git-branch" class="w-[14px] h-[14px]"></i>Pipeline</a>
+      <div class="nav-item nav-active"><i data-lucide="users" class="w-[14px] h-[14px]"></i>Leads <span class="ml-auto text-[11px] mono tnum text-[#2563eb]">124</span></div>
+      <div class="nav-item"><i data-lucide="contact" class="w-[14px] h-[14px]"></i>Contacts</div>
+      <div class="nav-item"><i data-lucide="building-2" class="w-[14px] h-[14px]"></i>Accounts</div>
+      <div class="nav-item"><i data-lucide="map-pin" class="w-[14px] h-[14px]"></i>Venues</div>
+
+      <div class="nav-section flex items-center gap-1"><i data-lucide="chevron-down" class="w-3 h-3"></i>Automation</div>
+      <div class="nav-item"><i data-lucide="mail" class="w-[14px] h-[14px]"></i>Drafts <span class="ml-auto pill pill-blue tnum">4</span></div>
+      <div class="nav-item"><i data-lucide="workflow" class="w-[14px] h-[14px]"></i>Sequences</div>
+      <div class="nav-item"><i data-lucide="file-text" class="w-[14px] h-[14px]"></i>Templates</div>
+    </nav>
+    <div class="border-t hairline p-2">
+      <div class="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[#f1f5f9] cursor-pointer">
+        <span class="avatar" style="background:#2563eb">M</span>
+        <div class="flex-1 min-w-0">
+          <div class="text-[12px] font-medium truncate">Morty</div>
+          <div class="text-[11px] text-[#94a3b8] truncate">Jordan CRM</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 flex flex-col min-w-0">
+    <!-- Breadcrumb -->
+    <header class="h-12 bg-white border-b hairline flex items-center px-4 gap-3">
+      <div class="flex items-center gap-1.5 text-[13px]">
+        <a href="pipeline.html" class="text-[#94a3b8] hover:text-[#0f172a]">Pipeline</a>
+        <span class="text-[#cbd5e1]">/</span>
+        <span class="font-medium">Sarah Chen · Canva</span>
+      </div>
+      <div class="ml-auto flex items-center gap-1.5">
+        <button class="h-8 w-8 border hairline rounded-md flex items-center justify-center text-[#475569] hover:bg-[#f8fafc]" title="Email"><i data-lucide="mail" class="w-[14px] h-[14px]"></i></button>
+        <button class="h-8 w-8 border hairline rounded-md flex items-center justify-center text-[#475569] hover:bg-[#f8fafc]" title="Call"><i data-lucide="phone" class="w-[14px] h-[14px]"></i></button>
+        <button class="h-8 w-8 border hairline rounded-md flex items-center justify-center text-[#475569] hover:bg-[#f8fafc]" title="Calendar"><i data-lucide="calendar" class="w-[14px] h-[14px]"></i></button>
+        <button class="h-8 w-8 border hairline rounded-md flex items-center justify-center text-[#475569] hover:bg-[#f8fafc]" title="Note"><i data-lucide="sticky-note" class="w-[14px] h-[14px]"></i></button>
+        <button class="h-8 w-8 border hairline rounded-md flex items-center justify-center text-[#475569] hover:bg-[#f8fafc]" title="More"><i data-lucide="more-horizontal" class="w-[14px] h-[14px]"></i></button>
+      </div>
+    </header>
+
+    <!-- Entity strip -->
+    <div class="bg-white border-b hairline px-4 py-3 flex items-center gap-4">
+      <div class="w-10 h-10 rounded-full bg-[#2563eb] flex items-center justify-center text-white font-semibold text-[14px]">SC</div>
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-2">
+          <h1 class="text-[17px] font-semibold tracking-tight">Sarah Chen</h1>
+          <span class="pill pill-red tnum">84 · Hot</span>
+          <span class="pill pill-blue">Proposal</span>
+        </div>
+        <div class="text-[12px] text-[#64748b] mt-0.5">Events Manager · Canva · sarah.chen@canva.com</div>
+      </div>
+      <div class="flex items-center gap-5 pr-2">
+        <div>
+          <div class="text-[11px] uppercase tracking-wider text-[#94a3b8]">Deal value</div>
+          <div class="mono tnum text-[17px] font-semibold">$48,500</div>
+        </div>
+        <div>
+          <div class="text-[11px] uppercase tracking-wider text-[#94a3b8]">Event date</div>
+          <div class="mono tnum text-[13px] font-medium">14 Jun 2026 · 53d</div>
+        </div>
+        <div>
+          <div class="text-[11px] uppercase tracking-wider text-[#94a3b8]">Close prob.</div>
+          <div class="mono tnum text-[13px] font-medium text-[#047857]">72%</div>
+        </div>
+        <div>
+          <div class="text-[11px] uppercase tracking-wider text-[#94a3b8]">Next step</div>
+          <div class="text-[13px] font-medium">Send updated proposal <span class="pill pill-amber ml-1 tnum">due tmrw</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Three-pane body -->
+    <div class="flex-1 flex overflow-hidden">
+      <!-- LEFT: entity attributes -->
+      <aside class="w-[280px] bg-white border-r hairline overflow-y-auto">
+        <div class="flex text-[12px] border-b hairline">
+          <button class="tab tab-active">Contact</button>
+          <button class="tab">Account</button>
+          <button class="tab">Venue</button>
+        </div>
+        <div class="p-2">
+          <div class="text-[11px] uppercase tracking-wider text-[#64748b] font-semibold px-2 py-1 mt-1">Identity</div>
+          <div class="field-row"><span class="field-label">Full name</span><span class="flex items-center justify-between">Sarah Chen<i data-lucide="pencil" class="edit-icon w-3 h-3 text-[#94a3b8]"></i></span></div>
+          <div class="field-row"><span class="field-label">Title</span><span class="flex items-center justify-between">Events Manager<i data-lucide="pencil" class="edit-icon w-3 h-3 text-[#94a3b8]"></i></span></div>
+          <div class="field-row"><span class="field-label">Email</span><span class="flex items-center justify-between"><span class="mono text-[11px]">sarah.chen@canva.com</span><i data-lucide="copy" class="edit-icon w-3 h-3 text-[#94a3b8]"></i></span></div>
+          <div class="field-row"><span class="field-label">Phone</span><span class="flex items-center justify-between"><span class="mono tnum text-[11px]">+61 412 883 104</span><i data-lucide="copy" class="edit-icon w-3 h-3 text-[#94a3b8]"></i></span></div>
+          <div class="field-row"><span class="field-label">LinkedIn</span><span class="text-[#2563eb] truncate">linkedin.com/in/sarah-chen</span></div>
+          <div class="field-row"><span class="field-label">Timezone</span><span>AEST (UTC+10)</span></div>
+          <div class="field-row"><span class="field-label">Location</span><span>Surry Hills, NSW</span></div>
+
+          <div class="text-[11px] uppercase tracking-wider text-[#64748b] font-semibold px-2 py-1 mt-3">Event preferences</div>
+          <div class="field-row"><span class="field-label">Cuisine</span><span>Modern Australian</span></div>
+          <div class="field-row"><span class="field-label">Dietary</span><span class="text-[12px]">8 vegan, 4 GF, 2 no alcohol</span></div>
+          <div class="field-row"><span class="field-label">Style</span><span>Standing canapés → seated dinner</span></div>
+          <div class="field-row"><span class="field-label">Budget</span><span class="mono tnum">$380-450 pp</span></div>
+          <div class="field-row"><span class="field-label">Authority</span><span class="pill pill-green">Y — sole signer</span></div>
+
+          <div class="text-[11px] uppercase tracking-wider text-[#64748b] font-semibold px-2 py-1 mt-3">Past events</div>
+          <div class="px-2 space-y-1">
+            <a class="block px-2 py-1.5 rounded hover:bg-[#f8fafc] text-[12px]">
+              <div class="flex justify-between"><span class="font-medium">Canva EOFY 2024</span><span class="mono tnum text-[#64748b] text-[11px]">$42,800</span></div>
+              <div class="text-[11px] text-[#94a3b8]">Oak Room · 100 guests · 9.1★</div>
+            </a>
+            <a class="block px-2 py-1.5 rounded hover:bg-[#f8fafc] text-[12px]">
+              <div class="flex justify-between"><span class="font-medium">Canva Design+AI launch</span><span class="mono tnum text-[#64748b] text-[11px]">$31,200</span></div>
+              <div class="text-[11px] text-[#94a3b8]">Cremorne Brewery · 85 · 8.7★</div>
+            </a>
+          </div>
+
+          <button class="mt-3 w-full text-left px-2 py-1 text-[12px] text-[#64748b] hover:bg-[#f8fafc] rounded flex items-center gap-1"><i data-lucide="plus" class="w-3 h-3"></i>Add field</button>
+        </div>
+      </aside>
+
+      <!-- CENTER: activity -->
+      <section class="flex-1 overflow-y-auto bg-[#fafbfc]">
+        <div class="bg-white border-b hairline px-4">
+          <div class="flex">
+            <button class="tab tab-active">Activity <span class="pill pill-slate ml-1 tnum">14</span></button>
+            <button class="tab">Emails <span class="text-[#94a3b8] tnum">9</span></button>
+            <button class="tab">Drafts <span class="pill pill-blue ml-1 tnum">1</span></button>
+            <button class="tab">Notes <span class="text-[#94a3b8] tnum">3</span></button>
+            <button class="tab">Files <span class="text-[#94a3b8] tnum">5</span></button>
+            <button class="tab">Tasks <span class="text-[#94a3b8] tnum">3</span></button>
+          </div>
+        </div>
+
+        <div class="bg-white border-b hairline px-4 py-2 flex items-center gap-2">
+          <span class="chip chip-active">Type: All <i data-lucide="x" class="w-3 h-3"></i></span>
+          <span class="chip chip-active">Last 30d <i data-lucide="x" class="w-3 h-3"></i></span>
+          <span class="chip"><i data-lucide="plus" class="w-3 h-3"></i>Add filter</span>
+          <div class="ml-auto flex items-center gap-2 text-[11px] text-[#94a3b8]">
+            <span class="kbd">J</span><span class="kbd">K</span> navigate
+          </div>
+        </div>
+
+        <div class="bg-white">
+          <div class="activity-row">
+            <span class="mono tnum text-[#94a3b8] text-[11px]">Today 10:42</span>
+            <span class="w-5 h-5 rounded-full bg-[#ecfdf5] flex items-center justify-center text-[#047857]"><i data-lucide="mail-open" class="w-[11px] h-[11px]"></i></span>
+            <span class="text-[#64748b]">Email opened</span>
+            <span><span class="font-medium">Sarah Chen</span> opened <span class="text-[#0f172a]">"Updated proposal — Oak Room EOFY"</span></span>
+            <span class="flex gap-1"><span class="pill pill-green tnum">3 opens</span><span class="pill pill-blue tnum">2 clicks</span></span>
+          </div>
+          <div class="activity-row">
+            <span class="mono tnum text-[#94a3b8] text-[11px]">Today 09:18</span>
+            <span class="w-5 h-5 rounded-full bg-[#eff6ff] flex items-center justify-center text-[#1e40af]"><i data-lucide="reply" class="w-[11px] h-[11px]"></i></span>
+            <span class="text-[#64748b]">Email replied</span>
+            <span>Reply received: <span class="italic text-[#475569]">"Looks perfect, can we discuss the canapé selection…"</span></span>
+            <span><span class="pill pill-purple">High intent</span></span>
+          </div>
+          <div class="activity-row">
+            <span class="mono tnum text-[#94a3b8] text-[11px]">Yesterday 16:02</span>
+            <span class="w-5 h-5 rounded-full bg-[#fffbeb] flex items-center justify-center text-[#b45309]"><i data-lucide="calendar-check" class="w-[11px] h-[11px]"></i></span>
+            <span class="text-[#64748b]">Meeting booked</span>
+            <span>Site visit booked via Calendly · <span class="mono tnum">23 Apr · 2pm</span> · Oak Room mezzanine</span>
+            <span class="text-[11px] text-[#94a3b8]">via Calendly</span>
+          </div>
+          <div class="activity-row">
+            <span class="mono tnum text-[#94a3b8] text-[11px]">Yesterday 11:35</span>
+            <span class="w-5 h-5 rounded-full bg-[#eff6ff] flex items-center justify-center text-[#1e40af]"><i data-lucide="send" class="w-[11px] h-[11px]"></i></span>
+            <span class="text-[#64748b]">Email sent</span>
+            <span>Jordan sent: <span class="text-[#0f172a]">"Updated proposal — Oak Room EOFY"</span></span>
+            <span class="text-[11px] text-[#94a3b8]">Approved by Morty</span>
+          </div>
+          <div class="activity-row">
+            <span class="mono tnum text-[#94a3b8] text-[11px]">2d ago</span>
+            <span class="w-5 h-5 rounded-full bg-[#f5f3ff] flex items-center justify-center text-[#6d28d9]"><i data-lucide="file-signature" class="w-[11px] h-[11px]"></i></span>
+            <span class="text-[#64748b]">NDA signed</span>
+            <span>Sarah signed NDA via DocuSign</span>
+            <span class="text-[11px] text-[#94a3b8]">catering-nda-v3.pdf</span>
+          </div>
+          <div class="activity-row">
+            <span class="mono tnum text-[#94a3b8] text-[11px]">3d ago</span>
+            <span class="w-5 h-5 rounded-full bg-[#f1f5f9] flex items-center justify-center text-[#475569]"><i data-lucide="sticky-note" class="w-[11px] h-[11px]"></i></span>
+            <span class="text-[#64748b]">Note</span>
+            <span>Morty: "Wants to move from plated to canapés → seated. Budget flexible to $450 pp."</span>
+            <span></span>
+          </div>
+          <div class="activity-row">
+            <span class="mono tnum text-[#94a3b8] text-[11px]">4d ago</span>
+            <span class="w-5 h-5 rounded-full bg-[#eff6ff] flex items-center justify-center text-[#1e40af]"><i data-lucide="phone" class="w-[11px] h-[11px]"></i></span>
+            <span class="text-[#64748b]">Call · 23min</span>
+            <span>Discovery call — confirmed 120 guests, EOFY theme, AV needs for keynote</span>
+            <span class="text-[11px] text-[#94a3b8]">Recording</span>
+          </div>
+          <div class="activity-row">
+            <span class="mono tnum text-[#94a3b8] text-[11px]">6d ago</span>
+            <span class="w-5 h-5 rounded-full bg-[#ecfdf5] flex items-center justify-center text-[#047857]"><i data-lucide="mail-open" class="w-[11px] h-[11px]"></i></span>
+            <span class="text-[#64748b]">Email opened</span>
+            <span>Initial outreach opened 4× over 2 days</span>
+            <span><span class="pill pill-green tnum">4 opens</span></span>
+          </div>
+          <div class="activity-row">
+            <span class="mono tnum text-[#94a3b8] text-[11px]">7d ago</span>
+            <span class="w-5 h-5 rounded-full bg-[#eff6ff] flex items-center justify-center text-[#1e40af]"><i data-lucide="send" class="w-[11px] h-[11px]"></i></span>
+            <span class="text-[#64748b]">Email sent</span>
+            <span>Jordan sent outreach (sequence "EOFY enterprise · step 1")</span>
+            <span class="text-[11px] text-[#94a3b8]">Auto-sent</span>
+          </div>
+        </div>
+
+        <!-- Tasks subpanel -->
+        <div class="mt-4 mx-4 mb-6 bg-white border hairline rounded-md">
+          <div class="px-3 py-2 border-b hairline flex items-center justify-between">
+            <span class="text-[12px] font-semibold">Upcoming tasks <span class="pill pill-slate ml-1 tnum">3</span></span>
+            <button class="text-[11px] text-[#2563eb] hover:underline">+ Add task</button>
+          </div>
+          <div>
+            <div class="px-3 py-2 flex items-center gap-3 border-b hairline hover:bg-[#fafbfc]">
+              <input type="checkbox"/>
+              <span class="text-[12px] flex-1">Send revised proposal with canapé menu &amp; AV addendum</span>
+              <span class="pill pill-red tnum">Due tmrw</span>
+              <span class="text-[11px] text-[#94a3b8]">Morty</span>
+            </div>
+            <div class="px-3 py-2 flex items-center gap-3 border-b hairline hover:bg-[#fafbfc]">
+              <input type="checkbox"/>
+              <span class="text-[12px] flex-1">Site visit with Sarah — Oak Room mezzanine</span>
+              <span class="pill pill-amber tnum">23 Apr · 2pm</span>
+              <span class="text-[11px] text-[#94a3b8]">Morty</span>
+            </div>
+            <div class="px-3 py-2 flex items-center gap-3 hover:bg-[#fafbfc]">
+              <input type="checkbox"/>
+              <span class="text-[12px] flex-1">Contract draft + DocuSign send</span>
+              <span class="pill pill-slate tnum">30 Apr</span>
+              <span class="text-[11px] text-[#94a3b8]">Jordan</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT: deal + draft + score -->
+      <aside class="w-[320px] bg-white border-l hairline overflow-y-auto">
+        <!-- Deal facts -->
+        <div class="p-4 border-b hairline">
+          <div class="text-[11px] uppercase tracking-wider text-[#64748b] font-semibold mb-2">Deal</div>
+          <div class="grid grid-cols-2 gap-y-1.5 text-[12px]">
+            <span class="text-[#64748b]">Value</span><span class="mono tnum font-medium">$48,500</span>
+            <span class="text-[#64748b]">Stage</span><span><span class="pill pill-blue">Proposal</span></span>
+            <span class="text-[#64748b]">Close date</span><span class="mono tnum">14 Jun 2026</span>
+            <span class="text-[#64748b]">Probability</span><span class="mono tnum text-[#047857] font-medium">72%</span>
+            <span class="text-[#64748b]">Event type</span><span>EOFY Dinner</span>
+            <span class="text-[#64748b]">Guests</span><span class="mono tnum">120</span>
+            <span class="text-[#64748b]">Venue</span><span>Oak Room, South Yarra</span>
+            <span class="text-[#64748b]">Created</span><span class="mono tnum">7 Apr · 15d ago</span>
+            <span class="text-[#64748b]">Age in stage</span><span class="mono tnum">3d</span>
+          </div>
+        </div>
+
+        <!-- AI Draft -->
+        <div class="p-4 border-b hairline">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-[11px] uppercase tracking-wider text-[#64748b] font-semibold">Jordan's draft · ready</span>
+            <span class="pill pill-blue tnum"><i data-lucide="sparkles" class="w-[10px] h-[10px]"></i>AI</span>
+          </div>
+          <div class="border hairline rounded-md p-2.5 bg-[#fafbfc]">
+            <div class="text-[11px] text-[#64748b] mb-1">Re: Updated proposal — Oak Room EOFY</div>
+            <div class="text-[12px] text-[#0f172a] leading-relaxed line-clamp-4">
+              Hi Sarah, thanks for the quick reply. Delighted it's landing well. For the canapé selection, I'd suggest a 6-piece arrival canapé set (3 cold, 3 hot, 2 vegan) followed by the seated 3-course — keeps flow moving and lets everyone mingle before dinner. I've attached updated quantities for 120 and flagged…
+            </div>
+          </div>
+          <div class="mt-2 flex gap-2">
+            <button class="flex-1 h-8 rounded-md bg-[#2563eb] text-white text-[12px] font-medium hover:bg-[#1e40af] inline-flex items-center justify-center gap-1.5"><i data-lucide="send" class="w-[13px] h-[13px]"></i>Approve &amp; send <span class="kbd" style="background:#1e40af;border-color:#1e40af;color:#bfdbfe">↵</span></button>
+            <button class="h-8 px-3 rounded-md border hairline text-[12px] text-[#475569] hover:bg-[#f8fafc]">Edit</button>
+            <button class="h-8 px-3 rounded-md text-[12px] text-[#94a3b8] hover:text-[#64748b]">Discard</button>
+          </div>
+        </div>
+
+        <!-- Score breakdown -->
+        <div class="p-4 border-b hairline">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-[11px] uppercase tracking-wider text-[#64748b] font-semibold">Score · 84 Hot</span>
+            <span class="pill pill-red tnum"><i data-lucide="flame" class="w-[10px] h-[10px]"></i>Hot</span>
+          </div>
+          <div class="space-y-1.5 text-[12px]">
+            <div>
+              <div class="flex justify-between"><span class="text-[#64748b]">Engagement</span><span class="mono tnum font-medium">90</span></div>
+              <div class="h-1 bg-[#f1f5f9] rounded"><div class="h-1 bg-[#2563eb] rounded" style="width:90%"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between"><span class="text-[#64748b]">Budget fit</span><span class="mono tnum font-medium">85</span></div>
+              <div class="h-1 bg-[#f1f5f9] rounded"><div class="h-1 bg-[#2563eb] rounded" style="width:85%"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between"><span class="text-[#64748b]">Timeline</span><span class="mono tnum font-medium">80</span></div>
+              <div class="h-1 bg-[#f1f5f9] rounded"><div class="h-1 bg-[#2563eb] rounded" style="width:80%"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between"><span class="text-[#64748b]">Authority</span><span class="mono tnum font-medium">75</span></div>
+              <div class="h-1 bg-[#f1f5f9] rounded"><div class="h-1 bg-[#2563eb] rounded" style="width:75%"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between"><span class="text-[#64748b]">Venue fit</span><span class="mono tnum font-medium">90</span></div>
+              <div class="h-1 bg-[#f1f5f9] rounded"><div class="h-1 bg-[#2563eb] rounded" style="width:90%"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Linked -->
+        <div class="p-4">
+          <div class="text-[11px] uppercase tracking-wider text-[#64748b] font-semibold mb-2">Linked records</div>
+          <div class="space-y-1.5 text-[12px]">
+            <a class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-[#f8fafc]">
+              <i data-lucide="map-pin" class="w-[13px] h-[13px] text-[#64748b]"></i>
+              <span>Oak Room, South Yarra</span>
+              <span class="ml-auto text-[11px] text-[#94a3b8] mono tnum">2 past</span>
+            </a>
+            <a class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-[#f8fafc]">
+              <i data-lucide="building-2" class="w-[13px] h-[13px] text-[#64748b]"></i>
+              <span>Canva</span>
+              <span class="ml-auto text-[11px] text-[#94a3b8] mono tnum">3 deals</span>
+            </a>
+            <a class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-[#f8fafc]">
+              <i data-lucide="contact" class="w-[13px] h-[13px] text-[#64748b]"></i>
+              <span>Ben Wu — Canva Ops</span>
+              <span class="ml-auto text-[11px] text-[#94a3b8]">cc'd</span>
+            </a>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>

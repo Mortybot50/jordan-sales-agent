@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Jordan · Dashboard — OBSIDIAN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  * { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+  body { background: #0a0a0a; color: #e8e8e8; }
+  .panel { background: #141414; border: 1px solid #222; }
+  .amber { color: #ffb020; }
+  .green { color: #00d27a; }
+  .red { color: #ff3b47; }
+  .cyan { color: #4ec9ff; }
+  .muted { color: #8a8a8a; }
+  .tertiary { color: #5a5a5a; }
+  .bg-hover:hover { background: #1a1a1a; }
+  .nav-item { border-left: 2px solid transparent; }
+  .nav-item:hover { background: #1a1a1a; }
+  .nav-active { background: #1a1a1a; border-left-color: #ffb020; color: #ffb020; }
+  table { border-collapse: collapse; width: 100%; }
+  th { color: #5a5a5a; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; font-size: 10px; text-align: left; padding: 6px 8px; border-bottom: 1px solid #2e2e2e; }
+  td { padding: 8px; border-bottom: 1px solid #1a1a1a; font-size: 12px; }
+  tr:hover td { background: #1a1a1a; }
+  .dot { display: inline-block; width: 8px; height: 8px; }
+  .sparkline { font-size: 14px; letter-spacing: -1px; }
+  a { color: #4ec9ff; text-decoration: none; }
+</style>
+</head>
+<body class="bg-[#0a0a0a] text-[#e8e8e8] font-mono">
+
+<!-- TOP STATUS BAR -->
+<div class="border-b border-[#222] px-4 py-2 flex items-center justify-between text-[11px] tracking-wider">
+  <div class="flex items-center gap-4">
+    <span class="amber font-bold">JORDAN</span>
+    <span class="muted">v1.4.2</span>
+    <span class="tertiary">│</span>
+    <span class="muted">22 APR 2026 10:47 AEST</span>
+    <span class="tertiary">│</span>
+    <span class="green">● CONNECTED</span>
+    <span class="tertiary">│</span>
+    <span class="muted">Morty Finlayson</span>
+  </div>
+  <div class="flex items-center gap-4">
+    <span class="muted">MTD <span class="green">$351.1K</span></span>
+    <span class="tertiary">│</span>
+    <span class="muted">GOAL <span class="amber">$420K</span></span>
+    <span class="tertiary">│</span>
+    <span class="cyan">⌘K</span>
+  </div>
+</div>
+
+<div class="flex min-h-[calc(100vh-72px)]">
+
+  <!-- LEFT NAV -->
+  <aside class="w-[180px] border-r border-[#222] text-[12px]">
+    <div class="px-3 py-2 text-[10px] tertiary tracking-[0.2em]">══ WORKSPACE ══</div>
+    <a class="nav-item nav-active block px-3 py-2 flex justify-between"><span>◆ DASHBOARD</span><span class="tertiary">D</span></a>
+    <a href="pipeline.html" class="nav-item block px-3 py-2 flex justify-between text-[#e8e8e8]"><span>▸ PIPELINE</span><span class="tertiary">P</span></a>
+    <a href="lead-detail.html" class="nav-item block px-3 py-2 flex justify-between text-[#e8e8e8]"><span>▸ LEADS</span><span class="tertiary">L</span></a>
+    <a class="nav-item block px-3 py-2 flex justify-between text-[#e8e8e8]"><span>▸ DRAFTS <span class="amber">[4]</span></span><span class="tertiary">R</span></a>
+    <a class="nav-item block px-3 py-2 flex justify-between text-[#e8e8e8]"><span>▸ BRIEFING</span><span class="tertiary">B</span></a>
+    <a class="nav-item block px-3 py-2 flex justify-between text-[#e8e8e8]"><span>▸ TEMPLATES</span><span class="tertiary">T</span></a>
+    <a class="nav-item block px-3 py-2 flex justify-between text-[#e8e8e8]"><span>▸ SETTINGS</span><span class="tertiary">,</span></a>
+
+    <div class="px-3 py-2 mt-4 text-[10px] tertiary tracking-[0.2em]">══ VENUES ══</div>
+    <div class="px-3 py-1 muted text-[11px]">● Oak Room South Yarra</div>
+    <div class="px-3 py-1 muted text-[11px]">● Collingwood Warehouse</div>
+    <div class="px-3 py-1 muted text-[11px]">● Docklands Rooftop</div>
+    <div class="px-3 py-1 muted text-[11px]">● Fitzroy Pavilion</div>
+    <div class="px-3 py-1 muted text-[11px]">● Cremorne Brewery</div>
+
+    <div class="px-3 py-2 mt-4 text-[10px] tertiary tracking-[0.2em]">══ SYSTEM ══</div>
+    <div class="px-3 py-1 text-[11px] muted">GMAIL <span class="green">OK</span></div>
+    <div class="px-3 py-1 text-[11px] muted">CAL <span class="green">OK</span></div>
+    <div class="px-3 py-1 text-[11px] muted">AI  <span class="green">OK</span> <span class="tertiary">· 420ms</span></div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="flex-1 p-4 pb-16">
+
+    <!-- HEADER ROW -->
+    <div class="flex items-baseline justify-between mb-3">
+      <div>
+        <div class="text-[10px] tertiary tracking-[0.3em]">══ DASHBOARD ══</div>
+        <h1 class="text-xl amber font-bold mt-1">OPERATIONS OVERVIEW / WEDNESDAY</h1>
+      </div>
+      <div class="text-[11px] muted">
+        LAST SYNC <span class="green">10:46:58</span> · NEXT <span class="tertiary">10:52:00</span>
+      </div>
+    </div>
+
+    <!-- KPI STRIP -->
+    <div class="grid grid-cols-12 gap-2 mb-2">
+
+      <div class="panel col-span-3 p-3">
+        <div class="flex items-start justify-between">
+          <div class="text-[10px] tertiary tracking-[0.2em]">PIPELINE VALUE</div>
+          <div class="text-[10px] green">▲ 12.4% WOW</div>
+        </div>
+        <div class="text-[28px] amber font-bold mt-1 tracking-tight">$351,100</div>
+        <div class="flex justify-between text-[10px] muted mt-1">
+          <span>7 DEALS OPEN</span>
+          <span class="sparkline green">▂▃▂▄▅▆▅▇</span>
+        </div>
+      </div>
+
+      <div class="panel col-span-3 p-3">
+        <div class="flex items-start justify-between">
+          <div class="text-[10px] tertiary tracking-[0.2em]">HOT LEADS</div>
+          <div class="text-[10px] green">▲ 1 VS YEST</div>
+        </div>
+        <div class="text-[28px] amber font-bold mt-1 tracking-tight">3</div>
+        <div class="flex justify-between text-[10px] muted mt-1">
+          <span>SCORE ≥ 80</span>
+          <span class="sparkline amber">▂▁▂▃▂▃▄▃</span>
+        </div>
+      </div>
+
+      <div class="panel col-span-3 p-3">
+        <div class="flex items-start justify-between">
+          <div class="text-[10px] tertiary tracking-[0.2em]">AVG DAYS IN STAGE</div>
+          <div class="text-[10px] red">▲ 0.8d ▸ SLOWER</div>
+        </div>
+        <div class="text-[28px] font-bold mt-1 tracking-tight">5.0<span class="muted text-[14px]">d</span></div>
+        <div class="flex justify-between text-[10px] muted mt-1">
+          <span>TARGET &lt; 4.0d</span>
+          <span class="sparkline red">▃▂▃▄▃▅▄▆</span>
+        </div>
+      </div>
+
+      <div class="panel col-span-3 p-3">
+        <div class="flex items-start justify-between">
+          <div class="text-[10px] tertiary tracking-[0.2em]">DRAFTS / EMAILS 7D</div>
+          <div class="text-[10px] cyan">◆ REVIEW</div>
+        </div>
+        <div class="text-[28px] font-bold mt-1 tracking-tight">
+          <span class="amber">4</span><span class="muted text-[18px]"> / </span><span>23</span>
+        </div>
+        <div class="flex justify-between text-[10px] muted mt-1">
+          <span>AWAITING REVIEW · SENT</span>
+          <span class="sparkline cyan">▁▃▂▄▃▅▆▇</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ACTIVITY TICKER FULL-WIDTH -->
+    <div class="panel mb-2">
+      <div class="flex items-center justify-between px-3 py-1.5 border-b border-[#2e2e2e]">
+        <div class="text-[10px] tracking-[0.2em]"><span class="green">●</span> ACTIVITY TICKER <span class="tertiary">· LIVE</span></div>
+        <div class="text-[10px] muted">23 EVENTS / LAST 4H <span class="sparkline green">▁▂▃▅▄▆▇▆▅▄</span></div>
+      </div>
+      <div class="px-3 py-2 text-[11px] leading-[1.7] font-normal overflow-hidden" style="max-height:120px;">
+        <div><span class="tertiary">10:42:14</span> &nbsp; <span class="amber">SARAH CHEN</span> opened your proposal <span class="green">3×</span> <span class="tertiary">· oak-room-proposal-v2.pdf</span></div>
+        <div><span class="tertiary">10:31:02</span> &nbsp; <span class="amber">JAMES WHITFIELD</span> replied <span class="cyan">▸</span> "Can we lock the 12 Dec date?" <span class="green">[draft ready]</span></div>
+        <div><span class="tertiary">10:14:58</span> &nbsp; <span class="amber">MARCUS HOLLOWAY</span> e-signed contract section 3 <span class="green">●</span></div>
+        <div><span class="tertiary">09:58:03</span> &nbsp; <span class="amber">LENA OYELARAN</span> booked calendar hold · 3 Jul · Cremorne Brewery · 200 pax</div>
+        <div><span class="tertiary">09:18:47</span> &nbsp; <span class="amber">JAMES WHITFIELD</span> replied <span class="cyan">▸</span> site visit requested Friday 2pm</div>
+        <div><span class="tertiary">08:52:11</span> &nbsp; <span class="amber">ANIKA SHAW</span> new enquiry ↓ Deloitte Year End · 180 pax · Docklands</div>
+        <div><span class="tertiary">08:40:00</span> &nbsp; <span class="muted">JORDAN</span> morning briefing generated · 3 priorities flagged</div>
+      </div>
+    </div>
+
+    <!-- MIDDLE GRID -->
+    <div class="grid grid-cols-12 gap-2 mb-2">
+
+      <!-- HOT LEADS -->
+      <div class="panel col-span-7">
+        <div class="flex items-center justify-between px-3 py-1.5 border-b border-[#2e2e2e]">
+          <div class="text-[10px] tracking-[0.2em]">HOT LEADS <span class="tertiary">· SORTED BY SCORE</span></div>
+          <div class="text-[10px] muted">3 HOT · 4 WARM · 1 COLD <span class="tertiary">│</span> <a>EXPORT ▸</a></div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>SCR</th>
+              <th>CONTACT / COMPANY</th>
+              <th>VENUE</th>
+              <th class="text-right">VALUE</th>
+              <th>STAGE</th>
+              <th class="text-right">DAYS</th>
+              <th>LAST TOUCH</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="dot" style="background:#ff3b47;"></span> <span class="amber">91</span></td>
+              <td>Lena Oyelaran <span class="tertiary">·</span> <span class="muted">Nike APAC</span></td>
+              <td class="muted">Cremorne Brewery</td>
+              <td class="text-right amber">$85,000</td>
+              <td><span class="cyan">PROPOSAL</span></td>
+              <td class="text-right">6</td>
+              <td class="muted">49m · opened</td>
+            </tr>
+            <tr>
+              <td><span class="dot" style="background:#ff3b47;"></span> <span class="amber">89</span></td>
+              <td>Marcus Holloway <span class="tertiary">·</span> <span class="muted">Grant Thornton</span></td>
+              <td class="muted">Fitzroy Pavilion</td>
+              <td class="text-right amber">$68,200</td>
+              <td><span class="green">CONTRACT</span></td>
+              <td class="text-right">2</td>
+              <td class="muted">32m · e-signed</td>
+            </tr>
+            <tr>
+              <td><span class="dot" style="background:#ff3b47;"></span> <span class="amber">84</span></td>
+              <td>Sarah Chen <span class="tertiary">·</span> <span class="muted">Canva</span></td>
+              <td class="muted">Oak Room South Yarra</td>
+              <td class="text-right amber">$48,500</td>
+              <td><span class="cyan">PROPOSAL</span></td>
+              <td class="text-right">3</td>
+              <td class="muted">5m · opened 3×</td>
+            </tr>
+            <tr>
+              <td><span class="dot" style="background:#ffb020;"></span> <span>78</span></td>
+              <td>Anika Shaw <span class="tertiary">·</span> <span class="muted">Deloitte</span></td>
+              <td class="muted">Docklands Rooftop</td>
+              <td class="text-right amber">$54,200</td>
+              <td><span class="muted">NEW LEAD</span></td>
+              <td class="text-right">0</td>
+              <td class="muted">2h · enquiry</td>
+            </tr>
+            <tr>
+              <td><span class="dot" style="background:#ffb020;"></span> <span>76</span></td>
+              <td>James Whitfield <span class="tertiary">·</span> <span class="muted">Holland &amp; Smith</span></td>
+              <td class="muted">Collingwood Warehouse</td>
+              <td class="text-right amber">$22,400</td>
+              <td><span class="cyan">QUALIFYING</span></td>
+              <td class="text-right">5</td>
+              <td class="muted">1h · replied</td>
+            </tr>
+            <tr>
+              <td><span class="dot" style="background:#ffb020;"></span> <span>71</span></td>
+              <td>Priya Nadar <span class="tertiary">·</span> <span class="muted">Bond Uni Alumni</span></td>
+              <td class="muted">Docklands Rooftop</td>
+              <td class="text-right amber">$14,800</td>
+              <td><span class="muted">NEW LEAD</span></td>
+              <td class="text-right">1</td>
+              <td class="muted">yest · call</td>
+            </tr>
+            <tr>
+              <td><span class="dot" style="background:#ffb020;"></span> <span>62</span></td>
+              <td>Tom Ferris <span class="tertiary">·</span> <span class="muted">Ferris/Chen Wedding</span></td>
+              <td class="muted">Oak Room South Yarra</td>
+              <td class="text-right amber">$38,600</td>
+              <td><span class="cyan">QUALIFYING</span></td>
+              <td class="text-right red">9</td>
+              <td class="muted">6d · no reply</td>
+            </tr>
+            <tr>
+              <td><span class="dot" style="background:#4ec9ff;"></span> <span class="muted">55</span></td>
+              <td>Dev Kapoor <span class="tertiary">·</span> <span class="muted">Rip Curl</span></td>
+              <td class="muted">Collingwood Warehouse</td>
+              <td class="text-right muted">$19,400</td>
+              <td><span class="cyan">QUALIFYING</span></td>
+              <td class="text-right red">14</td>
+              <td class="red">stuck · flag</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- AI DRAFTS -->
+      <div class="panel col-span-5">
+        <div class="flex items-center justify-between px-3 py-1.5 border-b border-[#2e2e2e]">
+          <div class="text-[10px] tracking-[0.2em]">AI DRAFTS AWAITING REVIEW <span class="amber">[4]</span></div>
+          <div class="text-[10px] muted">JORDAN · 420ms avg</div>
+        </div>
+
+        <div class="divide-y divide-[#1a1a1a]">
+
+          <div class="px-3 py-2.5">
+            <div class="flex items-center justify-between text-[11px]">
+              <div><span class="amber">◆</span> Reply to <span class="amber">Sarah Chen</span> <span class="tertiary">·</span> <span class="muted">Canva</span></div>
+              <div class="text-[10px] green">URGENT</div>
+            </div>
+            <div class="text-[11px] muted mt-1 leading-snug">"Hi Sarah — thanks for opening the proposal. I've attached the revised floor plan showing the 120-guest layout with the mezzanine bar. Happy to hold 14 Jun…"</div>
+            <div class="flex gap-2 mt-1.5 text-[10px]">
+              <span class="amber">[A] APPROVE</span>
+              <span class="cyan">[E] EDIT</span>
+              <span class="tertiary">[X] DISCARD</span>
+              <span class="muted ml-auto">43s ago</span>
+            </div>
+          </div>
+
+          <div class="px-3 py-2.5">
+            <div class="flex items-center justify-between text-[11px]">
+              <div><span class="amber">◆</span> Site visit confirm <span class="amber">James Whitfield</span></div>
+              <div class="text-[10px] amber">HIGH</div>
+            </div>
+            <div class="text-[11px] muted mt-1 leading-snug">"Friday 2pm works — I'll meet you at Collingwood Warehouse front gate. Bringing the vendor pack and audio diagram. Parking via Smith St entry…"</div>
+            <div class="flex gap-2 mt-1.5 text-[10px]">
+              <span class="amber">[A] APPROVE</span>
+              <span class="cyan">[E] EDIT</span>
+              <span class="tertiary">[X] DISCARD</span>
+              <span class="muted ml-auto">12m ago</span>
+            </div>
+          </div>
+
+          <div class="px-3 py-2.5">
+            <div class="flex items-center justify-between text-[11px]">
+              <div><span class="amber">◆</span> Proposal v1 <span class="amber">Anika Shaw</span> <span class="tertiary">·</span> <span class="muted">Deloitte</span></div>
+              <div class="text-[10px] cyan">NORMAL</div>
+            </div>
+            <div class="text-[11px] muted mt-1 leading-snug">"Anika — great to connect. Docklands Rooftop can comfortably seat 180 with the extended deck. Year-end pricing for 5 Dec is $54,200 inc GST covering…"</div>
+            <div class="flex gap-2 mt-1.5 text-[10px]">
+              <span class="amber">[A] APPROVE</span>
+              <span class="cyan">[E] EDIT</span>
+              <span class="tertiary">[X] DISCARD</span>
+              <span class="muted ml-auto">1h ago</span>
+            </div>
+          </div>
+
+          <div class="px-3 py-2.5">
+            <div class="flex items-center justify-between text-[11px]">
+              <div><span class="amber">◆</span> Re-engagement <span class="amber">Dev Kapoor</span> <span class="tertiary">·</span> <span class="muted">Rip Curl</span></div>
+              <div class="text-[10px] red">STALE · 14d</div>
+            </div>
+            <div class="text-[11px] muted mt-1 leading-snug">"Hi Dev — following up on the team offsite. I've held 25 Sep pencilled at Collingwood Warehouse. If it's no longer on, a quick 'not this year' helps…"</div>
+            <div class="flex gap-2 mt-1.5 text-[10px]">
+              <span class="amber">[A] APPROVE</span>
+              <span class="cyan">[E] EDIT</span>
+              <span class="tertiary">[X] DISCARD</span>
+              <span class="muted ml-auto">2h ago</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+    <!-- MORNING BRIEFING -->
+    <div class="panel mb-2">
+      <div class="flex items-center justify-between px-3 py-1.5 border-b border-[#2e2e2e]">
+        <div class="text-[10px] tracking-[0.2em]">MORNING BRIEFING <span class="tertiary">· generated 08:40 by JORDAN</span></div>
+        <div class="text-[10px] muted">3 PRIORITIES · EST. 47 MIN</div>
+      </div>
+      <div class="grid grid-cols-3 divide-x divide-[#2e2e2e]">
+
+        <div class="p-3">
+          <div class="flex items-baseline justify-between mb-1.5">
+            <div class="amber text-[11px]">▲ PRIORITY 01 · 12 MIN</div>
+            <div class="text-[10px] tertiary">[⏎] OPEN</div>
+          </div>
+          <div class="text-[12px] mb-1">Close <span class="amber">Marcus Holloway</span> — Grant Thornton</div>
+          <div class="text-[11px] muted leading-snug">Contract section 3 signed 32m ago. Countersign + return before 14:00. Deposit invoice auto-queued. Value <span class="green">$68,200</span>.</div>
+        </div>
+
+        <div class="p-3">
+          <div class="flex items-baseline justify-between mb-1.5">
+            <div class="amber text-[11px]">▲ PRIORITY 02 · 20 MIN</div>
+            <div class="text-[10px] tertiary">[⏎] OPEN</div>
+          </div>
+          <div class="text-[12px] mb-1">Send revised proposal to <span class="amber">Sarah Chen</span></div>
+          <div class="text-[11px] muted leading-snug">Opened v1 three times in 48h. Draft ready in review queue. Attach updated Oak Room floor plan + mezzanine bar upgrade. Probability <span class="green">72%</span>.</div>
+        </div>
+
+        <div class="p-3">
+          <div class="flex items-baseline justify-between mb-1.5">
+            <div class="amber text-[11px]">▲ PRIORITY 03 · 15 MIN</div>
+            <div class="text-[10px] tertiary">[⏎] OPEN</div>
+          </div>
+          <div class="text-[12px] mb-1">Re-engage or park <span class="amber">Dev Kapoor</span></div>
+          <div class="text-[11px] muted leading-snug">14 days stuck in Qualifying. Drafted polite out. <span class="red">If no reply by Fri, auto-archive</span> and release 25 Sep hold at Collingwood Warehouse.</div>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- BOTTOM KEYBOARD HINT -->
+<div class="fixed bottom-0 left-0 right-0 border-t border-[#222] bg-[#0a0a0a] px-4 py-2 flex items-center justify-between text-[10px] tracking-wider z-10">
+  <div class="flex gap-4 muted">
+    <span><span class="amber">[N]</span> new lead</span>
+    <span><span class="amber">[/]</span> search</span>
+    <span><span class="amber">[⌘K]</span> command</span>
+    <span><span class="amber">[G then P]</span> pipeline</span>
+    <span><span class="amber">[G then L]</span> leads</span>
+    <span><span class="amber">[R]</span> drafts</span>
+    <span><span class="amber">[?]</span> help</span>
+  </div>
+  <div class="tertiary">MEM 42% · CPU 8% · LATENCY 12ms</div>
+</div>
+
+</body>
+</html>

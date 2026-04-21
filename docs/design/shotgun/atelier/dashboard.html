@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Today · Jordan Sales Agent</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  html, body { font-family: 'Inter', system-ui, sans-serif; }
+  .serif { font-family: 'Fraunces', Georgia, serif; font-optical-sizing: auto; font-variation-settings: "opsz" 144; }
+  .serif-text { font-family: 'Fraunces', Georgia, serif; font-variation-settings: "opsz" 24; }
+  .serif-tabular { font-family: 'Fraunces', Georgia, serif; font-variation-settings: "opsz" 144; font-feature-settings: "tnum"; }
+  .kern { letter-spacing: 0.14em; }
+  body { line-height: 1.65; }
+  .nav a { transition: color 0.15s ease; }
+  .nav a:hover { color: #1a1612; }
+</style>
+</head>
+<body class="bg-[#f5f1ea] text-[#1a1612]">
+  <div class="flex min-h-screen">
+
+    <!-- Sidebar -->
+    <aside class="w-[220px] shrink-0 border-r border-[#ebe5d9] bg-[#f5f1ea] flex flex-col">
+      <div class="px-8 pt-10 pb-8">
+        <div class="serif text-[28px] leading-none">Jordan<span class="text-[#b8923f]">.</span></div>
+        <div class="kern text-[10px] uppercase text-[#9a8f80] mt-2">Sales copilot</div>
+      </div>
+
+      <nav class="nav px-8 flex-1 text-[14px]">
+        <div class="kern text-[10px] uppercase text-[#9a8f80] mb-4">Desk</div>
+        <ul class="space-y-3 mb-10">
+          <li><a href="#" class="flex items-center justify-between text-[#1a1612]"><span class="flex items-center gap-2"><span class="text-[#b8923f] text-[8px]">●</span>Today</span></a></li>
+          <li><a href="pipeline.html" class="flex items-center justify-between text-[#6b6257]"><span>Pipeline</span></a></li>
+          <li><a href="#" class="flex items-center justify-between text-[#6b6257]"><span>Enquiries</span></a></li>
+          <li><a href="#" class="flex items-center justify-between text-[#6b6257]"><span>Drafts</span><span class="text-[11px] text-[#b8923f]">4</span></a></li>
+          <li><a href="#" class="flex items-center justify-between text-[#6b6257]"><span>Briefing</span></a></li>
+        </ul>
+        <div class="kern text-[10px] uppercase text-[#9a8f80] mb-4">Studio</div>
+        <ul class="space-y-3">
+          <li><a href="#" class="text-[#6b6257]">Sequences</a></li>
+          <li><a href="#" class="text-[#6b6257]">Venues</a></li>
+          <li><a href="#" class="text-[#6b6257]">Settings</a></li>
+        </ul>
+      </nav>
+
+      <div class="px-8 py-6 border-t border-[#ebe5d9]">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-full bg-[#7d2b3a] text-white flex items-center justify-center serif text-[14px]">MF</div>
+          <div>
+            <div class="text-[13px] font-medium">Morty Finlayson</div>
+            <div class="text-[11px] text-[#9a8f80]">Sales &middot; Melbourne</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1 px-16 py-16 max-w-[1200px]">
+
+      <!-- Salutation -->
+      <section class="mb-16">
+        <div class="kern text-[11px] uppercase text-[#b8923f] mb-5">The Morning &middot; No. 112</div>
+        <h1 class="serif font-light tracking-tight leading-[1.02] text-[64px] mb-4">Good morning, Morty.</h1>
+        <p class="serif-text italic text-[20px] text-[#6b6257]">Wednesday, 22 April 2026 &mdash; seven things for today.</p>
+      </section>
+
+      <!-- Today's priorities -->
+      <section class="mb-20">
+        <div class="flex items-baseline justify-between mb-6">
+          <h2 class="serif text-[22px]">Today&rsquo;s priorities</h2>
+          <div class="kern text-[10px] uppercase text-[#9a8f80]">Three of seven</div>
+        </div>
+        <div class="grid grid-cols-3 gap-6">
+
+          <article class="bg-white rounded-2xl overflow-hidden shadow-[0_1px_3px_rgba(26,22,18,0.04),0_8px_24px_rgba(26,22,18,0.06)]">
+            <img src="https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=800&q=80" class="w-full h-48 object-cover" alt="Oak Room dining" />
+            <div class="p-6">
+              <div class="inline-block bg-[#7d2b3a] text-white kern text-[9px] uppercase px-2.5 py-1 rounded-full mb-4">Reply due</div>
+              <h3 class="serif text-[19px] leading-snug mb-2">Reply to Sarah Chen about the EOFY dinner.</h3>
+              <p class="text-[14px] text-[#6b6257]">She asked about canapé options &mdash; Jordan has a draft warmed up.</p>
+              <div class="mt-5 pt-4 border-t border-[#ebe5d9] flex items-center justify-between text-[12px] text-[#9a8f80]">
+                <span>Canva &middot; $48,500</span>
+                <span class="text-[#b8923f]">Open draft →</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="bg-white rounded-2xl overflow-hidden shadow-[0_1px_3px_rgba(26,22,18,0.04),0_8px_24px_rgba(26,22,18,0.06)]">
+            <img src="https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=800&q=80" class="w-full h-48 object-cover" alt="Brewery venue" />
+            <div class="p-6">
+              <div class="inline-block bg-[#2d5a3d] text-white kern text-[9px] uppercase px-2.5 py-1 rounded-full mb-4">Site visit</div>
+              <h3 class="serif text-[19px] leading-snug mb-2">Confirm Cremorne Brewery walk&#8209;through with Lena.</h3>
+              <p class="text-[14px] text-[#6b6257]">Nike APAC, Friday at 10am. She&rsquo;s bringing the head of brand.</p>
+              <div class="mt-5 pt-4 border-t border-[#ebe5d9] flex items-center justify-between text-[12px] text-[#9a8f80]">
+                <span>Nike APAC &middot; $85,000</span>
+                <span class="text-[#b8923f]">Send hold →</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="bg-white rounded-2xl overflow-hidden shadow-[0_1px_3px_rgba(26,22,18,0.04),0_8px_24px_rgba(26,22,18,0.06)]">
+            <img src="https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?w=800&q=80" class="w-full h-48 object-cover" alt="Warehouse venue" />
+            <div class="p-6">
+              <div class="inline-block bg-[#c2614b] text-white kern text-[9px] uppercase px-2.5 py-1 rounded-full mb-4">Proposal</div>
+              <h3 class="serif text-[19px] leading-snug mb-2">Send the Christmas proposal to James Whitfield.</h3>
+              <p class="text-[14px] text-[#6b6257]">Collingwood Warehouse, 80 guests, December. Jordan has it ready.</p>
+              <div class="mt-5 pt-4 border-t border-[#ebe5d9] flex items-center justify-between text-[12px] text-[#9a8f80]">
+                <span>Holland &amp; Smith &middot; $22,400</span>
+                <span class="text-[#b8923f]">Review proposal →</span>
+              </div>
+            </div>
+          </article>
+
+        </div>
+      </section>
+
+      <!-- Ornamental divider -->
+      <div class="flex items-center gap-6 mb-16 text-[#9a8f80]">
+        <div class="h-px bg-[#ebe5d9] flex-1"></div>
+        <span class="text-[#b8923f] text-lg">◆</span>
+        <div class="h-px bg-[#ebe5d9] flex-1"></div>
+      </div>
+
+      <!-- KPIs -->
+      <section class="mb-20">
+        <div class="flex items-baseline justify-between mb-10">
+          <h2 class="serif text-[22px]">This week at a glance</h2>
+          <div class="kern text-[10px] uppercase text-[#9a8f80]">22 Apr &ndash; 28 Apr</div>
+        </div>
+
+        <div class="grid grid-cols-4 gap-8">
+          <div>
+            <div class="serif-tabular font-light text-[#1a1612] text-[56px] leading-none">$351.1k</div>
+            <div class="kern text-[10px] uppercase text-[#6b6257] mt-3">Pipeline value</div>
+            <div class="text-[12px] text-[#2d5a3d] mt-1">+ $42.6k this week</div>
+          </div>
+          <div>
+            <div class="serif-tabular font-light text-[#1a1612] text-[56px] leading-none">7</div>
+            <div class="kern text-[10px] uppercase text-[#6b6257] mt-3">Deals open</div>
+            <div class="text-[12px] text-[#6b6257] mt-1">Two in contract stage</div>
+          </div>
+          <div>
+            <div class="serif-tabular font-light text-[#7d2b3a] text-[56px] leading-none">3</div>
+            <div class="kern text-[10px] uppercase text-[#6b6257] mt-3">Hot leads</div>
+            <div class="text-[12px] text-[#6b6257] mt-1">Sarah, Marcus, Lena</div>
+          </div>
+          <div>
+            <div class="serif-tabular font-light text-[#b8923f] text-[56px] leading-none">4</div>
+            <div class="kern text-[10px] uppercase text-[#6b6257] mt-3">Drafts to review</div>
+            <div class="text-[12px] text-[#6b6257] mt-1">Average age &middot; 14h</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Warm leads list -->
+      <section class="mb-16">
+        <div class="flex items-baseline justify-between mb-2">
+          <h2 class="serif text-[32px]">Warm leads.</h2>
+        </div>
+        <p class="serif-text italic text-[17px] text-[#6b6257] mb-8">The rooms likely to host real events by end of quarter.</p>
+
+        <ul class="divide-y divide-[#ebe5d9] border-t border-b border-[#ebe5d9]">
+
+          <li class="py-5 flex items-center gap-6">
+            <div class="w-11 h-11 rounded-full bg-[#7d2b3a] text-white flex items-center justify-center serif text-[14px]">SC</div>
+            <div class="flex-1">
+              <div class="serif text-[18px] leading-tight">Sarah Chen</div>
+              <div class="text-[13px] text-[#6b6257]">Canva EOFY dinner &middot; 120 guests &middot; The Oak Room, South Yarra &middot; 14 June</div>
+            </div>
+            <div class="text-right">
+              <div class="serif-tabular text-[20px] text-[#b8923f]">$48,500</div>
+              <div class="flex items-center justify-end gap-2 mt-1">
+                <span class="text-[#7d2b3a] text-[8px]">●</span>
+                <span class="text-[11px] kern uppercase text-[#6b6257]">Hot &middot; 84</span>
+              </div>
+            </div>
+          </li>
+
+          <li class="py-5 flex items-center gap-6">
+            <div class="w-11 h-11 rounded-full bg-[#2d5a3d] text-white flex items-center justify-center serif text-[14px]">MH</div>
+            <div class="flex-1">
+              <div class="serif text-[18px] leading-tight">Marcus Holloway</div>
+              <div class="text-[13px] text-[#6b6257]">Grant Thornton partner retreat &middot; 45 guests &middot; Fitzroy Gardens Pavilion &middot; 8 May</div>
+            </div>
+            <div class="text-right">
+              <div class="serif-tabular text-[20px] text-[#b8923f]">$68,200</div>
+              <div class="flex items-center justify-end gap-2 mt-1">
+                <span class="text-[#7d2b3a] text-[8px]">●</span>
+                <span class="text-[11px] kern uppercase text-[#6b6257]">Hot &middot; 89</span>
+              </div>
+            </div>
+          </li>
+
+          <li class="py-5 flex items-center gap-6">
+            <div class="w-11 h-11 rounded-full bg-[#c2614b] text-white flex items-center justify-center serif text-[14px]">LO</div>
+            <div class="flex-1">
+              <div class="serif text-[18px] leading-tight">Lena Oyelaran</div>
+              <div class="text-[13px] text-[#6b6257]">Nike APAC product launch &middot; 200 guests &middot; Cremorne Brewery &middot; 3 July</div>
+            </div>
+            <div class="text-right">
+              <div class="serif-tabular text-[20px] text-[#b8923f]">$85,000</div>
+              <div class="flex items-center justify-end gap-2 mt-1">
+                <span class="text-[#7d2b3a] text-[8px]">●</span>
+                <span class="text-[11px] kern uppercase text-[#6b6257]">Hot &middot; 91</span>
+              </div>
+            </div>
+          </li>
+
+          <li class="py-5 flex items-center gap-6">
+            <div class="w-11 h-11 rounded-full bg-[#b8923f] text-white flex items-center justify-center serif text-[14px]">AS</div>
+            <div class="flex-1">
+              <div class="serif text-[18px] leading-tight">Anika Shaw</div>
+              <div class="text-[13px] text-[#6b6257]">Deloitte year end &middot; 180 guests &middot; Docklands Rooftop &middot; 5 December</div>
+            </div>
+            <div class="text-right">
+              <div class="serif-tabular text-[20px] text-[#b8923f]">$54,200</div>
+              <div class="flex items-center justify-end gap-2 mt-1">
+                <span class="text-[#b8923f] text-[8px]">●</span>
+                <span class="text-[11px] kern uppercase text-[#6b6257]">Warm &middot; 78</span>
+              </div>
+            </div>
+          </li>
+
+          <li class="py-5 flex items-center gap-6">
+            <div class="w-11 h-11 rounded-full bg-[#1a1612] text-white flex items-center justify-center serif text-[14px]">JW</div>
+            <div class="flex-1">
+              <div class="serif text-[18px] leading-tight">James Whitfield</div>
+              <div class="text-[13px] text-[#6b6257]">Holland &amp; Smith Christmas party &middot; 80 guests &middot; Collingwood Warehouse &middot; 12 Dec</div>
+            </div>
+            <div class="text-right">
+              <div class="serif-tabular text-[20px] text-[#b8923f]">$22,400</div>
+              <div class="flex items-center justify-end gap-2 mt-1">
+                <span class="text-[#b8923f] text-[8px]">●</span>
+                <span class="text-[11px] kern uppercase text-[#6b6257]">Warm &middot; 76</span>
+              </div>
+            </div>
+          </li>
+
+        </ul>
+
+        <div class="mt-6 kern text-[11px] uppercase text-[#b8923f]">Read all eight open leads →</div>
+      </section>
+
+      <footer class="pt-10 mt-10 border-t border-[#ebe5d9] flex items-center justify-between text-[12px] text-[#9a8f80]">
+        <span>Jordan &middot; Sales copilot for hospitality</span>
+        <span class="kern uppercase">No. 112 &middot; 22.04.2026</span>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>

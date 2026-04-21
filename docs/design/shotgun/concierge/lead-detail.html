@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sarah Chen · Canva</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    html, body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+    .serif { font-family: 'Instrument Serif', Georgia, serif; font-style: italic; letter-spacing: -0.01em; }
+    .kbd { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 500; color: #6e6e6e; background: #f7f7f5; border: 1px solid #ececec; padding: 2px 7px; border-radius: 6px; line-height: 1; display:inline-flex; align-items:center; height: 20px; }
+    .hairline { border-color: #ececec; }
+    .tracking-tightish { letter-spacing: -0.01em; }
+
+    .rail-item { width: 32px; height: 32px; border-radius: 999px; display:flex; align-items:center; justify-content:center; color:#a3a3a3; font-size: 13px; font-weight: 500; position: relative; transition: color 120ms ease; }
+    .rail-item:hover { color: #0a0a0a; }
+    .rail-item[data-active="true"] { color: #0a6e5f; }
+    .rail-item[data-active="true"]::before { content:""; position:absolute; left:-14px; top:10px; bottom:10px; width:2px; background:#0a6e5f; border-radius:2px; }
+    .rail-item .label { position: absolute; left: 44px; white-space: nowrap; font-size: 13px; color:#0a0a0a; background:#ffffff; padding: 4px 10px; border-radius: 6px; border: 1px solid #ececec; opacity: 0; pointer-events: none; transform: translateX(-4px); transition: opacity 120ms ease, transform 120ms ease; }
+    .rail-item:hover .label { opacity: 1; transform: translateX(0); }
+  </style>
+</head>
+<body class="bg-white text-[#0a0a0a] antialiased">
+
+  <div class="min-h-screen flex">
+
+    <aside class="w-[60px] shrink-0 border-r hairline flex flex-col items-center pt-8 pb-8">
+      <div class="w-[28px] h-[28px] rounded-full bg-[#0a0a0a] text-white flex items-center justify-center text-[12px] font-semibold tracking-tightish mb-10">J</div>
+      <nav class="flex flex-col gap-3">
+        <a href="dashboard.html" class="rail-item">T<span class="label">Today</span></a>
+        <a href="pipeline.html" class="rail-item" data-active="true">P<span class="label">Pipeline</span></a>
+        <a href="#" class="rail-item">L<span class="label">Leads</span></a>
+        <a href="#" class="rail-item">D<span class="label">Drafts</span></a>
+        <a href="#" class="rail-item">B<span class="label">Bookings</span></a>
+      </nav>
+      <div class="mt-auto text-[10px] text-[#a3a3a3] tracking-[0.15em] uppercase">MK</div>
+    </aside>
+
+    <main class="flex-1">
+      <div class="max-w-[1120px] mx-auto px-16 md:px-24 pt-20 pb-40">
+
+        <a href="pipeline.html" class="text-[13px] text-[#6e6e6e] hover:text-[#0a0a0a] tracking-tightish transition">← Pipeline</a>
+
+        <h1 class="serif text-[48px] leading-[1.02] tracking-tightish text-[#0a0a0a] mt-10">Sarah Chen</h1>
+        <p class="text-[18px] leading-[1.55] text-[#6e6e6e] mt-3 max-w-[720px]">
+          Events Manager · Canva · $48,500 EOFY dinner for 120 at The Oak Room · 14 June.
+        </p>
+
+        <div class="grid grid-cols-5 gap-16 mt-20">
+
+          <!-- LEFT: the draft -->
+          <section class="col-span-5 lg:col-span-3">
+            <div class="border hairline rounded-2xl p-10 bg-white shadow-[0_1px_3px_rgba(10,10,10,0.04),0_10px_40px_-20px_rgba(10,10,10,0.1)]">
+              <div class="text-[11px] uppercase tracking-[0.18em] text-[#a3a3a3]">Jordan's draft · ready to send</div>
+
+              <div class="mt-6 text-[16px] tracking-tightish text-[#0a0a0a]">
+                <span class="text-[#6e6e6e]">To</span>&nbsp; sarah.chen@canva.com
+              </div>
+              <div class="mt-1 text-[16px] tracking-tightish text-[#0a0a0a]">
+                <span class="text-[#6e6e6e]">Subject</span>&nbsp; Re: EOFY dinner — confirming 14 June
+              </div>
+
+              <div class="my-8 h-px bg-[#ececec]"></div>
+
+              <div class="text-[16px] leading-[1.75] text-[#0a0a0a] space-y-4">
+                <p>Sarah,</p>
+                <p>Delighted you're ready to lock it in. I've provisionally held The Oak Room for Friday 14 June, 6:30pm start, seated for 120 with your brand activation space off the main bar.</p>
+                <p>The attached proposal reflects the vegan menu additions, the extended AV package, and the dedicated photographer you asked about on our call. The figure lands at $48,500 inc. GST, which sits inside the envelope you shared.</p>
+                <p>If you're happy, a reply to this email is enough to progress to contract — I'll send DocuSign within the hour and we can clear your internal sign-off before end of week.</p>
+                <p>Looking forward to hosting Canva.</p>
+                <p class="text-[#6e6e6e]">— Morty, on behalf of The Oak Room</p>
+              </div>
+
+              <div class="mt-10 flex items-center gap-4">
+                <button class="h-[36px] px-5 bg-[#0a6e5f] text-white rounded-lg text-[14px] font-medium tracking-tightish hover:bg-[#085547] transition">Approve & send</button>
+                <a href="#" class="text-[14px] text-[#6e6e6e] hover:text-[#0a0a0a] transition">Edit</a>
+                <a href="#" class="text-[14px] text-[#6e6e6e] hover:text-[#0a0a0a] transition">Discard</a>
+                <div class="ml-auto text-[12px] text-[#a3a3a3] flex items-center gap-2">
+                  <span class="kbd">↵</span><span>to send</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- RIGHT: minimal details -->
+          <aside class="col-span-5 lg:col-span-2 pt-4">
+
+            <div class="flex items-baseline gap-6">
+              <div>
+                <div class="text-[11px] uppercase tracking-[0.18em] text-[#a3a3a3]">Score</div>
+                <div class="mt-2 text-[22px] tracking-tightish font-medium">
+                  <span class="text-[#b45309]">84 · Hot</span>
+                </div>
+              </div>
+              <div class="border-l hairline pl-6">
+                <div class="text-[11px] uppercase tracking-[0.18em] text-[#a3a3a3]">Close probability</div>
+                <div class="mt-2 text-[22px] tracking-tightish font-medium text-[#0a0a0a]">72%</div>
+              </div>
+            </div>
+
+            <div class="mt-16">
+              <div class="text-[11px] uppercase tracking-[0.18em] text-[#a3a3a3] mb-5">Signal</div>
+              <ul class="space-y-4 text-[15px] leading-[1.5]">
+                <li class="flex items-baseline gap-4">
+                  <span class="text-[12px] text-[#a3a3a3] w-28 shrink-0">this morning</span>
+                  <span class="text-[#0a0a0a]">Replied — "let's lock it in".</span>
+                </li>
+                <li class="flex items-baseline gap-4">
+                  <span class="text-[12px] text-[#a3a3a3] w-28 shrink-0">yesterday</span>
+                  <span class="text-[#0a0a0a]">Opened proposal 3×.</span>
+                </li>
+                <li class="flex items-baseline gap-4">
+                  <span class="text-[12px] text-[#a3a3a3] w-28 shrink-0">4 days ago</span>
+                  <span class="text-[#0a0a0a]">Booked site visit — 11 May, 2pm.</span>
+                </li>
+                <li class="flex items-baseline gap-4">
+                  <span class="text-[12px] text-[#a3a3a3] w-28 shrink-0">last week</span>
+                  <span class="text-[#0a0a0a]">Signed NDA.</span>
+                </li>
+              </ul>
+            </div>
+
+            <div class="mt-14">
+              <a href="#" class="text-[13px] text-[#6e6e6e] hover:text-[#0a0a0a] underline underline-offset-4 decoration-[#ececec] hover:decoration-[#0a0a0a] transition">Conversation history · 11 messages</a>
+            </div>
+
+            <div class="mt-20 text-[12px] text-[#a3a3a3] flex items-center gap-2">
+              <span class="kbd">E</span><span>edit draft</span>
+              <span class="kbd ml-3">D</span><span>discard</span>
+              <span class="kbd ml-3">↵</span><span>send</span>
+            </div>
+
+          </aside>
+
+        </div>
+
+        <div class="h-[200px]"></div>
+
+      </div>
+    </main>
+
+  </div>
+
+</body>
+</html>
