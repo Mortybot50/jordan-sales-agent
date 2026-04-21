@@ -1,51 +1,43 @@
 # AUDIT-FINDINGS.md
 
-> Full audit: [`docs/audits/week2-self-audit-2026-04-21.md`](docs/audits/week2-self-audit-2026-04-21.md)
-> Audited: 21/04/2026 AEST | Auditor: Claude (automated self-audit)
+> Full audit: [`docs/audits/week3-self-audit-2026-04-22.md`](docs/audits/week3-self-audit-2026-04-22.md)
+> Previous: [`docs/audits/week2-self-audit-2026-04-21.md`](docs/audits/week2-self-audit-2026-04-21.md)
+> Last updated: 22/04/2026 AEST | Auditor: Claude (automated self-audit)
 
-## Quick Reference
+## Status Summary
 
 | Severity | Count | Status |
 |----------|-------|--------|
 | P0 — Critical | 0 | — |
-| P1 — High | 4 | Unresolved |
-| P2 — Medium | 6 | Unresolved |
-| ESLint errors | 3 | Unresolved |
+| P1 — High | 0 | **All resolved in Week 3 Day 1** |
+| P2 — Medium | 3 | Open (non-blocking) |
 
-## P1 Bugs (fix before next demo)
+## Week 2 P1 Bugs → All Resolved ✅
+
+| # | Location | Issue | Resolution |
+|---|----------|-------|-----------|
+| 1 | `src/hooks/useAuth.ts` | Auth loading never resolves if `getSession()` stalls | Fixed Day 1: `finally { setLoading(false) }` |
+| 2 | `src/lib/queries/dashboard.ts` | Reply rate KPI always shows `—` | Fixed Day 1: aligned activity_type constants |
+| 3 | `src/main.tsx` | Full stack traces in production ErrorBoundary | Fixed Day 1: NODE_ENV guard added |
+| 4 | Pipeline | Mobile pipeline shows "Loading…" permanently | Fixed Day 1: DealListView data flow repaired |
+
+## Current P2 Bugs (Week 4 backlog)
 
 | # | Location | Issue |
 |---|----------|-------|
-| 1 | `src/hooks/useAuth.ts` | Auth loading never resolves if `getSession()` stalls — app shows permanent "Loading…" spinner. Add `finally { setLoading(false) }`. |
-| 2 | `src/lib/queries/dashboard.ts` | Reply rate KPI always shows `—` — query filters `activity_type = 'email_sent'` but data uses `'email_outbound'`. |
-| 3 | `src/main.tsx:43–50` | Full stack traces render in production ErrorBoundary — no `NODE_ENV` guard. |
-| 4 | Pipeline | Mobile pipeline route shows "Loading…" permanently — mobile demo is broken. |
+| P2-1 | Nav sidebar | Draft queue count badge not showing on nav item |
+| P2-2 | Gmail OAuth | Requires Google app verification — needs Morty's privacy policy URL |
+| P2-3 | Supabase | No pg_cron job for morning briefing — manual setup needed post-deploy |
 
-## P2 Bugs (Week 3 backlog)
+## Week 3 Features Delivered
 
-| # | Location | Issue |
-|---|----------|-------|
-| 1 | `src/pages/ContactDetailPage.tsx:425` | Google Maps embed uses deprecated `?output=embed` URL — renders as grey box. |
-| 2 | `tsconfig.app.json` | Missing `"strict": true` — no `strictNullChecks`, `noImplicitAny`. |
-| 3 | `supabase/migrations/` | `auth_org_id()` always falls back to DB lookup — N+1 per RLS-gated query. |
-| 4 | Pipeline | Only 7 of 9 planned stages exist — "Replied", "Site Visit", "Demo Completed" missing. |
-| 5 | Dashboard | Warm Leads and Follow-ups Due KPIs are 0 due to seed data timing. |
-| 6 | Settings | Email + Calendly save silently (no success toast or error handling). |
-
-## Top Week 3 Recommendations
-
-| # | Size | Recommendation |
-|---|------|---------------|
-| 1 | S | Fix `useAuth.ts` loading bug (`finally` block) |
-| 2 | S | Fix reply rate KPI (`email_outbound` → consistent activity type) |
-| 3 | S | Gate stack trace in ErrorBoundary behind `NODE_ENV !== 'production'` |
-| 4 | M | Add missing pipeline stages (Replied, Site Visit, Demo Completed) |
-| 5 | M | Replace Google Maps embed with Mapbox Static API or Maps Embed API v2 |
-| 6 | M | Add AI email draft generation (Week 2 plan item, currently stub) |
-| 7 | L | Fix mobile layout — pipeline and auth loading on viewport change |
-| 8 | L | Add `org_id` JWT claim to eliminate `auth_org_id()` N+1 |
-| 9 | XL | Build Briefing AI narrative generation (currently 4 static cards) |
-
----
-
-*See full audit for browser screenshots, SQL evidence, ESLint output, and plan alignment details.*
+- AI draft generation (Claude Sonnet 4.6) with review queue
+- Gmail OAuth + Pub/Sub inbound email ingestion
+- Calendly HMAC-signed webhook + auto stage advancement
+- `compute_lead_score()` Postgres function + INSERT trigger
+- Hospitality-native ICP (suburb chips, licence type, spend tier)
+- Extended venue fields on contact detail
+- Briefing ICP filter toggle
+- `send-morning-briefing` Edge Function (Resend)
+- Loading skeletons on all major pages
+- Demo data refreshed, user profile seeded
