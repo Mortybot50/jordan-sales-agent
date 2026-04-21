@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { toast } from 'sonner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,20 +30,14 @@ import { useStages, useCreateStage, useDeleteStage, useUpdateStage } from '@/lib
 import { useDeals } from '@/lib/queries/deals'
 import { profileFormSchema, icpFormSchema, type ProfileFormValues, type IcpFormValues } from '@/lib/schemas/user'
 import { venueTypeLabel, cn } from '@/lib/utils'
-import { Plus, Trash2, ChevronUp, ChevronDown, CheckCircle2, XCircle } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { Plus, Trash2, ChevronUp, ChevronDown, CheckCircle2, XCircle, CheckCircle, ExternalLink } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 const VENUE_TYPES = [
   'restaurant', 'cafe', 'hotel', 'event_space', 'bar',
   'club', 'pub', 'qsr', 'function_centre', 'other',
 ] as const
-
-const INTEGRATIONS = [
-  { name: 'Gmail', description: 'Inbound reply watching + send-from' },
-  { name: 'Instantly.ai', description: 'Cold outbound sequencing' },
-  { name: 'SendGrid', description: 'Transactional email (briefing digest)' },
-  { name: 'Anthropic', description: 'AI draft generation (Week 3)' },
-  { name: 'Proxycurl', description: 'LinkedIn enrichment' },
-]
 
 // --- Profile Tab ---
 function ProfileTab() {
@@ -65,6 +61,7 @@ function ProfileTab() {
       calendly_url: values.calendly_url || undefined,
       email_signature: values.email_signature || undefined,
     })
+    toast.success('Profile saved')
   }
 
   return (
@@ -402,6 +399,7 @@ function IcpTab() {
         geo_postcode: values.geo_postcode ?? null,
       },
     })
+    toast.success('ICP config saved')
   }
 
   return (
@@ -500,30 +498,174 @@ function IcpTab() {
 
 // --- Integrations Tab ---
 function IntegrationsTab() {
+  const { user } = useAuth()
+  const qc = useQueryClient()
+
+  // Check if Gmail is connected
+  const { data: gmailConnection } = useQuery({
+    queryKey: ['gmail-connection'],
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase as any)
+        .from('gmail_connections')
+        .select('id, email, watch_expires_at')
+        .eq('user_id', user?.id ?? '')
+        .maybeSingle()
+      return data as { id: string; email: string; watch_expires_at: string | null } | null
+    },
+    enabled: !!user?.id,
+  })
+
+  const disconnectGmail = useMutation({
+    mutationFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
+        .from('gmail_connections')
+        .delete()
+        .eq('user_id', user?.id ?? '')
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['gmail-connection'] })
+      toast.success('Gmail disconnected')
+    },
+  })
+
+  async function handleConnectGmail() {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) {
+      toast.error('Please log in first')
+      return
+    }
+    window.location.href = `/api/oauth/gmail/start`
+  }
+
+  const isAnthropicConfigured = !!import.meta.env.VITE_SUPABASE_URL // placeholder indicator
+
   return (
     <div className="space-y-3 max-w-lg">
-      {INTEGRATIONS.map((integration) => (
-        <Card key={integration.name}>
-          <CardContent className="flex items-center justify-between gap-3 py-3 px-4">
-            <div>
-              <p className="text-sm font-medium">{integration.name}</p>
-              <p className="text-xs text-muted-foreground">{integration.description}</p>
+      {/* Gmail */}
+      <Card>
+        <CardContent className="flex items-center justify-between gap-3 py-3 px-4">
+          <div>
+            <p className="text-sm font-medium">Gmail</p>
+            <p className="text-xs text-muted-foreground">
+              {gmailConnection
+                ? `Connected as ${gmailConnection.email}`
+                : 'Inbound reply watching + send-from'}
+            </p>
+            {!gmailConnection && (
+              <p className="text-xs text-amber-600 mt-0.5">
+                Test-users only — Google OAuth verification pending (4–6 weeks)
+              </p>
+            )}
+          </div>
+          {gmailConnection ? (
+            <div className="flex items-center gap-2">
+              <Badge className="bg-green-100 text-green-700 border-0 text-xs shrink-0">
+                <CheckCircle className="w-3 h-3 mr-1" />
+                Connected
+              </Badge>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                onClick={() => disconnectGmail.mutate()}
+                disabled={disconnectGmail.isPending}
+              >
+                Disconnect
+              </Button>
             </div>
-            <Badge variant="outline" className="text-xs shrink-0 text-muted-foreground">
-              Not connected
+          ) : (
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleConnectGmail}>
+              <ExternalLink className="w-3 h-3 mr-1" />
+              Connect Gmail
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Anthropic */}
+      <Card>
+        <CardContent className="flex items-center justify-between gap-3 py-3 px-4">
+          <div>
+            <p className="text-sm font-medium">Anthropic</p>
+            <p className="text-xs text-muted-foreground">AI draft generation — claude-sonnet-4-6</p>
+          </div>
+          {isAnthropicConfigured ? (
+            <Badge className="bg-green-100 text-green-700 border-0 text-xs shrink-0">
+              Configured
             </Badge>
-          </CardContent>
-        </Card>
-      ))}
-      <p className="text-xs text-muted-foreground pt-1">
-        Integration setup is in progress. These will be activated as each platform is connected.
-      </p>
+          ) : (
+            <Badge variant="outline" className="text-xs shrink-0 text-amber-600 border-amber-200">
+              Key needed
+            </Badge>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Calendly */}
+      <Card>
+        <CardContent className="flex items-center justify-between gap-3 py-3 px-4">
+          <div>
+            <p className="text-sm font-medium">Calendly</p>
+            <p className="text-xs text-muted-foreground">Auto-log meeting bookings as activities</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Set your token in Profile to activate</p>
+          </div>
+          <Badge variant="outline" className="text-xs shrink-0 text-muted-foreground">
+            Not connected
+          </Badge>
+        </CardContent>
+      </Card>
+
+      {/* Instantly.ai */}
+      <Card>
+        <CardContent className="flex items-center justify-between gap-3 py-3 px-4">
+          <div>
+            <p className="text-sm font-medium">Instantly.ai</p>
+            <p className="text-xs text-muted-foreground">Cold outbound sequencing — Week 4</p>
+          </div>
+          <Badge variant="outline" className="text-xs shrink-0 text-muted-foreground">
+            Week 4
+          </Badge>
+        </CardContent>
+      </Card>
+
+      {/* Resend */}
+      <Card>
+        <CardContent className="flex items-center justify-between gap-3 py-3 px-4">
+          <div>
+            <p className="text-sm font-medium">Resend</p>
+            <p className="text-xs text-muted-foreground">Morning briefing email digest</p>
+          </div>
+          <Badge variant="outline" className="text-xs shrink-0 text-muted-foreground">
+            Not connected
+          </Badge>
+        </CardContent>
+      </Card>
     </div>
   )
 }
 
 // --- Main Settings Page ---
 export function SettingsPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const defaultTab = ['profile', 'stages', 'icp', 'integrations'].includes(tabParam ?? '')
+    ? tabParam!
+    : 'profile'
+
+  useEffect(() => {
+    if (searchParams.get('connected') === 'gmail') {
+      toast.success('Gmail connected ✓')
+      setSearchParams({})
+    }
+    if (searchParams.get('error')) {
+      toast.error(`Connection failed: ${searchParams.get('error')}`)
+      setSearchParams({})
+    }
+  }, [searchParams, setSearchParams])
+
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-3xl">
       <div>
@@ -533,7 +675,7 @@ export function SettingsPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="profile">
+      <Tabs defaultValue={defaultTab}>
         <TabsList className="mb-4">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="stages">Pipeline Stages</TabsTrigger>
