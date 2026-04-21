@@ -1,0 +1,32 @@
+Feature,Category,Evidence URL,Screenshot Path,Quality Score (0-3),Jordan Has It (Y/N),Jordan Quality (0-3)
+1000 custom sending inboxes,Outbound / Email,https://spectraacquisition.com/,screenshots/homepage-full.png,3,N,0
+Full domain warm-up,Outbound / Email,https://spectraacquisition.com/,screenshots/homepage-full.png,3,N,0
+Ongoing deliverability optimization,Outbound / Email,https://spectraacquisition.com/,screenshots/homepage-full.png,2,N,0
+Custom ICP build-out,Data Sourcing,https://spectraacquisition.com/,screenshots/homepage-full.png,2,Y (partial),1
+Verified data pipelines (Apollo/SalesNav/Outscraper/Clay),Data Sourcing,https://spectraacquisition.com/,screenshots/homepage-full.png,3,N,0
+Continuous list refresh,Data Sourcing,https://spectraacquisition.com/,screenshots/homepage-full.png,2,N,0
+Industry-specific copywriting,Outbound / Email,https://spectraacquisition.com/,screenshots/homepage-full.png,2,N,0
+A/B tested multi-sequence campaigns,Outbound / Email,https://spectraacquisition.com/,screenshots/homepage-full.png,2,N,0
+LinkedIn connection + follow-up sequences,Outbound / Email,https://spectraacquisition.com/,screenshots/homepage-full.png,3,N,0
+Multi-step follow-up workflows,Automation,https://spectraacquisition.com/,screenshots/homepage-full.png,3,N,0
+Calendar integration & auto-booking,Integrations,https://spectraacquisition.com/,screenshots/homepage-full.png,2,N (schema only),0
+Real-time analytics + reporting dashboards,Analytics,https://spectraacquisition.com/,screenshots/homepage-full.png,1,Y (partial),1
+Warm calling team,Outbound / Phone,https://spectraacquisition.com/,screenshots/homepage-full.png,3,N,0
+Inbox management + lead qualification,Inbound / Reply,https://spectraacquisition.com/,screenshots/homepage-full.png,3,Y (stub),1
+Lead tracking + rescheduling,Pipeline / CRM,https://spectraacquisition.com/,screenshots/homepage-full.png,2,Y (partial),1
+Show-up optimization,Pipeline / CRM,https://spectraacquisition.com/,screenshots/homepage-full.png,2,N,0
+Reactivation campaigns,Pipeline / CRM,https://spectraacquisition.com/,screenshots/homepage-full.png,2,N,0
+Monthly KPI reviews,Analytics,https://spectraacquisition.com/,screenshots/homepage-full.png,2,N,0
+Qualified Opportunity definition (ICP-anchored),Pipeline / CRM,https://spectraacquisition.com/,screenshots/homepage-full.png,3,Y (partial),2
+Revenue share contract alignment,Other,https://spectraacquisition.com/,screenshots/homepage-full.png,2,N/A,N/A
+Hospitality-native ICP (venue type/cover count),Data Sourcing,N/A — not in Spectra,N/A,0,Y,2
+Venue data model (address/cover count/licence),Pipeline / CRM,N/A — not in Spectra,N/A,0,Y,2
+VCGLR / venue opening signals,Data Sourcing,N/A — not in Spectra,N/A,0,N (schema stub),0
+Spam Act 2003 suppression list,Compliance,N/A — not visible,N/A,1,Y,2
+Multi-tenant RLS (Supabase),Compliance / Security,N/A,N/A,0,Y,3
+Activity timeline per contact,Pipeline / CRM,N/A — not in Spectra,N/A,0,Y,2
+Morning briefing daily digest,Pipeline / CRM,N/A — not in Spectra,N/A,0,Y (stub),1
+AI email draft generation,AI / Automation,N/A — not stated,N/A,1,N (placeholder),0
+Contact CRM (contacts table + search),Pipeline / CRM,N/A,N/A,2,Y,2
+Pipeline Kanban,Pipeline / CRM,N/A,N/A,2,Y,2
+CSV import,Pipeline / CRM,N/A,N/A,0,Y,2
