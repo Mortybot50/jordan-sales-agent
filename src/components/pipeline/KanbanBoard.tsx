@@ -141,7 +141,25 @@ export function KanbanBoard() {
   }
 
   if (isLoading) {
-    return <div className="p-6 text-sm text-muted-foreground">Loading…</div>
+    return (
+      <div className="flex gap-4 p-4 overflow-x-auto">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="w-64 shrink-0 rounded-xl border bg-muted/30 animate-pulse">
+            <div className="p-3 border-b">
+              <div className="h-4 w-24 rounded bg-muted" />
+            </div>
+            <div className="p-2 space-y-2">
+              {Array.from({ length: 2 + (i % 3) }).map((__, j) => (
+                <div key={j} className="rounded-lg border bg-card p-3 space-y-1.5">
+                  <div className="h-3.5 w-full rounded bg-muted" />
+                  <div className="h-3 w-2/3 rounded bg-muted" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    )
   }
   if (error) {
     return (

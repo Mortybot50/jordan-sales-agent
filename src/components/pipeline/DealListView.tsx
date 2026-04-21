@@ -126,7 +126,20 @@ export function DealListView() {
     )
   }
 
-  if (isLoading) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>
+  if (isLoading) return (
+    <div className="p-4 sm:p-6 space-y-2">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="flex items-center gap-3 border rounded-lg px-4 py-3 animate-pulse">
+          <div className="flex-1 space-y-1.5">
+            <div className="h-3.5 w-48 rounded bg-muted" />
+            <div className="h-3 w-32 rounded bg-muted" />
+          </div>
+          <div className="h-5 w-20 rounded-full bg-muted hidden sm:block" />
+          <div className="h-4 w-16 rounded bg-muted" />
+        </div>
+      ))}
+    </div>
+  )
   if (error) return <div className="text-destructive text-sm p-4">Failed to load: {error.message}</div>
 
   return (

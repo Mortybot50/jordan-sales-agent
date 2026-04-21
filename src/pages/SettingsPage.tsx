@@ -38,6 +38,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 function ProfileTab() {
   const { user } = useAuth()
   const updateProfile = useUpdateUserProfile()
+  const [briefingEnabled, setBriefingEnabled] = useState(user?.email_notifications?.morning_briefing ?? true)
+  const [briefingHour, setBriefingHour] = useState(user?.email_notifications?.briefing_time_hour ?? 7)
 
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileFormSchema),
@@ -55,6 +57,7 @@ function ProfileTab() {
       full_name: values.full_name,
       calendly_url: values.calendly_url || undefined,
       email_signature: values.email_signature || undefined,
+      email_notifications: { morning_briefing: briefingEnabled, briefing_time_hour: briefingHour },
     })
   }
 
@@ -126,6 +129,44 @@ function ProfileTab() {
           Events: <code className="text-xs bg-muted px-1 rounded">invitee.created</code> and{' '}
           <code className="text-xs bg-muted px-1 rounded">invitee.canceled</code>
         </p>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-3">
+        <Label className="text-xs text-muted-foreground uppercase tracking-wide">Email Notifications</Label>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">Morning briefing</p>
+            <p className="text-xs text-muted-foreground">Receive your daily digest at 7am AEST</p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={briefingEnabled}
+            onClick={() => setBriefingEnabled((v) => !v)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${briefingEnabled ? 'bg-primary' : 'bg-muted'}`}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${briefingEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
+        {briefingEnabled && (
+          <div className="space-y-1">
+            <Label htmlFor="briefing_hour">Briefing time</Label>
+            <Select value={String(briefingHour)} onValueChange={(v) => setBriefingHour(Number(v))}>
+              <SelectTrigger id="briefing_hour" className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[5, 6, 7, 8, 9].map((h) => (
+                  <SelectItem key={h} value={String(h)}>
+                    {h}:00am AEST
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       <Button type="submit" disabled={updateProfile.isPending}>

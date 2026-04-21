@@ -170,7 +170,7 @@ export function BriefingPage() {
         <div>
           <h1 className="text-2xl font-semibold">Morning Briefing</h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Last refreshed {formatRelative(lastRefreshed.toISOString())}
+            Last synced {formatRelative(lastRefreshed.toISOString())} · {lastRefreshed.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Melbourne' })} AEST
           </p>
         </div>
         <Button
@@ -204,7 +204,18 @@ export function BriefingPage() {
           </AccordionTrigger>
           <AccordionContent className="px-0 pb-0">
             {repliesLoading && (
-              <p className="text-sm text-muted-foreground px-4 py-4">Loading…</p>
+              <div className="divide-y">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="px-4 py-3 animate-pulse space-y-1.5">
+                    <div className="flex justify-between">
+                      <div className="h-3.5 w-32 rounded bg-muted" />
+                      <div className="h-3 w-16 rounded bg-muted" />
+                    </div>
+                    <div className="h-3 w-full rounded bg-muted" />
+                    <div className="h-3 w-3/4 rounded bg-muted" />
+                  </div>
+                ))}
+              </div>
             )}
             {!repliesLoading && (!replies || replies.length === 0) && (
               <p className="text-sm text-muted-foreground px-4 py-4">
@@ -312,7 +323,17 @@ export function BriefingPage() {
           </AccordionTrigger>
           <AccordionContent className="px-0 pb-0">
             {tasksLoading && (
-              <p className="text-sm text-muted-foreground px-4 py-4">Loading…</p>
+              <div className="divide-y">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 px-4 py-3 animate-pulse">
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-3.5 w-48 rounded bg-muted" />
+                      <div className="h-3 w-32 rounded bg-muted" />
+                    </div>
+                    <div className="h-7 w-16 rounded bg-muted shrink-0" />
+                  </div>
+                ))}
+              </div>
             )}
             {!tasksLoading && (!todayTasks || todayTasks.length === 0) && (
               <p className="text-sm text-muted-foreground px-4 py-4">
@@ -400,7 +421,17 @@ export function BriefingPage() {
               </button>
             </div>
             {candidatesLoading && (
-              <p className="text-sm text-muted-foreground px-4 py-4">Loading…</p>
+              <div className="divide-y">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 px-4 py-3 animate-pulse">
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-3.5 w-40 rounded bg-muted" />
+                      <div className="h-3 w-28 rounded bg-muted" />
+                    </div>
+                    <div className="h-7 w-16 rounded bg-muted shrink-0" />
+                  </div>
+                ))}
+              </div>
             )}
             {!candidatesLoading && (!filteredCandidates || filteredCandidates.length === 0) && (
               <p className="text-sm text-muted-foreground px-4 py-4">
@@ -479,7 +510,17 @@ export function BriefingPage() {
           </AccordionTrigger>
           <AccordionContent className="px-0 pb-0">
             {reengagementLoading && (
-              <p className="text-sm text-muted-foreground px-4 py-4">Loading…</p>
+              <div className="divide-y">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 px-4 py-3 animate-pulse">
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-3.5 w-36 rounded bg-muted" />
+                      <div className="h-3 w-24 rounded bg-muted" />
+                    </div>
+                    <div className="h-7 w-24 rounded bg-muted shrink-0" />
+                  </div>
+                ))}
+              </div>
             )}
             {!reengagementLoading && (!reengagement || reengagement.length === 0) && (
               <p className="text-sm text-muted-foreground px-4 py-4">

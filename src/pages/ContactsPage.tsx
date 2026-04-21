@@ -154,9 +154,34 @@ export function ContactsPage() {
         </div>
       )}
 
-      {/* Loading */}
+      {/* Loading skeleton */}
       {isLoading && (
-        <div className="text-sm text-muted-foreground py-8 text-center">Loading…</div>
+        <div className="border rounded-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/40">
+                  <th className="px-3 py-2 text-left"><div className="h-3 w-12 rounded bg-muted" /></th>
+                  <th className="px-3 py-2 text-left hidden sm:table-cell"><div className="h-3 w-8 rounded bg-muted" /></th>
+                  <th className="px-3 py-2 text-left"><div className="h-3 w-12 rounded bg-muted" /></th>
+                  <th className="px-3 py-2 text-left hidden md:table-cell"><div className="h-3 w-10 rounded bg-muted" /></th>
+                  <th className="px-3 py-2 text-left hidden lg:table-cell"><div className="h-3 w-10 rounded bg-muted" /></th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={i} className="border-b last:border-0 animate-pulse">
+                    <td className="px-3 py-2.5"><div className="h-3.5 w-32 rounded bg-muted" /></td>
+                    <td className="px-3 py-2.5 hidden sm:table-cell"><div className="h-3 w-20 rounded bg-muted" /></td>
+                    <td className="px-3 py-2.5"><div className="h-3 w-28 rounded bg-muted" /></td>
+                    <td className="px-3 py-2.5 hidden md:table-cell"><div className="h-3 w-36 rounded bg-muted" /></td>
+                    <td className="px-3 py-2.5 hidden lg:table-cell"><div className="h-5 w-10 rounded-full bg-muted" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {/* Empty state */}
