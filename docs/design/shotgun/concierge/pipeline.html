@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pipeline · Jordan</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    html, body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+    .serif { font-family: 'Instrument Serif', Georgia, serif; font-style: italic; letter-spacing: -0.01em; }
+    .kbd { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 500; color: #6e6e6e; background: #f7f7f5; border: 1px solid #ececec; padding: 2px 7px; border-radius: 6px; line-height: 1; display:inline-flex; align-items:center; height: 20px; }
+    .hairline { border-color: #ececec; }
+    .tracking-tightish { letter-spacing: -0.01em; }
+
+    .rail-item { width: 32px; height: 32px; border-radius: 999px; display:flex; align-items:center; justify-content:center; color:#a3a3a3; font-size: 13px; font-weight: 500; position: relative; transition: color 120ms ease; }
+    .rail-item:hover { color: #0a0a0a; }
+    .rail-item[data-active="true"] { color: #0a6e5f; }
+    .rail-item[data-active="true"]::before { content:""; position:absolute; left:-14px; top:10px; bottom:10px; width:2px; background:#0a6e5f; border-radius:2px; }
+    .rail-item .label { position: absolute; left: 44px; white-space: nowrap; font-size: 13px; color:#0a0a0a; background:#ffffff; padding: 4px 10px; border-radius: 6px; border: 1px solid #ececec; opacity: 0; pointer-events: none; transform: translateX(-4px); transition: opacity 120ms ease, transform 120ms ease; }
+    .rail-item:hover .label { opacity: 1; transform: translateX(0); }
+
+    /* Kanban column states */
+    .col-dim { opacity: 0.40; filter: grayscale(40%); transition: opacity 160ms ease, filter 160ms ease; }
+    .col-dim:hover { opacity: 0.75; filter: grayscale(10%); }
+    .col-focus { opacity: 1; }
+
+    /* Card */
+    .card { background: #ffffff; border: 1px solid #ececec; border-radius: 12px; padding: 18px 18px; transition: border-color 140ms ease, transform 140ms ease; }
+    .col-focus .card:hover { border-color: #d8d8d4; }
+    .card-dim { padding: 12px 14px; }
+
+    .dot-hot { background: #b45309; }
+    .dot-warm { background: #d9d4cc; }
+    .dot-cool { background: #e5e5e2; }
+
+    .tab { padding: 4px 10px; border-radius: 999px; font-size: 13px; color: #6e6e6e; cursor: pointer; }
+    .tab[data-active="true"] { background: #0a0a0a; color: #ffffff; }
+  </style>
+</head>
+<body class="bg-white text-[#0a0a0a] antialiased">
+
+  <div class="min-h-screen flex">
+
+    <!-- Narrow rail -->
+    <aside class="w-[60px] shrink-0 border-r hairline flex flex-col items-center pt-8 pb-8">
+      <div class="w-[28px] h-[28px] rounded-full bg-[#0a0a0a] text-white flex items-center justify-center text-[12px] font-semibold tracking-tightish mb-10">J</div>
+      <nav class="flex flex-col gap-3">
+        <a href="dashboard.html" class="rail-item">T<span class="label">Today</span></a>
+        <a href="pipeline.html" class="rail-item" data-active="true">P<span class="label">Pipeline</span></a>
+        <a href="#" class="rail-item">L<span class="label">Leads</span></a>
+        <a href="#" class="rail-item">D<span class="label">Drafts</span></a>
+        <a href="#" class="rail-item">B<span class="label">Bookings</span></a>
+      </nav>
+      <div class="mt-auto text-[10px] text-[#a3a3a3] tracking-[0.15em] uppercase">MK</div>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1">
+      <div class="px-16 md:px-24 pt-24 pb-32">
+
+        <!-- Top line -->
+        <div class="flex items-baseline gap-6 mb-2">
+          <div class="text-[13px] uppercase tracking-[0.18em] text-[#a3a3a3]">Pipeline</div>
+          <div class="serif text-[44px] leading-none tracking-tightish text-[#0a0a0a]">$351,100</div>
+          <div class="text-[14px] text-[#6e6e6e] ml-2">7 open · 3 hot</div>
+
+          <div class="ml-auto flex items-center gap-6">
+            <div class="flex items-center gap-1">
+              <span class="tab" data-active="true">All</span>
+              <span class="tab">Mine</span>
+              <span class="tab">Hot</span>
+            </div>
+            <div class="flex items-center gap-2 text-[12px] text-[#a3a3a3]">
+              <span class="kbd">←</span><span class="kbd">→</span><span>focus column</span>
+              <span class="kbd ml-3">↵</span><span>open</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-[14px] text-[#6e6e6e] mb-16">Focused on <span class="text-[#0a0a0a]">Proposal</span> — where the next money is.</div>
+
+        <!-- Kanban -->
+        <div class="grid grid-cols-5 gap-5">
+
+          <!-- NEW -->
+          <div class="col-dim">
+            <div class="flex items-baseline justify-between mb-6">
+              <div class="text-[13px] text-[#0a0a0a] tracking-tightish">New</div>
+              <div class="text-[12px] text-[#a3a3a3]">2 · $69k</div>
+            </div>
+            <div class="space-y-3">
+              <div class="card card-dim">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <div class="text-[15px] tracking-tightish font-medium truncate">Priya Nadar</div>
+                    <div class="text-[12px] text-[#6e6e6e] mt-0.5">Bond Uni · Networking</div>
+                  </div>
+                  <div class="text-[14px] tracking-tightish text-[#0a0a0a]">$14.8k</div>
+                </div>
+                <div class="flex items-center justify-between mt-3">
+                  <span class="w-1.5 h-1.5 rounded-full dot-warm"></span>
+                  <span class="text-[11px] text-[#a3a3a3]">1d</span>
+                </div>
+              </div>
+              <div class="card card-dim">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <div class="text-[15px] tracking-tightish font-medium truncate">Anika Shaw</div>
+                    <div class="text-[12px] text-[#6e6e6e] mt-0.5">Deloitte · Year End</div>
+                  </div>
+                  <div class="text-[14px] tracking-tightish text-[#0a0a0a]">$54.2k</div>
+                </div>
+                <div class="flex items-center justify-between mt-3">
+                  <span class="w-1.5 h-1.5 rounded-full dot-warm"></span>
+                  <span class="text-[11px] text-[#a3a3a3]">today</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- QUALIFYING -->
+          <div class="col-dim">
+            <div class="flex items-baseline justify-between mb-6">
+              <div class="text-[13px] text-[#0a0a0a] tracking-tightish">Qualifying</div>
+              <div class="text-[12px] text-[#a3a3a3]">3 · $80k</div>
+            </div>
+            <div class="space-y-3">
+              <div class="card card-dim">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <div class="text-[15px] tracking-tightish font-medium truncate">James Whitfield</div>
+                    <div class="text-[12px] text-[#6e6e6e] mt-0.5">Holland & Smith · Christmas</div>
+                  </div>
+                  <div class="text-[14px] tracking-tightish text-[#0a0a0a]">$22.4k</div>
+                </div>
+                <div class="flex items-center justify-between mt-3">
+                  <span class="w-1.5 h-1.5 rounded-full dot-warm"></span>
+                  <span class="text-[11px] text-[#a3a3a3]">5d</span>
+                </div>
+              </div>
+              <div class="card card-dim">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <div class="text-[15px] tracking-tightish font-medium truncate">Tom Ferris</div>
+                    <div class="text-[12px] text-[#6e6e6e] mt-0.5">Ferris/Chen · Wedding</div>
+                  </div>
+                  <div class="text-[14px] tracking-tightish text-[#0a0a0a]">$38.6k</div>
+                </div>
+                <div class="flex items-center justify-between mt-3">
+                  <span class="w-1.5 h-1.5 rounded-full dot-warm"></span>
+                  <span class="text-[11px] text-[#a3a3a3]">9d</span>
+                </div>
+              </div>
+              <div class="card card-dim">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <div class="text-[15px] tracking-tightish font-medium truncate">Dev Kapoor</div>
+                    <div class="text-[12px] text-[#6e6e6e] mt-0.5">Rip Curl · Team Offsite</div>
+                  </div>
+                  <div class="text-[14px] tracking-tightish text-[#0a0a0a]">$19.4k</div>
+                </div>
+                <div class="flex items-center justify-between mt-3">
+                  <span class="w-1.5 h-1.5 rounded-full dot-cool"></span>
+                  <span class="text-[11px] text-[#a3a3a3]">14d</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- PROPOSAL (FOCUS) -->
+          <div class="col-focus">
+            <div class="flex items-baseline justify-between mb-6">
+              <div class="flex items-center gap-2">
+                <span class="w-1 h-4 bg-[#0a6e5f] rounded-full"></span>
+                <div class="text-[13px] text-[#0a0a0a] tracking-tightish font-medium">Proposal</div>
+              </div>
+              <div class="text-[12px] text-[#6e6e6e]">2 · $133.5k</div>
+            </div>
+            <div class="space-y-4">
+
+              <a href="lead-detail.html" class="block card hover:shadow-[0_1px_3px_rgba(10,10,10,0.04),0_10px_30px_-18px_rgba(10,10,10,0.18)]">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <div class="text-[17px] tracking-tightish font-semibold truncate">Sarah Chen</div>
+                    <div class="text-[13px] text-[#6e6e6e] mt-1 truncate">Canva · EOFY Dinner</div>
+                    <div class="text-[12px] text-[#a3a3a3] mt-1">The Oak Room · 120 · 14 Jun</div>
+                  </div>
+                  <div class="text-[15px] tracking-tightish font-medium text-[#0a0a0a] whitespace-nowrap">$48,500</div>
+                </div>
+                <div class="flex items-center justify-between mt-5">
+                  <div class="flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 rounded-full dot-hot"></span>
+                    <span class="text-[11px] uppercase tracking-[0.14em] text-[#b45309] font-medium">Hot</span>
+                  </div>
+                  <span class="text-[11px] text-[#a3a3a3]">3d in stage</span>
+                </div>
+              </a>
+
+              <a href="#" class="block card hover:shadow-[0_1px_3px_rgba(10,10,10,0.04),0_10px_30px_-18px_rgba(10,10,10,0.18)]">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <div class="text-[17px] tracking-tightish font-semibold truncate">Lena Oyelaran</div>
+                    <div class="text-[13px] text-[#6e6e6e] mt-1 truncate">Nike APAC · Product Launch</div>
+                    <div class="text-[12px] text-[#a3a3a3] mt-1">Cremorne Brewery · 200 · 3 Jul</div>
+                  </div>
+                  <div class="text-[15px] tracking-tightish font-medium text-[#0a0a0a] whitespace-nowrap">$85,000</div>
+                </div>
+                <div class="flex items-center justify-between mt-5">
+                  <div class="flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 rounded-full dot-hot"></span>
+                    <span class="text-[11px] uppercase tracking-[0.14em] text-[#b45309] font-medium">Hot</span>
+                  </div>
+                  <span class="text-[11px] text-[#a3a3a3]">6d in stage</span>
+                </div>
+              </a>
+
+            </div>
+          </div>
+
+          <!-- CONTRACT -->
+          <div class="col-dim">
+            <div class="flex items-baseline justify-between mb-6">
+              <div class="text-[13px] text-[#0a0a0a] tracking-tightish">Contract</div>
+              <div class="text-[12px] text-[#a3a3a3]">1 · $68.2k</div>
+            </div>
+            <div class="space-y-3">
+              <div class="card card-dim">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <div class="text-[15px] tracking-tightish font-medium truncate">Marcus Holloway</div>
+                    <div class="text-[12px] text-[#6e6e6e] mt-0.5">Grant Thornton · Retreat</div>
+                  </div>
+                  <div class="text-[14px] tracking-tightish text-[#0a0a0a]">$68.2k</div>
+                </div>
+                <div class="flex items-center justify-between mt-3">
+                  <span class="w-1.5 h-1.5 rounded-full dot-hot"></span>
+                  <span class="text-[11px] text-[#a3a3a3]">2d</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- WON -->
+          <div class="col-dim">
+            <div class="flex items-baseline justify-between mb-6">
+              <div class="text-[13px] text-[#0a0a0a] tracking-tightish">Won</div>
+              <div class="text-[12px] text-[#a3a3a3]">— this quarter</div>
+            </div>
+            <div class="text-[13px] text-[#a3a3a3] leading-[1.6]">
+              Six closed this quarter. Quiet streak continues.
+            </div>
+          </div>
+
+        </div>
+
+        <div class="h-[220px]"></div>
+
+      </div>
+    </main>
+
+  </div>
+
+</body>
+</html>

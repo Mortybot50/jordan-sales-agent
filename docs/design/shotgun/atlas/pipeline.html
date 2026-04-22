@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Pipeline — Atlas / Jordan Sales Agent</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  html,body{font-family:'Inter',ui-sans-serif,system-ui,sans-serif;font-size:13px;}
+  .mono{font-family:'JetBrains Mono',ui-monospace,monospace;}
+  .tnum{font-variant-numeric:tabular-nums;}
+  .hairline{border-color:#e4e7eb;}
+  .kbd{font-family:'JetBrains Mono',monospace;font-size:10px;border:1px solid #e4e7eb;border-bottom-width:2px;border-radius:3px;padding:1px 4px;color:#475569;background:#fafbfc;}
+  .pill{display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;border-radius:3px;font-size:11px;line-height:1;font-weight:500;}
+  .pill-green{background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;}
+  .pill-amber{background:#fffbeb;color:#b45309;border:1px solid #fde68a;}
+  .pill-red{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;}
+  .pill-blue{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;}
+  .pill-slate{background:#f1f5f9;color:#334155;border:1px solid #e2e8f0;}
+  .pill-purple{background:#f5f3ff;color:#6d28d9;border:1px solid #ddd6fe;}
+  .pill-rose{background:#fff1f2;color:#be123c;border:1px solid #fecdd3;}
+  .avatar{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#fff;}
+  .nav-item{display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:4px;color:#334155;font-size:13px;cursor:pointer;}
+  .nav-item:hover{background:#f1f5f9;}
+  .nav-active{background:#eff6ff;color:#1e40af;font-weight:500;}
+  .nav-sub{padding-left:28px;}
+  .nav-section{font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:#94a3b8;padding:10px 8px 4px;}
+  .chip{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:500;color:#334155;background:#fff;border:1px solid #e4e7eb;cursor:pointer;}
+  .chip:hover{background:#f8fafc;}
+  .chip-active{background:#eff6ff;border-color:#bfdbfe;color:#1e40af;}
+  .deal-card{background:#fff;border:1px solid #e4e7eb;border-radius:6px;padding:8px 10px;margin-bottom:6px;cursor:grab;position:relative;}
+  .deal-card:hover{border-color:#cbd5e1;box-shadow:0 1px 2px rgba(15,23,42,0.04);}
+  .deal-handle{position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:6px 0 0 6px;background:transparent;}
+  .deal-card:hover .deal-handle{background:#e2e8f0;}
+  .col-bar{height:3px;border-radius:2px;}
+  .stage-col{min-width:260px;width:260px;}
+</style>
+</head>
+<body class="bg-[#fafbfc] text-[#0f172a]">
+<div class="flex h-screen overflow-hidden">
+  <!-- Sidebar -->
+  <aside class="w-[240px] bg-white border-r hairline flex flex-col">
+    <div class="h-12 border-b hairline flex items-center px-3 gap-2">
+      <div class="w-5 h-5 rounded-[4px] bg-[#0f172a] flex items-center justify-center">
+        <div class="w-2 h-2 bg-[#2563eb] rounded-[1px]"></div>
+      </div>
+      <span class="font-semibold tracking-tight text-[13px]">Jordan</span>
+      <span class="ml-auto text-[10px] mono text-[#94a3b8]">v1.4</span>
+    </div>
+    <nav class="flex-1 overflow-y-auto px-2 py-2">
+      <div class="nav-section flex items-center gap-1"><i data-lucide="chevron-down" class="w-3 h-3"></i>Overview</div>
+      <a href="dashboard.html" class="nav-item"><i data-lucide="layout-grid" class="w-[14px] h-[14px]"></i>Dashboard</a>
+      <div class="nav-item"><i data-lucide="sun" class="w-[14px] h-[14px]"></i>Morning briefing</div>
+
+      <div class="nav-section flex items-center gap-1"><i data-lucide="chevron-down" class="w-3 h-3"></i>Sales</div>
+      <div class="nav-item nav-active"><i data-lucide="git-branch" class="w-[14px] h-[14px]"></i>Pipeline <span class="ml-auto text-[11px] mono tnum text-[#94a3b8]">7</span></div>
+      <div class="nav-item"><i data-lucide="users" class="w-[14px] h-[14px]"></i>Leads <span class="ml-auto text-[11px] mono tnum text-[#94a3b8]">124</span></div>
+      <div class="nav-item"><i data-lucide="contact" class="w-[14px] h-[14px]"></i>Contacts</div>
+      <div class="nav-item"><i data-lucide="building-2" class="w-[14px] h-[14px]"></i>Accounts</div>
+      <div class="nav-item"><i data-lucide="map-pin" class="w-[14px] h-[14px]"></i>Venues</div>
+
+      <div class="nav-section flex items-center gap-1"><i data-lucide="chevron-down" class="w-3 h-3"></i>Automation</div>
+      <div class="nav-item"><i data-lucide="mail" class="w-[14px] h-[14px]"></i>Drafts <span class="ml-auto pill pill-blue tnum">4</span></div>
+      <div class="nav-item"><i data-lucide="workflow" class="w-[14px] h-[14px]"></i>Sequences</div>
+      <div class="nav-item"><i data-lucide="file-text" class="w-[14px] h-[14px]"></i>Templates</div>
+
+      <div class="nav-section flex items-center gap-1"><i data-lucide="chevron-right" class="w-3 h-3"></i>Insights</div>
+      <div class="nav-item nav-sub"><i data-lucide="trending-up" class="w-[14px] h-[14px]"></i>Forecast</div>
+      <div class="nav-item nav-sub"><i data-lucide="pie-chart" class="w-[14px] h-[14px]"></i>Win / loss</div>
+    </nav>
+    <div class="border-t hairline p-2">
+      <div class="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[#f1f5f9] cursor-pointer">
+        <span class="avatar" style="background:#2563eb">M</span>
+        <div class="flex-1 min-w-0">
+          <div class="text-[12px] font-medium truncate">Morty</div>
+          <div class="text-[11px] text-[#94a3b8] truncate">Jordan CRM</div>
+        </div>
+        <i data-lucide="chevrons-up-down" class="w-[14px] h-[14px] text-[#94a3b8]"></i>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 flex flex-col min-w-0">
+    <!-- Top bar -->
+    <header class="h-12 bg-white border-b hairline flex items-center px-4 gap-3">
+      <div class="flex items-center gap-1.5 text-[13px]">
+        <span class="text-[#94a3b8]">Sales /</span>
+        <span class="font-medium">Pipeline</span>
+      </div>
+      <div class="ml-4 flex items-center h-8 w-64 border hairline rounded-md px-2.5 gap-2 text-[#94a3b8]">
+        <i data-lucide="search" class="w-[14px] h-[14px]"></i>
+        <span class="text-[12px]">Search deals, contacts, venues…</span>
+        <span class="kbd ml-auto">/</span>
+      </div>
+      <div class="ml-auto flex items-center gap-2">
+        <div class="flex items-center gap-1 h-8 border hairline rounded-md p-0.5 bg-white text-[12px]">
+          <button class="px-2 h-7 rounded bg-[#0f172a] text-white font-medium">Kanban</button>
+          <button class="px-2 h-7 rounded text-[#475569]">List</button>
+          <button class="px-2 h-7 rounded text-[#475569]">Forecast</button>
+        </div>
+        <button class="h-8 px-3 rounded-md bg-[#2563eb] text-white text-[12px] font-medium inline-flex items-center gap-1.5 hover:bg-[#1e40af]"><i data-lucide="plus" class="w-[14px] h-[14px]"></i>Add deal</button>
+        <span class="avatar" style="background:#2563eb">M</span>
+      </div>
+    </header>
+
+    <!-- Filter + action bar -->
+    <div class="bg-white border-b hairline px-4 py-2 flex items-center gap-2 flex-wrap">
+      <span class="chip chip-active">Owner: Me <i data-lucide="x" class="w-3 h-3"></i></span>
+      <span class="chip chip-active">Stage: Open <i data-lucide="x" class="w-3 h-3"></i></span>
+      <span class="chip chip-active">Score ≥ 50 <i data-lucide="x" class="w-3 h-3"></i></span>
+      <span class="chip chip-active">Event date: Next 90d <i data-lucide="x" class="w-3 h-3"></i></span>
+      <span class="chip"><i data-lucide="plus" class="w-3 h-3"></i>Add filter</span>
+      <span class="w-px h-4 bg-[#e4e7eb] mx-1"></span>
+      <span class="chip">Group by: Stage <i data-lucide="chevron-down" class="w-3 h-3"></i></span>
+      <span class="chip">Sort: Value desc <i data-lucide="chevron-down" class="w-3 h-3"></i></span>
+      <div class="ml-auto flex items-center gap-3 text-[12px] text-[#475569]">
+        <span><span class="mono tnum text-[#0f172a] font-semibold">$351,100</span> across <span class="mono tnum text-[#0f172a] font-semibold">7</span> deals</span>
+        <span class="text-[#94a3b8]">·</span>
+        <span><span class="pill pill-red">3 hot</span></span>
+        <span class="text-[#94a3b8]">·</span>
+        <span>avg velocity <span class="mono tnum">5.0d</span></span>
+      </div>
+    </div>
+
+    <!-- Kanban + right rail -->
+    <div class="flex-1 flex overflow-hidden">
+      <!-- Board -->
+      <div class="flex-1 overflow-x-auto overflow-y-auto p-4">
+        <div class="flex gap-3">
+
+          <!-- New -->
+          <div class="stage-col">
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="text-[12px] font-semibold uppercase tracking-wider text-[#475569]">New</span>
+                <span class="pill pill-slate tnum">2</span>
+              </div>
+              <span class="mono tnum text-[11px] text-[#64748b]">$69.0k</span>
+            </div>
+            <div class="col-bar mb-2" style="background:linear-gradient(to right,#10b981 100%,#e4e7eb 0)"></div>
+
+            <div class="deal-card">
+              <span class="deal-handle"></span>
+              <div class="flex items-start gap-2">
+                <input type="checkbox" class="mt-0.5"/>
+                <span class="avatar" style="background:#8b5cf6">AS</span>
+                <div class="min-w-0 flex-1">
+                  <div class="text-[13px] font-medium truncate">Anika Shaw</div>
+                  <div class="text-[11px] text-[#64748b] truncate">Deloitte · Year End Party</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                <span class="pill pill-slate"><i data-lucide="map-pin" class="w-[10px] h-[10px]"></i>Docklands</span>
+                <span class="pill pill-slate tnum"><i data-lucide="users" class="w-[10px] h-[10px]"></i>180</span>
+                <span class="pill pill-slate tnum"><i data-lucide="calendar" class="w-[10px] h-[10px]"></i>5 Dec</span>
+              </div>
+              <div class="flex items-center justify-between mt-1.5">
+                <span class="mono tnum text-[13px] font-semibold">$54,200</span>
+                <div class="flex items-center gap-1">
+                  <span class="pill pill-amber tnum">78 Warm</span>
+                  <span class="pill pill-slate tnum">0d</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="deal-card">
+              <span class="deal-handle"></span>
+              <div class="flex items-start gap-2">
+                <input type="checkbox" class="mt-0.5"/>
+                <span class="avatar" style="background:#0ea5e9">PN</span>
+                <div class="min-w-0 flex-1">
+                  <div class="text-[13px] font-medium truncate">Priya Nadar</div>
+                  <div class="text-[11px] text-[#64748b] truncate">Bond Uni Alumni · Networking</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                <span class="pill pill-slate"><i data-lucide="map-pin" class="w-[10px] h-[10px]"></i>Docklands</span>
+                <span class="pill pill-slate tnum"><i data-lucide="users" class="w-[10px] h-[10px]"></i>60</span>
+                <span class="pill pill-slate tnum"><i data-lucide="calendar" class="w-[10px] h-[10px]"></i>22 Aug</span>
+              </div>
+              <div class="flex items-center justify-between mt-1.5">
+                <span class="mono tnum text-[13px] font-semibold">$14,800</span>
+                <div class="flex items-center gap-1">
+                  <span class="pill pill-amber tnum">71 Warm</span>
+                  <span class="pill pill-slate tnum">1d</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Qualifying -->
+          <div class="stage-col">
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="text-[12px] font-semibold uppercase tracking-wider text-[#475569]">Qualifying</span>
+                <span class="pill pill-slate tnum">3</span>
+              </div>
+              <span class="mono tnum text-[11px] text-[#64748b]">$80.4k</span>
+            </div>
+            <div class="col-bar mb-2" style="background:linear-gradient(to right,#f59e0b 66%,#e4e7eb 0)"></div>
+
+            <div class="deal-card">
+              <span class="deal-handle"></span>
+              <div class="flex items-start gap-2">
+                <input type="checkbox" class="mt-0.5"/>
+                <span class="avatar" style="background:#059669">JW</span>
+                <div class="min-w-0 flex-1">
+                  <div class="text-[13px] font-medium truncate">James Whitfield</div>
+                  <div class="text-[11px] text-[#64748b] truncate">Holland &amp; Smith · Xmas Party</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                <span class="pill pill-slate"><i data-lucide="map-pin" class="w-[10px] h-[10px]"></i>Collingwood</span>
+                <span class="pill pill-slate tnum"><i data-lucide="users" class="w-[10px] h-[10px]"></i>80</span>
+                <span class="pill pill-slate tnum"><i data-lucide="calendar" class="w-[10px] h-[10px]"></i>12 Dec</span>
+              </div>
+              <div class="flex items-center justify-between mt-1.5">
+                <span class="mono tnum text-[13px] font-semibold">$22,400</span>
+                <div class="flex items-center gap-1">
+                  <span class="pill pill-amber tnum">76 Warm</span>
+                  <span class="pill pill-slate tnum">5d</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="deal-card">
+              <span class="deal-handle"></span>
+              <div class="flex items-start gap-2">
+                <input type="checkbox" class="mt-0.5"/>
+                <span class="avatar" style="background:#dc2626">TF</span>
+                <div class="min-w-0 flex-1">
+                  <div class="text-[13px] font-medium truncate">Tom Ferris</div>
+                  <div class="text-[11px] text-[#64748b] truncate">Ferris/Chen · Wedding</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                <span class="pill pill-slate"><i data-lucide="map-pin" class="w-[10px] h-[10px]"></i>Oak Room</span>
+                <span class="pill pill-slate tnum"><i data-lucide="users" class="w-[10px] h-[10px]"></i>140</span>
+                <span class="pill pill-slate tnum tnum"><i data-lucide="calendar" class="w-[10px] h-[10px]"></i>18 Oct</span>
+              </div>
+              <div class="flex items-center justify-between mt-1.5">
+                <span class="mono tnum text-[13px] font-semibold">$38,600</span>
+                <div class="flex items-center gap-1">
+                  <span class="pill pill-amber tnum">62 Warm</span>
+                  <span class="pill pill-rose tnum">9d</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="deal-card" style="border-color:#fecdd3;background:#fff5f5;">
+              <span class="deal-handle" style="background:#ef4444"></span>
+              <div class="flex items-start gap-2">
+                <input type="checkbox" class="mt-0.5"/>
+                <span class="avatar" style="background:#0891b2">DK</span>
+                <div class="min-w-0 flex-1">
+                  <div class="text-[13px] font-medium truncate">Dev Kapoor</div>
+                  <div class="text-[11px] text-[#64748b] truncate">Rip Curl · Team Offsite</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                <span class="pill pill-slate"><i data-lucide="map-pin" class="w-[10px] h-[10px]"></i>Collingwood</span>
+                <span class="pill pill-slate tnum"><i data-lucide="users" class="w-[10px] h-[10px]"></i>65</span>
+                <span class="pill pill-slate tnum"><i data-lucide="calendar" class="w-[10px] h-[10px]"></i>25 Sep</span>
+              </div>
+              <div class="flex items-center justify-between mt-1.5">
+                <span class="mono tnum text-[13px] font-semibold">$19,400</span>
+                <div class="flex items-center gap-1">
+                  <span class="pill pill-slate tnum">55 Cool</span>
+                  <span class="pill pill-red tnum">Stuck 14d</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Proposal -->
+          <div class="stage-col">
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="text-[12px] font-semibold uppercase tracking-wider text-[#475569]">Proposal</span>
+                <span class="pill pill-slate tnum">2</span>
+              </div>
+              <span class="mono tnum text-[11px] text-[#64748b]">$133.5k</span>
+            </div>
+            <div class="col-bar mb-2" style="background:linear-gradient(to right,#10b981 100%,#e4e7eb 0)"></div>
+
+            <a href="lead-detail.html" class="block">
+            <div class="deal-card">
+              <span class="deal-handle"></span>
+              <div class="flex items-start gap-2">
+                <input type="checkbox" class="mt-0.5"/>
+                <span class="avatar" style="background:#2563eb">SC</span>
+                <div class="min-w-0 flex-1">
+                  <div class="text-[13px] font-medium truncate">Sarah Chen</div>
+                  <div class="text-[11px] text-[#64748b] truncate">Canva · EOFY Dinner</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                <span class="pill pill-slate"><i data-lucide="map-pin" class="w-[10px] h-[10px]"></i>Oak Room</span>
+                <span class="pill pill-slate tnum"><i data-lucide="users" class="w-[10px] h-[10px]"></i>120</span>
+                <span class="pill pill-blue tnum"><i data-lucide="calendar" class="w-[10px] h-[10px]"></i>14 Jun</span>
+              </div>
+              <div class="flex items-center justify-between mt-1.5">
+                <span class="mono tnum text-[13px] font-semibold">$48,500</span>
+                <div class="flex items-center gap-1">
+                  <span class="pill pill-red tnum">84 Hot</span>
+                  <span class="pill pill-slate tnum">3d</span>
+                </div>
+              </div>
+            </div>
+            </a>
+
+            <div class="deal-card">
+              <span class="deal-handle"></span>
+              <div class="flex items-start gap-2">
+                <input type="checkbox" class="mt-0.5"/>
+                <span class="avatar" style="background:#db2777">LO</span>
+                <div class="min-w-0 flex-1">
+                  <div class="text-[13px] font-medium truncate">Lena Oyelaran</div>
+                  <div class="text-[11px] text-[#64748b] truncate">Nike APAC · Product Launch</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                <span class="pill pill-slate"><i data-lucide="map-pin" class="w-[10px] h-[10px]"></i>Cremorne Brewery</span>
+                <span class="pill pill-slate tnum"><i data-lucide="users" class="w-[10px] h-[10px]"></i>200</span>
+                <span class="pill pill-slate tnum"><i data-lucide="calendar" class="w-[10px] h-[10px]"></i>3 Jul</span>
+              </div>
+              <div class="flex items-center justify-between mt-1.5">
+                <span class="mono tnum text-[13px] font-semibold">$85,000</span>
+                <div class="flex items-center gap-1">
+                  <span class="pill pill-red tnum">91 Hot</span>
+                  <span class="pill pill-slate tnum">6d</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Contract -->
+          <div class="stage-col">
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="text-[12px] font-semibold uppercase tracking-wider text-[#475569]">Contract sent</span>
+                <span class="pill pill-slate tnum">1</span>
+              </div>
+              <span class="mono tnum text-[11px] text-[#64748b]">$68.2k</span>
+            </div>
+            <div class="col-bar mb-2" style="background:linear-gradient(to right,#10b981 100%,#e4e7eb 0)"></div>
+
+            <div class="deal-card">
+              <span class="deal-handle"></span>
+              <div class="flex items-start gap-2">
+                <input type="checkbox" class="mt-0.5"/>
+                <span class="avatar" style="background:#7c3aed">MH</span>
+                <div class="min-w-0 flex-1">
+                  <div class="text-[13px] font-medium truncate">Marcus Holloway</div>
+                  <div class="text-[11px] text-[#64748b] truncate">Grant Thornton · Partner Retreat</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                <span class="pill pill-slate"><i data-lucide="map-pin" class="w-[10px] h-[10px]"></i>Fitzroy Pavilion</span>
+                <span class="pill pill-slate tnum"><i data-lucide="users" class="w-[10px] h-[10px]"></i>45</span>
+                <span class="pill pill-blue tnum"><i data-lucide="calendar" class="w-[10px] h-[10px]"></i>8 May</span>
+              </div>
+              <div class="flex items-center justify-between mt-1.5">
+                <span class="mono tnum text-[13px] font-semibold">$68,200</span>
+                <div class="flex items-center gap-1">
+                  <span class="pill pill-red tnum">89 Hot</span>
+                  <span class="pill pill-slate tnum">2d</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Won -->
+          <div class="stage-col">
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="text-[12px] font-semibold uppercase tracking-wider text-[#475569]">Won</span>
+                <span class="pill pill-green tnum">4 QTD</span>
+              </div>
+              <span class="mono tnum text-[11px] text-[#64748b]">$178.4k</span>
+            </div>
+            <div class="col-bar mb-2" style="background:#10b981"></div>
+            <div class="text-[11px] text-[#94a3b8] py-6 text-center">Drag a deal here to close</div>
+          </div>
+
+          <!-- Lost -->
+          <div class="stage-col">
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="text-[12px] font-semibold uppercase tracking-wider text-[#475569]">Lost</span>
+                <span class="pill pill-slate tnum">2 QTD</span>
+              </div>
+              <span class="mono tnum text-[11px] text-[#64748b]">$61.0k</span>
+            </div>
+            <div class="col-bar mb-2" style="background:#ef4444"></div>
+            <div class="text-[11px] text-[#94a3b8] py-6 text-center">No recent lost deals</div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Right rail: forecast -->
+      <aside class="w-[300px] bg-white border-l hairline p-4 flex flex-col gap-4 overflow-y-auto">
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <div class="text-[11px] uppercase tracking-wider text-[#64748b] font-semibold">Forecast · Q2 FY26</div>
+            <i data-lucide="more-horizontal" class="w-4 h-4 text-[#94a3b8]"></i>
+          </div>
+          <div class="mono tnum text-[28px] font-semibold leading-none">$271,200</div>
+          <div class="text-[12px] text-[#64748b] mt-1 flex items-center gap-2">
+            <span class="pill pill-green"><i data-lucide="arrow-up" class="w-3 h-3"></i>+12.4%</span>
+            <span>vs Q1</span>
+          </div>
+          <div class="mt-3 text-[11px] text-[#64748b] space-y-1.5">
+            <div class="flex justify-between"><span>Weighted pipeline</span><span class="mono tnum text-[#0f172a]">$208,900</span></div>
+            <div class="flex justify-between"><span>Best case</span><span class="mono tnum text-[#0f172a]">$351,100</span></div>
+            <div class="flex justify-between"><span>Commit</span><span class="mono tnum text-[#0f172a]">$116,700</span></div>
+            <div class="flex justify-between"><span>Coverage ratio</span><span class="mono tnum text-[#0f172a]">2.8×</span></div>
+          </div>
+        </div>
+
+        <div class="border-t hairline pt-4">
+          <div class="text-[11px] uppercase tracking-wider text-[#64748b] font-semibold mb-2">Stage conversion</div>
+          <div class="space-y-2 text-[12px]">
+            <div>
+              <div class="flex justify-between mb-0.5"><span>New → Qualifying</span><span class="mono tnum font-medium">72%</span></div>
+              <div class="h-1 bg-[#f1f5f9] rounded"><div class="h-1 bg-[#2563eb] rounded" style="width:72%"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between mb-0.5"><span>Qualifying → Proposal</span><span class="mono tnum font-medium">58%</span></div>
+              <div class="h-1 bg-[#f1f5f9] rounded"><div class="h-1 bg-[#2563eb] rounded" style="width:58%"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between mb-0.5"><span>Proposal → Contract</span><span class="mono tnum font-medium">64%</span></div>
+              <div class="h-1 bg-[#f1f5f9] rounded"><div class="h-1 bg-[#2563eb] rounded" style="width:64%"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between mb-0.5"><span>Contract → Won</span><span class="mono tnum font-medium">84%</span></div>
+              <div class="h-1 bg-[#f1f5f9] rounded"><div class="h-1 bg-[#10b981] rounded" style="width:84%"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="border-t hairline pt-4">
+          <div class="text-[11px] uppercase tracking-wider text-[#64748b] font-semibold mb-2">Stuck deals</div>
+          <div class="text-[12px] space-y-2">
+            <div class="flex items-center gap-2">
+              <span class="avatar" style="background:#0891b2">DK</span>
+              <div class="flex-1 min-w-0">
+                <div class="truncate">Dev Kapoor · Rip Curl</div>
+                <div class="text-[11px] text-[#94a3b8]">Qualifying · 14d idle</div>
+              </div>
+              <span class="pill pill-red tnum">!</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="avatar" style="background:#dc2626">TF</span>
+              <div class="flex-1 min-w-0">
+                <div class="truncate">Tom Ferris · Wedding</div>
+                <div class="text-[11px] text-[#94a3b8]">Qualifying · 9d idle</div>
+              </div>
+              <span class="pill pill-amber tnum">•</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="border-t hairline pt-4">
+          <div class="text-[11px] uppercase tracking-wider text-[#64748b] font-semibold mb-2">Venue load · next 90d</div>
+          <div class="text-[12px] space-y-1.5">
+            <div class="flex justify-between"><span>Oak Room</span><span class="mono tnum">2 events</span></div>
+            <div class="flex justify-between"><span>Docklands Rooftop</span><span class="mono tnum">2 events</span></div>
+            <div class="flex justify-between"><span>Collingwood</span><span class="mono tnum">2 events</span></div>
+            <div class="flex justify-between"><span>Fitzroy Pavilion</span><span class="mono tnum">1 event</span></div>
+            <div class="flex justify-between"><span>Cremorne Brewery</span><span class="mono tnum">1 event</span></div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Bulk action floating bar (dormant) -->
+    <div class="h-9 bg-white border-t hairline flex items-center px-4 gap-3 text-[12px] text-[#64748b]">
+      <span>0 selected</span>
+      <span>·</span>
+      <span class="text-[#94a3b8]">Actions ▾</span>
+      <div class="ml-auto flex items-center gap-4">
+        <span>Move to stage · Assign · Email · Archive</span>
+        <span class="kbd">J</span><span class="kbd">K</span> <span class="text-[#94a3b8]">move</span>
+        <span class="kbd">X</span> <span class="text-[#94a3b8]">select</span>
+        <span class="kbd">⌘ K</span> <span class="text-[#94a3b8]">command</span>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>lucide.createIcons();</script>
+</body>
+</html>

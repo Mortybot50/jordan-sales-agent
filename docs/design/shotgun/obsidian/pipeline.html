@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Jordan · Pipeline — OBSIDIAN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  * { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+  body { background: #0a0a0a; color: #e8e8e8; }
+  .panel { background: #141414; border: 1px solid #222; }
+  .amber { color: #ffb020; }
+  .green { color: #00d27a; }
+  .red { color: #ff3b47; }
+  .cyan { color: #4ec9ff; }
+  .muted { color: #8a8a8a; }
+  .tertiary { color: #5a5a5a; }
+  .nav-item { border-left: 2px solid transparent; }
+  .nav-item:hover { background: #1a1a1a; }
+  .nav-active { background: #1a1a1a; border-left-color: #ffb020; color: #ffb020; }
+  .col-head { border-bottom: 1px solid #2e2e2e; }
+  .deal-card { background: #141414; border: 1px solid #222; cursor: pointer; }
+  .deal-card:hover { background: #1a1a1a; border-color: #ffb020; }
+  .dot { display: inline-block; width: 8px; height: 8px; }
+  .fill-bar { height: 2px; background: #1a1a1a; }
+  .fill-bar > span { display: block; height: 100%; background: #ffb020; }
+  a { color: #4ec9ff; text-decoration: none; }
+  .flow-arrow { color: #2e2e2e; font-size: 10px; }
+</style>
+</head>
+<body class="bg-[#0a0a0a] text-[#e8e8e8] font-mono">
+
+<!-- TOP STATUS BAR -->
+<div class="border-b border-[#222] px-4 py-2 flex items-center justify-between text-[11px] tracking-wider">
+  <div class="flex items-center gap-4">
+    <span class="amber font-bold">JORDAN</span>
+    <span class="muted">v1.4.2</span>
+    <span class="tertiary">│</span>
+    <span class="muted">22 APR 2026 10:47 AEST</span>
+    <span class="tertiary">│</span>
+    <span class="green">● CONNECTED</span>
+    <span class="tertiary">│</span>
+    <span class="muted">Morty Finlayson</span>
+  </div>
+  <div class="flex items-center gap-4">
+    <span class="muted">MTD <span class="green">$351.1K</span></span>
+    <span class="tertiary">│</span>
+    <span class="muted">GOAL <span class="amber">$420K</span></span>
+    <span class="tertiary">│</span>
+    <span class="cyan">⌘K</span>
+  </div>
+</div>
+
+<div class="flex min-h-[calc(100vh-72px)]">
+
+  <!-- LEFT NAV -->
+  <aside class="w-[180px] border-r border-[#222] text-[12px]">
+    <div class="px-3 py-2 text-[10px] tertiary tracking-[0.2em]">══ WORKSPACE ══</div>
+    <a href="dashboard.html" class="nav-item block px-3 py-2 flex justify-between text-[#e8e8e8]"><span>▸ DASHBOARD</span><span class="tertiary">D</span></a>
+    <a class="nav-item nav-active block px-3 py-2 flex justify-between"><span>◆ PIPELINE</span><span class="tertiary">P</span></a>
+    <a href="lead-detail.html" class="nav-item block px-3 py-2 flex justify-between text-[#e8e8e8]"><span>▸ LEADS</span><span class="tertiary">L</span></a>
+    <a class="nav-item block px-3 py-2 flex justify-between text-[#e8e8e8]"><span>▸ DRAFTS <span class="amber">[4]</span></span><span class="tertiary">R</span></a>
+    <a class="nav-item block px-3 py-2 flex justify-between text-[#e8e8e8]"><span>▸ BRIEFING</span><span class="tertiary">B</span></a>
+    <a class="nav-item block px-3 py-2 flex justify-between text-[#e8e8e8]"><span>▸ TEMPLATES</span><span class="tertiary">T</span></a>
+    <a class="nav-item block px-3 py-2 flex justify-between text-[#e8e8e8]"><span>▸ SETTINGS</span><span class="tertiary">,</span></a>
+
+    <div class="px-3 py-2 mt-4 text-[10px] tertiary tracking-[0.2em]">══ FILTERS ══</div>
+    <div class="px-3 py-1 text-[11px] muted">● ALL STAGES</div>
+    <div class="px-3 py-1 text-[11px] muted">○ HOT ONLY</div>
+    <div class="px-3 py-1 text-[11px] muted">○ STUCK &gt; 7d</div>
+    <div class="px-3 py-1 text-[11px] muted">○ Q2 CLOSE</div>
+
+    <div class="px-3 py-2 mt-4 text-[10px] tertiary tracking-[0.2em]">══ VIEW ══</div>
+    <div class="px-3 py-1 text-[11px] amber">◆ KANBAN</div>
+    <div class="px-3 py-1 text-[11px] muted">○ TABLE</div>
+    <div class="px-3 py-1 text-[11px] muted">○ FORECAST</div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="flex-1 p-4 pb-16 overflow-hidden">
+
+    <!-- HEADER -->
+    <div class="flex items-baseline justify-between mb-3">
+      <div>
+        <div class="text-[10px] tertiary tracking-[0.3em]">══ PIPELINE / Q2 2026 ══</div>
+        <h1 class="text-xl amber font-bold mt-1">8 DEALS · $351,100 GROSS · $252,792 WEIGHTED</h1>
+      </div>
+      <div class="text-[11px] muted">
+        VELOCITY <span class="amber">5.0d</span> avg · STUCK <span class="red">2</span> · <a>NEW DEAL [N] ▸</a>
+      </div>
+    </div>
+
+    <!-- KANBAN + HEALTH -->
+    <div class="flex gap-2">
+
+      <!-- KANBAN -->
+      <div class="flex-1 grid grid-cols-5 gap-2">
+
+        <!-- COLUMN 1: NEW LEAD -->
+        <div>
+          <div class="panel">
+            <div class="fill-bar"><span style="width:19.6%;"></span></div>
+            <div class="px-2 py-2 col-head">
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="amber font-bold">NEW LEAD</span>
+                <span class="muted">[2]</span>
+              </div>
+              <div class="flex items-center justify-between text-[10px] mt-0.5">
+                <span class="muted">19.6% pipe</span>
+                <span class="amber">$69,000</span>
+              </div>
+            </div>
+            <div class="p-2 space-y-2 min-h-[60vh]">
+
+              <div class="deal-card p-2">
+                <div class="flex items-start justify-between text-[11px]">
+                  <div>
+                    <div class="text-[#e8e8e8]">Anika Shaw</div>
+                    <div class="muted text-[10px]">Deloitte · Year End</div>
+                  </div>
+                  <div class="amber">$54,200</div>
+                </div>
+                <div class="text-[10px] muted mt-1.5 leading-tight">Docklands Rooftop · 180 pax · 5 Dec 2026</div>
+                <div class="flex items-center justify-between text-[10px] mt-1.5">
+                  <span><span class="dot" style="background:#ffb020;"></span> 78</span>
+                  <span class="muted">0d in stage</span>
+                </div>
+              </div>
+
+              <div class="deal-card p-2">
+                <div class="flex items-start justify-between text-[11px]">
+                  <div>
+                    <div class="text-[#e8e8e8]">Priya Nadar</div>
+                    <div class="muted text-[10px]">Bond Uni · Networking</div>
+                  </div>
+                  <div class="amber">$14,800</div>
+                </div>
+                <div class="text-[10px] muted mt-1.5 leading-tight">Docklands Rooftop · 60 pax · 22 Aug 2026</div>
+                <div class="flex items-center justify-between text-[10px] mt-1.5">
+                  <span><span class="dot" style="background:#ffb020;"></span> 71</span>
+                  <span class="muted">1d in stage</span>
+                </div>
+              </div>
+
+              <div class="text-center text-[10px] tertiary py-3">+ DROP HERE</div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- COLUMN 2: QUALIFYING -->
+        <div class="relative">
+          <div class="absolute -left-2 top-8 flow-arrow">→</div>
+          <div class="panel">
+            <div class="fill-bar"><span style="width:22.8%;"></span></div>
+            <div class="px-2 py-2 col-head">
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="amber font-bold">QUALIFYING</span>
+                <span class="muted">[3]</span>
+              </div>
+              <div class="flex items-center justify-between text-[10px] mt-0.5">
+                <span class="muted">22.8% pipe</span>
+                <span class="amber">$80,400</span>
+              </div>
+            </div>
+            <div class="p-2 space-y-2 min-h-[60vh]">
+
+              <div class="deal-card p-2">
+                <div class="flex items-start justify-between text-[11px]">
+                  <div>
+                    <div class="text-[#e8e8e8]">James Whitfield</div>
+                    <div class="muted text-[10px]">Holland &amp; Smith · Xmas Party</div>
+                  </div>
+                  <div class="amber">$22,400</div>
+                </div>
+                <div class="text-[10px] muted mt-1.5 leading-tight">Collingwood Warehouse · 80 · 12 Dec 2026</div>
+                <div class="flex items-center justify-between text-[10px] mt-1.5">
+                  <span><span class="dot" style="background:#ffb020;"></span> 76</span>
+                  <span class="muted">5d in stage</span>
+                </div>
+              </div>
+
+              <div class="deal-card p-2">
+                <div class="flex items-start justify-between text-[11px]">
+                  <div>
+                    <div class="text-[#e8e8e8]">Tom Ferris</div>
+                    <div class="muted text-[10px]">Ferris/Chen · Wedding</div>
+                  </div>
+                  <div class="amber">$38,600</div>
+                </div>
+                <div class="text-[10px] muted mt-1.5 leading-tight">Oak Room South Yarra · 140 · 18 Oct</div>
+                <div class="flex items-center justify-between text-[10px] mt-1.5">
+                  <span><span class="dot" style="background:#ffb020;"></span> 62</span>
+                  <span class="red">9d stuck ▲</span>
+                </div>
+              </div>
+
+              <div class="deal-card p-2" style="border-color:#3a1a1d;">
+                <div class="flex items-start justify-between text-[11px]">
+                  <div>
+                    <div class="text-[#e8e8e8]">Dev Kapoor</div>
+                    <div class="muted text-[10px]">Rip Curl · Team Offsite</div>
+                  </div>
+                  <div class="muted">$19,400</div>
+                </div>
+                <div class="text-[10px] muted mt-1.5 leading-tight">Collingwood Warehouse · 65 · 25 Sep</div>
+                <div class="flex items-center justify-between text-[10px] mt-1.5">
+                  <span><span class="dot" style="background:#4ec9ff;"></span> <span class="muted">55</span></span>
+                  <span class="red">14d ▲ STUCK</span>
+                </div>
+              </div>
+
+              <div class="text-center text-[10px] tertiary py-3">+ DROP HERE</div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- COLUMN 3: PROPOSAL -->
+        <div class="relative">
+          <div class="absolute -left-2 top-8 flow-arrow">→</div>
+          <div class="panel">
+            <div class="fill-bar"><span style="width:37.9%;"></span></div>
+            <div class="px-2 py-2 col-head">
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="amber font-bold">PROPOSAL</span>
+                <span class="muted">[2]</span>
+              </div>
+              <div class="flex items-center justify-between text-[10px] mt-0.5">
+                <span class="muted">37.9% pipe</span>
+                <span class="amber">$133,500</span>
+              </div>
+            </div>
+            <div class="p-2 space-y-2 min-h-[60vh]">
+
+              <div class="deal-card p-2" style="border-color:#3a2a0d;">
+                <div class="flex items-start justify-between text-[11px]">
+                  <div>
+                    <div class="amber">Lena Oyelaran</div>
+                    <div class="muted text-[10px]">Nike APAC · Product Launch</div>
+                  </div>
+                  <div class="amber font-bold">$85,000</div>
+                </div>
+                <div class="text-[10px] muted mt-1.5 leading-tight">Cremorne Brewery · 200 · 3 Jul 2026</div>
+                <div class="flex items-center justify-between text-[10px] mt-1.5">
+                  <span><span class="dot" style="background:#ff3b47;"></span> <span class="amber">91</span></span>
+                  <span class="green">6d · opened 49m</span>
+                </div>
+              </div>
+
+              <div class="deal-card p-2" style="border-color:#3a2a0d;">
+                <div class="flex items-start justify-between text-[11px]">
+                  <div>
+                    <div class="amber">Sarah Chen</div>
+                    <div class="muted text-[10px]">Canva · EOFY Dinner</div>
+                  </div>
+                  <div class="amber font-bold">$48,500</div>
+                </div>
+                <div class="text-[10px] muted mt-1.5 leading-tight">Oak Room South Yarra · 120 · 14 Jun</div>
+                <div class="flex items-center justify-between text-[10px] mt-1.5">
+                  <span><span class="dot" style="background:#ff3b47;"></span> <span class="amber">84</span></span>
+                  <span class="green">3d · opened 3×</span>
+                </div>
+              </div>
+
+              <div class="text-center text-[10px] tertiary py-3">+ DROP HERE</div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- COLUMN 4: CONTRACT SENT -->
+        <div class="relative">
+          <div class="absolute -left-2 top-8 flow-arrow">→</div>
+          <div class="panel">
+            <div class="fill-bar"><span style="width:19.4%;"></span></div>
+            <div class="px-2 py-2 col-head">
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="amber font-bold">CONTRACT</span>
+                <span class="muted">[1]</span>
+              </div>
+              <div class="flex items-center justify-between text-[10px] mt-0.5">
+                <span class="muted">19.4% pipe</span>
+                <span class="amber">$68,200</span>
+              </div>
+            </div>
+            <div class="p-2 space-y-2 min-h-[60vh]">
+
+              <div class="deal-card p-2" style="border-color:#0d3a23;">
+                <div class="flex items-start justify-between text-[11px]">
+                  <div>
+                    <div class="amber">Marcus Holloway</div>
+                    <div class="muted text-[10px]">Grant Thornton · Retreat</div>
+                  </div>
+                  <div class="amber font-bold">$68,200</div>
+                </div>
+                <div class="text-[10px] muted mt-1.5 leading-tight">Fitzroy Pavilion · 45 · 8 May 2026</div>
+                <div class="flex items-center justify-between text-[10px] mt-1.5">
+                  <span><span class="dot" style="background:#ff3b47;"></span> <span class="amber">89</span></span>
+                  <span class="green">2d · § 3 signed ●</span>
+                </div>
+              </div>
+
+              <div class="text-center text-[10px] tertiary py-3">+ DROP HERE</div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- COLUMN 5: WON -->
+        <div class="relative">
+          <div class="absolute -left-2 top-8 flow-arrow">→</div>
+          <div class="panel">
+            <div class="fill-bar"><span style="width:0%;background:#00d27a;"></span></div>
+            <div class="px-2 py-2 col-head">
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="green font-bold">WON</span>
+                <span class="muted">[0]</span>
+              </div>
+              <div class="flex items-center justify-between text-[10px] mt-0.5">
+                <span class="muted">Q2 YTD</span>
+                <span class="green">$204K</span>
+              </div>
+            </div>
+            <div class="p-2 space-y-2 min-h-[60vh]">
+              <div class="text-center text-[10px] tertiary py-10 leading-loose">
+                ═══════════<br>
+                NO DEALS<br>
+                CLOSED THIS<br>
+                WEEK<br>
+                ═══════════<br>
+                <span class="green">LAST: 14 APR</span><br>
+                <span class="muted">Roy Morgan · $31.2K</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- PIPELINE HEALTH -->
+      <aside class="w-[280px] space-y-2">
+
+        <div class="panel">
+          <div class="px-3 py-1.5 col-head text-[10px] tracking-[0.2em]">PIPELINE HEALTH</div>
+          <div class="p-3 space-y-3">
+
+            <div>
+              <div class="text-[10px] tertiary tracking-[0.2em] mb-1.5">STAGE CONVERSION</div>
+              <div class="text-[11px] space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="muted">NEW ▸ QUAL</span>
+                  <span class="amber">72%</span>
+                </div>
+                <div class="fill-bar"><span style="width:72%;"></span></div>
+                <div class="flex items-center justify-between">
+                  <span class="muted">QUAL ▸ PROP</span>
+                  <span class="amber">58%</span>
+                </div>
+                <div class="fill-bar"><span style="width:58%;"></span></div>
+                <div class="flex items-center justify-between">
+                  <span class="muted">PROP ▸ CONTRACT</span>
+                  <span class="amber">41%</span>
+                </div>
+                <div class="fill-bar"><span style="width:41%;"></span></div>
+                <div class="flex items-center justify-between">
+                  <span class="muted">CONTRACT ▸ WON</span>
+                  <span class="green">83%</span>
+                </div>
+                <div class="fill-bar"><span style="width:83%;background:#00d27a;"></span></div>
+              </div>
+            </div>
+
+            <div>
+              <div class="text-[10px] tertiary tracking-[0.2em] mb-1.5">STAGE VELOCITY · DAYS</div>
+              <div class="text-[11px] space-y-0.5">
+                <div class="flex justify-between"><span class="muted">NEW LEAD</span><span>1.2d <span class="green">▼</span></span></div>
+                <div class="flex justify-between"><span class="muted">QUALIFYING</span><span>7.4d <span class="red">▲</span></span></div>
+                <div class="flex justify-between"><span class="muted">PROPOSAL</span><span>4.5d <span class="muted">━</span></span></div>
+                <div class="flex justify-between"><span class="muted">CONTRACT</span><span>2.8d <span class="green">▼</span></span></div>
+                <div class="flex justify-between pt-1 border-t border-[#1a1a1a] mt-1"><span class="amber">AVG</span><span class="amber">5.0d</span></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="px-3 py-1.5 col-head text-[10px] tracking-[0.2em] red">▲ STUCK DEALS · 2</div>
+          <div class="p-3 text-[11px] space-y-2">
+
+            <div>
+              <div class="flex justify-between">
+                <span class="amber">Dev Kapoor</span>
+                <span class="red">14d</span>
+              </div>
+              <div class="text-[10px] muted">Rip Curl · Qualifying · $19,400</div>
+              <div class="text-[10px] cyan mt-0.5">▸ re-engage draft ready</div>
+            </div>
+
+            <div class="border-t border-[#1a1a1a] pt-2">
+              <div class="flex justify-between">
+                <span class="amber">Tom Ferris</span>
+                <span class="red">9d</span>
+              </div>
+              <div class="text-[10px] muted">Ferris/Chen · Qualifying · $38,600</div>
+              <div class="text-[10px] cyan mt-0.5">▸ call suggested · 11:30</div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="px-3 py-1.5 col-head text-[10px] tracking-[0.2em]">FORECAST · 30D</div>
+          <div class="p-3 text-[11px]">
+            <div class="flex justify-between mb-1">
+              <span class="muted">WEIGHTED</span>
+              <span class="amber">$252,792</span>
+            </div>
+            <div class="flex justify-between mb-1">
+              <span class="muted">BEST CASE</span>
+              <span class="green">$351,100</span>
+            </div>
+            <div class="flex justify-between mb-2">
+              <span class="muted">WORST CASE</span>
+              <span class="red">$136,400</span>
+            </div>
+            <div class="text-[10px] muted">PROJECTION <span class="green">▂▃▅▆▇▆▇█</span></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="px-3 py-1.5 col-head text-[10px] tracking-[0.2em]">VENUE LOAD · Q2</div>
+          <div class="p-3 text-[11px] space-y-0.5">
+            <div class="flex justify-between"><span class="muted">Oak Room S.Y.</span><span>2 · <span class="amber">$87.1K</span></span></div>
+            <div class="flex justify-between"><span class="muted">Docklands Roof</span><span>2 · <span class="amber">$69.0K</span></span></div>
+            <div class="flex justify-between"><span class="muted">Collingwood W.</span><span>2 · <span class="amber">$41.8K</span></span></div>
+            <div class="flex justify-between"><span class="muted">Cremorne Brew</span><span>1 · <span class="amber">$85.0K</span></span></div>
+            <div class="flex justify-between"><span class="muted">Fitzroy Pav</span><span>1 · <span class="amber">$68.2K</span></span></div>
+          </div>
+        </div>
+
+      </aside>
+
+    </div>
+
+  </main>
+</div>
+
+<!-- BOTTOM KEYBOARD HINT -->
+<div class="fixed bottom-0 left-0 right-0 border-t border-[#222] bg-[#0a0a0a] px-4 py-2 flex items-center justify-between text-[10px] tracking-wider z-10">
+  <div class="flex gap-4 muted">
+    <span><span class="amber">[N]</span> new lead</span>
+    <span><span class="amber">[/]</span> search</span>
+    <span><span class="amber">[⌘K]</span> command</span>
+    <span><span class="amber">[J/K]</span> navigate</span>
+    <span><span class="amber">[H/L]</span> move stage</span>
+    <span><span class="amber">[G then D]</span> dashboard</span>
+    <span><span class="amber">[?]</span> help</span>
+  </div>
+  <div class="tertiary">8 DEALS LOADED · 12ms</div>
+</div>
+
+</body>
+</html>

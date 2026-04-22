@@ -1,7 +1,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+@import "./styles/tokens.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -73,7 +75,79 @@
 
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: 'Geist Variable', sans-serif;
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* ── Jordan design tokens exposed as Tailwind utilities ────── */
+  /* Neutrals → bg-ink, text-ink, bg-ink-muted, etc. */
+  --color-ink: var(--jordan-ink);
+  --color-ink-muted: var(--jordan-ink-muted);
+  --color-ink-subtle: var(--jordan-ink-subtle);
+  --color-ink-faint: var(--jordan-ink-faint);
+  --color-ink-disabled: var(--jordan-ink-disabled);
+  --color-hairline: var(--jordan-hairline);
+  --color-surface-1: var(--jordan-surface-1);
+  --color-surface-2: var(--jordan-surface-2);
+  --color-surface-3: var(--jordan-surface-3);
+  --color-surface-4: var(--jordan-surface-4);
+  --color-canvas: var(--jordan-canvas);
+
+  /* Jordan accent (kept under `brand-*` utility name to avoid
+   * collision with shadcn's own --color-accent semantic token). */
+  --color-brand: var(--jordan-accent);
+  --color-brand-hover: var(--jordan-accent-hover);
+  --color-brand-soft: var(--jordan-accent-soft);
+
+  /* Tones */
+  --color-hot: var(--jordan-hot);
+  --color-hot-soft: var(--jordan-hot-soft);
+  --color-hot-text: var(--jordan-hot-text);
+  --color-warm: var(--jordan-warm);
+  --color-warm-soft: var(--jordan-warm-soft);
+  --color-warm-text: var(--jordan-warm-text);
+  --color-cold: var(--jordan-cold);
+  --color-cold-soft: var(--jordan-cold-soft);
+  --color-cold-text: var(--jordan-cold-text);
+  --color-success-jordan: var(--jordan-success);
+  --color-success-soft: var(--jordan-success-soft);
+  --color-success-text: var(--jordan-success-text);
+  --color-warning-jordan: var(--jordan-warning);
+  --color-warning-soft: var(--jordan-warning-soft);
+  --color-warning-text: var(--jordan-warning-text);
+  --color-danger: var(--jordan-danger);
+  --color-danger-soft: var(--jordan-danger-soft);
+  --color-danger-text: var(--jordan-danger-text);
+
+  /* Tracking */
+  --tracking-label: var(--jordan-tracking-label);
+  --tracking-section: var(--jordan-tracking-section);
+
+  /* Shadows */
+  --shadow-hover: var(--jordan-shadow-hover);
+  --shadow-sheet: var(--jordan-shadow-sheet);
+
+  /* Radii */
+  --radius-pill: var(--jordan-radius-sm);
+  --radius-jordan: var(--jordan-radius-md);
+  --radius-overlay: var(--jordan-radius-lg);
+
+  /* Jordan typography scale (px-locked per plan §3.2).
+   * Tailwind v4 expects `--text-<key>` → font-size (with line-height via --line-height). */
+  --text-11: 11px;
+  --text-11--line-height: 16px;
+  --text-13: 13px;
+  --text-13--line-height: 20px;
+  --text-14: 14px;
+  --text-14--line-height: 22px;
+  --text-15: 15px;
+  --text-15--line-height: 24px;
+  --text-17: 17px;
+  --text-17--line-height: 24px;
+  --text-20: 20px;
+  --text-20--line-height: 28px;
+  --text-24: 24px;
+  --text-24--line-height: 32px;
+
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);

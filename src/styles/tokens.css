@@ -1,0 +1,113 @@
+/*
+ * Jordan Sales Agent — Design Tokens (Phase A)
+ * ---------------------------------------------
+ * Source of truth for colour, type, spacing, radius, shadow, motion.
+ *
+ * Phase A is "invisible foundation" — these tokens are additive. They
+ * coexist with shadcn's semantic tokens (--primary, --border, etc.) so
+ * already-shipped screens do not shift. New primitives under
+ * `src/components/primitives/` bind directly to the Jordan tokens via
+ * `jordan-` prefixed CSS custom properties and Tailwind utilities
+ * declared in `index.css` (see @theme inline block).
+ *
+ * Naming: all Jordan tokens are prefixed `--jordan-*` for CSS, and
+ * expose Tailwind utilities under `text-ink-*`, `bg-accent-*`, etc via
+ * the @theme mapping in index.css. Prefix on the CSS variable prevents
+ * any cascade collision with shadcn tokens; the utility names are short
+ * because consumers only write Tailwind.
+ *
+ * See: /Users/mortybot/.openclaw/roles/dev/plans/jordan-reskin-plan.md §3
+ */
+
+:root {
+  /* ── Neutrals (slate scale) ─────────────────────────────────── */
+  --jordan-ink:            #0f172a;   /* primary text                */
+  --jordan-ink-muted:      #334155;   /* secondary text              */
+  --jordan-ink-subtle:     #475569;   /* tertiary                    */
+  --jordan-ink-faint:      #64748b;   /* labels                      */
+  --jordan-ink-disabled:   #94a3b8;   /* hints, placeholders         */
+  --jordan-hairline:       #e4e7eb;   /* THE ONLY BORDER COLOUR      */
+  --jordan-surface-1:      #ffffff;   /* cards, sheet                */
+  --jordan-surface-2:      #fafbfc;   /* table header bg, input bg   */
+  --jordan-surface-3:      #f8fafc;   /* row hover                   */
+  --jordan-surface-4:      #f1f5f9;   /* active row, filter chip     */
+  --jordan-canvas:         #ffffff;   /* page background             */
+
+  /* ── Accent — one and only ──────────────────────────────────── */
+  --jordan-accent:         #2563eb;
+  --jordan-accent-hover:   #1e40af;
+  --jordan-accent-soft:    #eff6ff;
+  --jordan-accent-ring:    rgba(37, 99, 235, 0.25);
+
+  /* ── Semantic tones ─────────────────────────────────────────── */
+  --jordan-hot:            #ef4444;
+  --jordan-hot-soft:       #fef2f2;
+  --jordan-hot-text:       #b91c1c;
+
+  --jordan-warm:           #f59e0b;
+  --jordan-warm-soft:      #fffbeb;
+  --jordan-warm-text:      #b45309;
+
+  --jordan-cold:           #64748b;
+  --jordan-cold-soft:      #f1f5f9;
+  --jordan-cold-text:      #334155;
+
+  --jordan-success:        #10b981;
+  --jordan-success-soft:   #ecfdf5;
+  --jordan-success-text:   #047857;
+
+  --jordan-warning:        #f59e0b;
+  --jordan-warning-soft:   #fffbeb;
+  --jordan-warning-text:   #b45309;
+
+  --jordan-danger:         #ef4444;
+  --jordan-danger-soft:    #fef2f2;
+  --jordan-danger-text:    #b91c1c;
+
+  /* ── Typography — font families ─────────────────────────────── */
+  --jordan-font-sans: 'Inter Variable', ui-sans-serif, system-ui,
+    -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --jordan-font-mono: 'JetBrains Mono Variable', ui-monospace,
+    SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* ── Typography — letter spacing ────────────────────────────── */
+  --jordan-tracking-label:   0.08em;
+  --jordan-tracking-section: 0.12em;
+
+  /* ── Row height (Morty locked 32px default for Phase A) ─────── */
+  --jordan-row-compact: 28px;
+  --jordan-row:         32px;
+  --jordan-row-cozy:    40px;
+
+  /* ── Radius ─────────────────────────────────────────────────── */
+  --jordan-radius-sm:   3px;
+  --jordan-radius-md:   6px;
+  --jordan-radius-lg:   10px;
+  --jordan-radius-full: 9999px;
+
+  /* ── Shadow (only two allowed) ──────────────────────────────── */
+  --jordan-shadow-hover: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --jordan-shadow-sheet: 0 8px 24px rgba(15, 23, 42, 0.08);
+
+  /* ── Motion ─────────────────────────────────────────────────── */
+  --jordan-motion-instant: 100ms ease;
+  --jordan-motion-fast:    150ms ease-out;
+  --jordan-motion-medium:  200ms ease-out;
+  --jordan-motion-slow:    280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Respect prefers-reduced-motion — zero animation */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --jordan-motion-instant: 0ms;
+    --jordan-motion-fast:    0ms;
+    --jordan-motion-medium:  0ms;
+    --jordan-motion-slow:    0ms;
+  }
+}
+
+/* Tabular numerals — apply to any element for aligned digits */
+.jordan-tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}

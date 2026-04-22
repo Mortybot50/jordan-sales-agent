@@ -12,6 +12,7 @@ import { ContactImportPage } from '@/pages/ContactImportPage'
 import { DraftsPage } from '@/pages/DraftsPage'
 import { BriefingPage } from '@/pages/BriefingPage'
 import { SettingsPage } from '@/pages/SettingsPage'
+import PrimitivesPage from '@/pages/_primitives'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth()
@@ -36,6 +37,8 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        {/* Phase A internal surface — not linked from the main nav. */}
+        <Route path="/__primitives" element={<PrimitivesPage />} />
         <Route
           path="/"
           element={

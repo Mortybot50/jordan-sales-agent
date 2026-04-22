@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Today · Jordan</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    html, body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+    .serif { font-family: 'Instrument Serif', Georgia, serif; font-style: italic; letter-spacing: -0.01em; }
+    .kbd { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 500; color: #6e6e6e; background: #f7f7f5; border: 1px solid #ececec; padding: 2px 7px; border-radius: 6px; line-height: 1; display:inline-flex; align-items:center; height: 20px; }
+    .hairline { border-color: #ececec; }
+    .tracking-tightish { letter-spacing: -0.01em; }
+
+    /* narrow rail nav */
+    .rail-item { width: 32px; height: 32px; border-radius: 999px; display:flex; align-items:center; justify-content:center; color:#a3a3a3; font-size: 13px; font-weight: 500; position: relative; transition: color 120ms ease; }
+    .rail-item:hover { color: #0a0a0a; }
+    .rail-item[data-active="true"] { color: #0a6e5f; }
+    .rail-item[data-active="true"]::before { content:""; position:absolute; left:-14px; top:10px; bottom:10px; width:2px; background:#0a6e5f; border-radius:2px; }
+    .rail-item .label { position: absolute; left: 44px; white-space: nowrap; font-size: 13px; color:#0a0a0a; background:#ffffff; padding: 4px 10px; border-radius: 6px; border: 1px solid #ececec; opacity: 0; pointer-events: none; transform: translateX(-4px); transition: opacity 120ms ease, transform 120ms ease; }
+    .rail-item:hover .label { opacity: 1; transform: translateX(0); }
+  </style>
+</head>
+<body class="bg-white text-[#0a0a0a] antialiased">
+
+  <div class="min-h-screen flex">
+
+    <!-- Narrow rail -->
+    <aside class="w-[60px] shrink-0 border-r hairline flex flex-col items-center pt-8 pb-8">
+      <div class="w-[28px] h-[28px] rounded-full bg-[#0a0a0a] text-white flex items-center justify-center text-[12px] font-semibold tracking-tightish mb-10">J</div>
+      <nav class="flex flex-col gap-3">
+        <a href="dashboard.html" class="rail-item" data-active="true">T<span class="label">Today</span></a>
+        <a href="pipeline.html" class="rail-item">P<span class="label">Pipeline</span></a>
+        <a href="#" class="rail-item">L<span class="label">Leads</span></a>
+        <a href="#" class="rail-item">D<span class="label">Drafts</span></a>
+        <a href="#" class="rail-item">B<span class="label">Bookings</span></a>
+      </nav>
+      <div class="mt-auto text-[10px] text-[#a3a3a3] tracking-[0.15em] uppercase">MK</div>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1">
+      <div class="max-w-[900px] mx-auto px-16 md:px-24 pt-32 pb-40">
+
+        <!-- Greeting -->
+        <div class="text-[12px] text-[#a3a3a3] tracking-[0.15em] uppercase mb-5">Wed 22 Apr · 7:42 am</div>
+        <h1 class="serif text-[42px] leading-[1.05] tracking-tightish text-[#0a0a0a] mb-4">Good morning, Morty.</h1>
+        <p class="text-[20px] leading-[1.55] text-[#6e6e6e] max-w-[600px] mb-24">
+          Three replies came in overnight. Jordan has already drafted responses for two.
+        </p>
+
+        <!-- The ONE THING -->
+        <section class="border hairline rounded-2xl bg-white shadow-[0_1px_3px_rgba(10,10,10,0.04),0_10px_40px_-20px_rgba(10,10,10,0.1)] p-10">
+          <div class="text-[11px] uppercase tracking-[0.18em] text-[#a3a3a3] mb-5">The next thing</div>
+
+          <div class="text-[22px] leading-[1.35] tracking-tightish text-[#0a0a0a] font-medium max-w-[640px]">
+            Reply to Sarah Chen — she's ready to confirm the $48,500 EOFY dinner at The Oak Room.
+          </div>
+
+          <div class="mt-8 text-[13px] uppercase tracking-[0.15em] text-[#a3a3a3]">Jordan's draft · Subject: Re: EOFY dinner — confirming 14 June</div>
+
+          <div class="mt-4 text-[15px] leading-[1.7] text-[#0a0a0a] max-w-[640px] space-y-3">
+            <p>Sarah,</p>
+            <p>Delighted you're ready to lock it in. I've provisionally held The Oak Room for Friday 14 June, 6:30pm start, seated for 120 with your brand activation area off the bar.</p>
+            <p>Attached is the final proposal reflecting the vegan menu additions and the extended AV package we discussed. The figure lands at $48,500 inc. GST. If you're happy, a reply to this email is enough to progress to contract — I'll send DocuSign within the hour.</p>
+            <p>Looking forward to hosting Canva.</p>
+            <p class="text-[#6e6e6e]">— Morty, on behalf of The Oak Room</p>
+          </div>
+
+          <div class="mt-10 flex items-center gap-4">
+            <button class="h-[36px] px-5 bg-[#0a6e5f] text-white rounded-lg text-[14px] font-medium tracking-tightish hover:bg-[#085547] transition">Approve and send</button>
+            <a href="lead-detail.html" class="text-[14px] text-[#6e6e6e] hover:text-[#0a0a0a] transition">Edit</a>
+            <a href="#" class="text-[14px] text-[#6e6e6e] hover:text-[#0a0a0a] transition">Skip</a>
+            <div class="ml-auto text-[12px] text-[#a3a3a3] flex items-center gap-2">
+              <span class="kbd">↵</span><span>to send</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- More today -->
+        <section class="mt-32">
+          <div class="text-[11px] uppercase tracking-[0.18em] text-[#a3a3a3] mb-6">More today</div>
+          <ul class="divide-y hairline">
+            <li class="py-5 flex items-baseline gap-6 group cursor-pointer">
+              <span class="text-[15px] text-[#0a0a0a] tracking-tightish group-hover:underline underline-offset-4">Marcus Holloway</span>
+              <span class="text-[15px] text-[#6e6e6e] flex-1">contract comes back from Grant Thornton legal — expected before 11am.</span>
+              <span class="text-[13px] text-[#a3a3a3]">Fitzroy Pavilion</span>
+            </li>
+            <li class="py-5 flex items-baseline gap-6 group cursor-pointer">
+              <span class="text-[15px] text-[#0a0a0a] tracking-tightish group-hover:underline underline-offset-4">Lena Oyelaran</span>
+              <span class="text-[15px] text-[#6e6e6e] flex-1">Nike APAC proposal draft ready for your review.</span>
+              <span class="text-[13px] text-[#a3a3a3]">Cremorne Brewery</span>
+            </li>
+            <li class="py-5 flex items-baseline gap-6 group cursor-pointer">
+              <span class="text-[15px] text-[#0a0a0a] tracking-tightish group-hover:underline underline-offset-4">Priya Nadar</span>
+              <span class="text-[15px] text-[#6e6e6e] flex-1">site visit requested for the Bond Uni networking night — two dates offered.</span>
+              <span class="text-[13px] text-[#a3a3a3]">Docklands Rooftop</span>
+            </li>
+            <li class="py-5 flex items-baseline gap-6 group cursor-pointer">
+              <span class="text-[15px] text-[#0a0a0a] tracking-tightish group-hover:underline underline-offset-4">Anika Shaw</span>
+              <span class="text-[15px] text-[#6e6e6e] flex-1">first enquiry from Deloitte — needs a qualifying call before noon.</span>
+              <span class="text-[13px] text-[#a3a3a3]">Docklands Rooftop</span>
+            </li>
+          </ul>
+        </section>
+
+        <!-- This week -->
+        <section class="mt-32">
+          <div class="text-[11px] uppercase tracking-[0.18em] text-[#a3a3a3] mb-8">This week</div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-x-12 gap-y-10">
+            <div>
+              <div class="text-[32px] font-medium tracking-tightish text-[#0a0a0a]">$351k</div>
+              <div class="text-[11px] uppercase tracking-[0.15em] text-[#a3a3a3] mt-2">Pipeline</div>
+            </div>
+            <div>
+              <div class="text-[32px] font-medium tracking-tightish text-[#0a0a0a]">7</div>
+              <div class="text-[11px] uppercase tracking-[0.15em] text-[#a3a3a3] mt-2">Open</div>
+            </div>
+            <div>
+              <div class="text-[32px] font-medium tracking-tightish text-[#0a0a0a]">3</div>
+              <div class="text-[11px] uppercase tracking-[0.15em] text-[#a3a3a3] mt-2">Hot</div>
+            </div>
+            <div>
+              <div class="text-[32px] font-medium tracking-tightish text-[#0a0a0a]">4</div>
+              <div class="text-[11px] uppercase tracking-[0.15em] text-[#a3a3a3] mt-2">Drafts</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Intentional whitespace -->
+        <div class="h-[200px]"></div>
+
+        <div class="flex items-center gap-3 text-[12px] text-[#a3a3a3]">
+          <span class="kbd">⌘ K</span><span>command</span>
+          <span class="kbd ml-4">J</span><span class="kbd">K</span><span>move</span>
+          <span class="kbd ml-4">E</span><span>edit</span>
+          <span class="kbd ml-4">↵</span><span>send</span>
+        </div>
+
+      </div>
+    </main>
+
+  </div>
+
+</body>
+</html>
