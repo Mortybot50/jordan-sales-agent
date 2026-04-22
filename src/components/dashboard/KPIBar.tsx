@@ -1,5 +1,5 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatCurrency } from '@/lib/utils'
+import { MetricNumber, SkeletonBlock } from '@/components/primitives'
+import { cn } from '@/lib/utils'
 import type { DashboardKPIs } from '@/lib/queries/dashboard'
 
 interface KPIBarProps {
@@ -7,71 +7,69 @@ interface KPIBarProps {
   loading: boolean
 }
 
-interface KPICardProps {
+interface KPITileProps {
   label: string
-  value: string
   sublabel: string
   loading: boolean
+  children: React.ReactNode
+  className?: string
 }
 
-function KPICard({ label, value, sublabel, loading }: KPICardProps) {
+function KPITile({ label, sublabel, loading, children, className }: KPITileProps) {
   return (
-    <Card>
-      <CardHeader className="pb-1 pt-3 px-4">
-        <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          {label}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="px-4 pb-3">
+    <div
+      className={cn(
+        'rounded-[6px] border border-hairline bg-surface-1 px-4 py-3 transition-colors hover:border-ink-disabled/50',
+        className,
+      )}
+    >
+      <div className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
+        {label}
+      </div>
+      <div className="mt-1.5 h-7 flex items-center">
         {loading ? (
-          <div className="h-8 w-16 rounded bg-muted animate-pulse" />
+          <SkeletonBlock className="h-6 w-20" />
         ) : (
-          <p className="text-2xl font-bold">{value}</p>
+          <span className="text-[22px] leading-none font-semibold text-ink">{children}</span>
         )}
-        <p className="text-xs text-muted-foreground mt-0.5">{sublabel}</p>
-      </CardContent>
-    </Card>
+      </div>
+      <div className="mt-1 text-[11px] text-ink-faint">{sublabel}</div>
+    </div>
   )
 }
 
 export function KPIBar({ kpis, loading }: KPIBarProps) {
-  const replyRateDisplay =
-    kpis.replyRate === null ? '—' : `${kpis.replyRate}%`
-  const meetingRateDisplay =
-    kpis.meetingRate === null ? '—' : `${kpis.meetingRate}%`
-
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-      <KPICard
-        label="Reply Rate"
-        value={replyRateDisplay}
-        sublabel="this week"
-        loading={loading}
-      />
-      <KPICard
-        label="Meeting Rate"
-        value={meetingRateDisplay}
-        sublabel="this month"
-        loading={loading}
-      />
-      <KPICard
-        label="Pipeline Value"
-        value={formatCurrency(kpis.pipelineValue)}
-        sublabel="active deals"
-        loading={loading}
-      />
-      <KPICard
-        label="Follow-ups Due"
-        value={String(kpis.followupsDueToday)}
-        sublabel="today"
-        loading={loading}
-      />
-      <KPICard
-        label="Closes"
-        value={String(kpis.closesThisMonth)}
-        sublabel="this month"
-        loading={loading}
-      />
+      <KPITile label="Reply Rate" sublabel="this week" loading={loading}>
+        {kpis.replyRate === null ? (
+          <span className="text-ink-disabled">—</span>
+        ) : (
+          <>
+            <MetricNumber value={kpis.replyRate} className="text-[22px]" />
+            <span className="ml-0.5 text-ink-muted text-[18px]">%</span>
+          </>
+        )}
+      </KPITile>
+      <KPITile label="Meeting Rate" sublabel="this month" loading={loading}>
+        {kpis.meetingRate === null ? (
+          <span className="text-ink-disabled">—</span>
+        ) : (
+          <>
+            <MetricNumber value={kpis.meetingRate} className="text-[22px]" />
+            <span className="ml-0.5 text-ink-muted text-[18px]">%</span>
+          </>
+        )}
+      </KPITile>
+      <KPITile label="Pipeline Value" sublabel="active deals" loading={loading}>
+        <MetricNumber value={kpis.pipelineValue} format="currency" className="text-[22px]" />
+      </KPITile>
+      <KPITile label="Follow-ups Due" sublabel="today" loading={loading}>
+        <MetricNumber value={kpis.followupsDueToday} className="text-[22px]" />
+      </KPITile>
+      <KPITile label="Closes" sublabel="this month" loading={loading}>
+        <MetricNumber value={kpis.closesThisMonth} className="text-[22px]" />
+      </KPITile>
     </div>
   )
 }

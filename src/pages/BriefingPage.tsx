@@ -348,21 +348,21 @@ export function BriefingPage() {
                     className="flex items-center gap-3 px-4 py-3"
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{task.title}</p>
+                      <p className="text-sm font-medium line-clamp-2 break-words">{task.title}</p>
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5 flex-wrap">
                         {task.contact_name && (
-                          <span>{task.contact_name}</span>
+                          <span className="break-words">{task.contact_name}</span>
                         )}
                         {task.venue_name && (
                           <>
                             <span>·</span>
-                            <span>{task.venue_name}</span>
+                            <span className="break-words">{task.venue_name}</span>
                           </>
                         )}
                         {task.deal_title && (
                           <>
                             <span>·</span>
-                            <span className="italic">{task.deal_title}</span>
+                            <span className="italic break-words">{task.deal_title}</span>
                           </>
                         )}
                       </div>

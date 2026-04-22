@@ -79,11 +79,41 @@ export function useCompleteTask() {
 
       if (error) throw error
     },
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: ['briefing', 'tasks-today'] })
+      await qc.cancelQueries({ queryKey: ['tasks'] })
+
+      const previousBriefing = qc.getQueryData(['briefing', 'tasks-today'])
+      const previousTasksToday = qc.getQueryData(['tasks', 'today'])
+
+      qc.setQueryData<Array<{ id: string }> | undefined>(
+        ['briefing', 'tasks-today'],
+        (old) => old?.filter((t) => t.id !== id),
+      )
+      qc.setQueryData<Array<{ id: string }> | undefined>(
+        ['tasks', 'today'],
+        (old) => old?.filter((t) => t.id !== id),
+      )
+
+      return { previousBriefing, previousTasksToday }
+    },
+    onError: (err: Error, _id, context) => {
+      if (context?.previousBriefing !== undefined) {
+        qc.setQueryData(['briefing', 'tasks-today'], context.previousBriefing)
+      }
+      if (context?.previousTasksToday !== undefined) {
+        qc.setQueryData(['tasks', 'today'], context.previousTasksToday)
+      }
+      toast.error(err.message)
+    },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['tasks'] })
       toast.success('Task completed')
     },
-    onError: (err: Error) => toast.error(err.message),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['briefing'] })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
+    },
   })
 }
 

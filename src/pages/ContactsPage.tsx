@@ -1,328 +1,339 @@
-import { useState, useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Upload, UserPlus, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { useContacts, scoreToTier } from '@/lib/queries/contacts'
-import { venueTypeLabel, roleLabel } from '@/lib/utils'
-import { UserPlus, Upload, ChevronUp, ChevronDown, Users } from 'lucide-react'
+  DataTable,
+  type ColumnDef,
+  FacetBar,
+  type FacetDef,
+  PageHeader,
+  ScoreBadge,
+  StatusPill,
+} from '@/components/primitives'
+import { useContacts, scoreToTier, type Contact } from '@/lib/queries/contacts'
+import { roleLabel, venueTypeLabel } from '@/lib/utils'
 
-type SortField = 'name' | 'venue' | 'score'
+type SortField = 'name' | 'venue' | 'score' | 'suburb'
 type SortDir = 'asc' | 'desc'
-type TierFilter = 'all' | 'hot' | 'warm' | 'cold'
+
+type SelectionState = Record<string, string[]>
 
 const PAGE_SIZE = 50
 
-function scoreBadge(score: number | null | undefined) {
-  const tier = scoreToTier(score)
-  if (tier === 'hot') return <Badge className="bg-red-100 text-red-700 border-0">Hot</Badge>
-  if (tier === 'warm') return <Badge className="bg-amber-100 text-amber-700 border-0">Warm</Badge>
-  return <Badge className="bg-slate-100 text-slate-600 border-0">Cold</Badge>
-}
-
 export function ContactsPage() {
   const navigate = useNavigate()
-  const { data: contacts, isLoading, error } = useContacts()
+  const { data: contacts, isLoading, error, refetch } = useContacts()
 
   const [search, setSearch] = useState('')
   const [sortField, setSortField] = useState<SortField>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
-  const [tierFilter, setTierFilter] = useState<TierFilter>('all')
+  const [selection, setSelection] = useState<SelectionState>({})
   const [page, setPage] = useState(0)
 
-  function toggleSort(field: SortField) {
-    if (sortField === field) {
+  // Derive facet options from the current data.
+  const { venueTypeOptions, suburbOptions } = useMemo(() => {
+    const venueSet = new Map<string, number>()
+    const suburbSet = new Map<string, number>()
+    for (const c of contacts ?? []) {
+      const vt = c.venue?.venue_type
+      if (vt) venueSet.set(vt, (venueSet.get(vt) ?? 0) + 1)
+      const sb = c.venue?.suburb
+      if (sb) suburbSet.set(sb, (suburbSet.get(sb) ?? 0) + 1)
+    }
+    const venueTypeOptions = [...venueSet.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([value, count]) => ({ value, label: venueTypeLabel(value), count }))
+    const suburbOptions = [...suburbSet.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([value, count]) => ({ value, label: value, count }))
+    return { venueTypeOptions, suburbOptions }
+  }, [contacts])
+
+  const facets: FacetDef[] = [
+    {
+      id: 'tier',
+      label: 'Tier',
+      mode: 'single',
+      options: [
+        { value: 'hot', label: 'Hot' },
+        { value: 'warm', label: 'Warm' },
+        { value: 'cold', label: 'Cold' },
+      ],
+    },
+    ...(venueTypeOptions.length > 0
+      ? [{ id: 'venue_type', label: 'Venue', mode: 'multi' as const, options: venueTypeOptions }]
+      : []),
+    ...(suburbOptions.length > 0
+      ? [{ id: 'suburb', label: 'Suburb', mode: 'multi' as const, options: suburbOptions }]
+      : []),
+  ]
+
+  const filtered = useMemo(() => {
+    if (!contacts) return []
+    let rows = contacts
+
+    const q = search.trim().toLowerCase()
+    if (q) {
+      rows = rows.filter(
+        (c) =>
+          c.full_name.toLowerCase().includes(q) ||
+          (c.email ?? '').toLowerCase().includes(q) ||
+          (c.venue?.name ?? '').toLowerCase().includes(q) ||
+          (c.venue?.suburb ?? '').toLowerCase().includes(q),
+      )
+    }
+
+    const tier = selection.tier?.[0]
+    if (tier) {
+      rows = rows.filter((c) => scoreToTier(c.lead_score?.score) === tier)
+    }
+
+    const venueTypes = selection.venue_type ?? []
+    if (venueTypes.length > 0) {
+      rows = rows.filter((c) => c.venue?.venue_type && venueTypes.includes(c.venue.venue_type))
+    }
+
+    const suburbs = selection.suburb ?? []
+    if (suburbs.length > 0) {
+      rows = rows.filter((c) => c.venue?.suburb && suburbs.includes(c.venue.suburb))
+    }
+
+    rows = [...rows].sort((a, b) => {
+      let cmp = 0
+      switch (sortField) {
+        case 'name':
+          cmp = a.full_name.localeCompare(b.full_name)
+          break
+        case 'venue':
+          cmp = (a.venue?.name ?? '').localeCompare(b.venue?.name ?? '')
+          break
+        case 'suburb':
+          cmp = (a.venue?.suburb ?? '').localeCompare(b.venue?.suburb ?? '')
+          break
+        case 'score':
+          cmp = (a.lead_score?.score ?? -1) - (b.lead_score?.score ?? -1)
+          break
+      }
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+
+    return rows
+  }, [contacts, search, selection, sortField, sortDir])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+
+  function toggleSort(field: string) {
+    const f = field as SortField
+    if (sortField === f) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
     } else {
-      setSortField(field)
+      setSortField(f)
       setSortDir('asc')
     }
     setPage(0)
   }
 
-  const filtered = useMemo(() => {
-    if (!contacts) return []
+  const columns: ColumnDef<Contact>[] = [
+    {
+      id: 'name',
+      header: 'Name',
+      sortable: true,
+      width: 'minmax(180px, 1.6fr)',
+      cell: (row) => (
+        <span className="truncate font-medium text-ink">{row.full_name}</span>
+      ),
+    },
+    {
+      id: 'role',
+      header: 'Role',
+      width: 'minmax(120px, 1fr)',
+      cell: (row) =>
+        row.role ? (
+          <span className="truncate text-ink-muted">{roleLabel(row.role)}</span>
+        ) : (
+          <span className="text-ink-disabled">—</span>
+        ),
+    },
+    {
+      id: 'venue',
+      header: 'Venue',
+      sortable: true,
+      width: 'minmax(160px, 1.8fr)',
+      cell: (row) => (
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-ink">{row.venue?.name ?? '—'}</span>
+          {row.venue?.venue_type && (
+            <StatusPill tone="neutral" className="shrink-0 h-[16px] px-1 text-[10px]">
+              {venueTypeLabel(row.venue.venue_type)}
+            </StatusPill>
+          )}
+        </span>
+      ),
+    },
+    {
+      id: 'suburb',
+      header: 'Suburb',
+      sortable: true,
+      width: 'minmax(100px, 1fr)',
+      cell: (row) =>
+        row.venue?.suburb ? (
+          <span className="truncate text-ink-muted">{row.venue.suburb}</span>
+        ) : (
+          <span className="text-ink-disabled">—</span>
+        ),
+    },
+    {
+      id: 'email',
+      header: 'Email',
+      width: 'minmax(180px, 1.8fr)',
+      cell: (row) =>
+        row.email ? (
+          <span className="truncate text-ink-muted">{row.email}</span>
+        ) : (
+          <span className="text-ink-disabled">—</span>
+        ),
+    },
+    {
+      id: 'score',
+      header: 'Score',
+      sortable: true,
+      align: 'right',
+      width: '92px',
+      cell: (row) => <ScoreBadge score={row.lead_score?.score} />,
+    },
+  ]
 
-    let result = contacts
-
-    if (search.trim()) {
-      const q = search.trim().toLowerCase()
-      result = result.filter(
-        (c) =>
-          c.full_name.toLowerCase().includes(q) ||
-          (c.email ?? '').toLowerCase().includes(q) ||
-          (c.venue?.name ?? '').toLowerCase().includes(q)
-      )
-    }
-
-    if (tierFilter !== 'all') {
-      result = result.filter(
-        (c) => scoreToTier(c.lead_score?.score) === tierFilter
-      )
-    }
-
-    result = [...result].sort((a, b) => {
-      let cmp = 0
-      if (sortField === 'name') {
-        cmp = a.full_name.localeCompare(b.full_name)
-      } else if (sortField === 'venue') {
-        cmp = (a.venue?.name ?? '').localeCompare(b.venue?.name ?? '')
-      } else if (sortField === 'score') {
-        cmp = (a.lead_score?.score ?? 0) - (b.lead_score?.score ?? 0)
-      }
-      return sortDir === 'asc' ? cmp : -cmp
-    })
-
-    return result
-  }, [contacts, search, sortField, sortDir, tierFilter])
-
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
-  const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
-
-  function SortIcon({ field }: { field: SortField }) {
-    if (sortField !== field)
-      return <ChevronDown className="w-3 h-3 text-muted-foreground opacity-40" />
-    return sortDir === 'asc' ? (
-      <ChevronUp className="w-3 h-3" />
-    ) : (
-      <ChevronDown className="w-3 h-3" />
-    )
-  }
+  const totalCount = contacts?.length ?? 0
+  const anyFilters =
+    search.trim().length > 0 ||
+    Object.values(selection).some((v) => v && v.length > 0)
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 max-w-7xl">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-semibold">Contacts</h1>
-          {!isLoading && contacts && (
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {contacts.length} contact{contacts.length !== 1 ? 's' : ''}
-            </p>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate('/contacts/import')}
-          >
-            <Upload className="w-4 h-4 mr-1.5" />
-            Import CSV
-          </Button>
-          <Button size="sm" onClick={() => navigate('/contacts/new')}>
-            <UserPlus className="w-4 h-4 mr-1.5" />
-            Add contact
-          </Button>
-        </div>
-      </div>
+    <div className="p-4 sm:p-6 space-y-5 max-w-[1200px]">
+      <PageHeader
+        eyebrow="Workspace"
+        title="Contacts"
+        description={
+          isLoading
+            ? 'Loading…'
+            : totalCount === 0
+              ? 'No contacts yet — import a CSV or add your first.'
+              : `${totalCount} contact${totalCount === 1 ? '' : 's'} across ${
+                  new Set((contacts ?? []).map((c) => c.venue?.name).filter(Boolean)).size
+                } venues`
+        }
+        actions={
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={() => navigate('/contacts/import')}
+            >
+              <Upload className="w-4 h-4 mr-1.5" />
+              Import CSV
+            </Button>
+            <Button size="sm" className="h-8" onClick={() => navigate('/contacts/new')}>
+              <UserPlus className="w-4 h-4 mr-1.5" />
+              Add contact
+            </Button>
+          </>
+        }
+      />
 
-      {/* Filters */}
-      <div className="flex gap-2 flex-wrap">
-        <Input
-          placeholder="Search by name, email or venue…"
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(0) }}
-          className="max-w-xs h-8 text-sm"
-        />
-        <Select
-          value={tierFilter}
-          onValueChange={(v) => { setTierFilter(v as TierFilter); setPage(0) }}
-        >
-          <SelectTrigger className="w-32 h-8 text-sm">
-            <SelectValue placeholder="Score tier" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All tiers</SelectItem>
-            <SelectItem value="hot">Hot (80+)</SelectItem>
-            <SelectItem value="warm">Warm (50–79)</SelectItem>
-            <SelectItem value="cold">Cold (&lt;50)</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <FacetBar
+        search={search}
+        onSearchChange={(v) => {
+          setSearch(v)
+          setPage(0)
+        }}
+        searchPlaceholder="Search name, email, venue, suburb…"
+        facets={facets}
+        selection={selection}
+        onSelectionChange={(facetId, values) => {
+          setSelection((s) => ({ ...s, [facetId]: values }))
+          setPage(0)
+        }}
+        onClear={() => {
+          setSelection({})
+          setSearch('')
+          setPage(0)
+        }}
+        summary={
+          <span>
+            {filtered.length} <span className="text-ink-disabled">of</span> {totalCount}
+          </span>
+        }
+      />
 
-      {/* Error */}
-      {error && (
-        <div className="text-destructive text-sm p-4">
-          Failed to load: {error.message}
-        </div>
-      )}
+      <DataTable
+        ariaLabel="Contacts"
+        columns={columns}
+        rows={paginated}
+        rowKey={(row) => row.id}
+        loading={isLoading}
+        error={error}
+        onRetry={() => refetch()}
+        sort={{ columnId: sortField, direction: sortDir }}
+        onSortChange={toggleSort}
+        onRowClick={(row) => navigate(`/contacts/${row.id}`)}
+        empty={{
+          icon: Users,
+          title: anyFilters ? 'No contacts match your filters' : 'No contacts yet',
+          body: anyFilters
+            ? 'Try clearing filters or adjusting the search.'
+            : 'Add your first contact or import a CSV to get started.',
+          action: anyFilters ? undefined : (
+            <Button size="sm" className="h-8" onClick={() => navigate('/contacts/new')}>
+              <UserPlus className="w-4 h-4 mr-1.5" />
+              Add contact
+            </Button>
+          ),
+          secondary: anyFilters ? undefined : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={() => navigate('/contacts/import')}
+            >
+              <Upload className="w-4 h-4 mr-1.5" />
+              Import CSV
+            </Button>
+          ),
+        }}
+      />
 
-      {/* Loading skeleton */}
-      {isLoading && (
-        <div className="border rounded-lg overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/40">
-                  <th className="px-3 py-2 text-left"><div className="h-3 w-12 rounded bg-muted" /></th>
-                  <th className="px-3 py-2 text-left hidden sm:table-cell"><div className="h-3 w-8 rounded bg-muted" /></th>
-                  <th className="px-3 py-2 text-left"><div className="h-3 w-12 rounded bg-muted" /></th>
-                  <th className="px-3 py-2 text-left hidden md:table-cell"><div className="h-3 w-10 rounded bg-muted" /></th>
-                  <th className="px-3 py-2 text-left hidden lg:table-cell"><div className="h-3 w-10 rounded bg-muted" /></th>
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <tr key={i} className="border-b last:border-0 animate-pulse">
-                    <td className="px-3 py-2.5"><div className="h-3.5 w-32 rounded bg-muted" /></td>
-                    <td className="px-3 py-2.5 hidden sm:table-cell"><div className="h-3 w-20 rounded bg-muted" /></td>
-                    <td className="px-3 py-2.5"><div className="h-3 w-28 rounded bg-muted" /></td>
-                    <td className="px-3 py-2.5 hidden md:table-cell"><div className="h-3 w-36 rounded bg-muted" /></td>
-                    <td className="px-3 py-2.5 hidden lg:table-cell"><div className="h-5 w-10 rounded-full bg-muted" /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between text-[12px] text-ink-faint">
+          <span className="jordan-tnum">
+            {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} of{' '}
+            {filtered.length}
+          </span>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              disabled={page === 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            >
+              Next
+            </Button>
           </div>
         </div>
-      )}
-
-      {/* Empty state */}
-      {!isLoading && !error && filtered.length === 0 && (
-        <div className="border rounded-lg py-16 text-center space-y-4">
-          <Users className="w-10 h-10 mx-auto text-muted-foreground opacity-40" />
-          <div>
-            <p className="text-sm font-medium">
-              {search || tierFilter !== 'all' ? 'No contacts match your filters' : 'No contacts yet'}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {search || tierFilter !== 'all'
-                ? 'Try adjusting your search or filter.'
-                : 'Add your first contact or import a CSV to get started.'}
-            </p>
-          </div>
-          {!search && tierFilter === 'all' && (
-            <div className="flex gap-2 justify-center">
-              <Button variant="outline" size="sm" onClick={() => navigate('/contacts/import')}>
-                <Upload className="w-4 h-4 mr-1.5" />
-                Import CSV
-              </Button>
-              <Button size="sm" onClick={() => navigate('/contacts/new')}>
-                <UserPlus className="w-4 h-4 mr-1.5" />
-                Add contact
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Table */}
-      {!isLoading && !error && filtered.length > 0 && (
-        <>
-          <div className="border rounded-lg overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/40">
-                    <th className="text-left px-3 py-2 font-medium">
-                      <button
-                        className="flex items-center gap-1 hover:text-foreground"
-                        onClick={() => toggleSort('name')}
-                      >
-                        Name <SortIcon field="name" />
-                      </button>
-                    </th>
-                    <th className="text-left px-3 py-2 font-medium hidden sm:table-cell">
-                      Role
-                    </th>
-                    <th className="text-left px-3 py-2 font-medium">
-                      <button
-                        className="flex items-center gap-1 hover:text-foreground"
-                        onClick={() => toggleSort('venue')}
-                      >
-                        Venue <SortIcon field="venue" />
-                      </button>
-                    </th>
-                    <th className="text-left px-3 py-2 font-medium hidden md:table-cell">
-                      Email
-                    </th>
-                    <th className="text-left px-3 py-2 font-medium hidden lg:table-cell">
-                      Phone
-                    </th>
-                    <th className="text-left px-3 py-2 font-medium">
-                      <button
-                        className="flex items-center gap-1 hover:text-foreground"
-                        onClick={() => toggleSort('score')}
-                      >
-                        Score <SortIcon field="score" />
-                      </button>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {paginated.map((contact) => (
-                    <tr
-                      key={contact.id}
-                      className="hover:bg-muted/30 cursor-pointer transition-colors"
-                      onClick={() => navigate(`/contacts/${contact.id}`)}
-                    >
-                      <td className="px-3 py-2.5 font-medium">{contact.full_name}</td>
-                      <td className="px-3 py-2.5 text-muted-foreground hidden sm:table-cell">
-                        {roleLabel(contact.role)}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <div>
-                          <span className="text-sm">{contact.venue?.name ?? '—'}</span>
-                          {contact.venue?.venue_type && (
-                            <Badge
-                              variant="outline"
-                              className="ml-1.5 text-xs hidden sm:inline-flex"
-                            >
-                              {venueTypeLabel(contact.venue.venue_type)}
-                            </Badge>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2.5 text-muted-foreground hidden md:table-cell">
-                        {contact.email ?? '—'}
-                      </td>
-                      <td className="px-3 py-2.5 text-muted-foreground hidden lg:table-cell">
-                        {contact.phone ?? '—'}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        {scoreBadge(contact.lead_score?.score)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">
-                Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page === 0}
-                  onClick={() => setPage((p) => p - 1)}
-                >
-                  Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= totalPages - 1}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
-          )}
-        </>
       )}
     </div>
   )

@@ -32,9 +32,10 @@ import { useDeals, useUpdateDeal, useCreateDeal, type Deal } from '@/lib/queries
 import { useStages } from '@/lib/queries/stages'
 import { useContacts } from '@/lib/queries/contacts'
 import { useAuth } from '@/hooks/useAuth'
-import { formatCurrency, cn } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { DealCard } from './DealCard'
 import { DealDrawer } from './DealDrawer'
+import { MetricNumber, ErrorAlert } from '@/components/primitives'
 import { Plus } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -142,17 +143,23 @@ export function KanbanBoard() {
 
   if (isLoading) {
     return (
-      <div className="flex gap-4 p-4 overflow-x-auto">
+      <div className="flex gap-3 p-4 overflow-x-auto">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="w-64 shrink-0 rounded-xl border bg-muted/30 animate-pulse">
-            <div className="p-3 border-b">
-              <div className="h-4 w-24 rounded bg-muted" />
+          <div
+            key={i}
+            className="w-72 shrink-0 rounded-[6px] border border-hairline bg-surface-2 animate-pulse"
+          >
+            <div className="p-3 border-b border-hairline">
+              <div className="h-3 w-24 rounded-[2px] bg-surface-4" />
             </div>
             <div className="p-2 space-y-2">
               {Array.from({ length: 2 + (i % 3) }).map((__, j) => (
-                <div key={j} className="rounded-lg border bg-card p-3 space-y-1.5">
-                  <div className="h-3.5 w-full rounded bg-muted" />
-                  <div className="h-3 w-2/3 rounded bg-muted" />
+                <div
+                  key={j}
+                  className="rounded-[6px] border border-hairline bg-surface-1 p-3 space-y-1.5"
+                >
+                  <div className="h-3 w-full rounded-[2px] bg-surface-4" />
+                  <div className="h-2.5 w-2/3 rounded-[2px] bg-surface-4" />
                 </div>
               ))}
             </div>
@@ -163,8 +170,8 @@ export function KanbanBoard() {
   }
   if (error) {
     return (
-      <div className="text-destructive text-sm p-4">
-        Failed to load: {error.message}
+      <div className="p-4">
+        <ErrorAlert title="Couldn't load pipeline" error={error} />
       </div>
     )
   }
@@ -187,32 +194,38 @@ export function KanbanBoard() {
               (sum, d) => sum + (d.contract_value ?? 0),
               0
             )
+            const isActiveTarget = activeDeal != null && activeDeal.stage_id !== stage.id
 
             return (
               <div
                 key={stage.id}
-                className="flex flex-col w-64 shrink-0 bg-muted/40 rounded-xl border"
+                className={cn(
+                  'flex flex-col w-72 shrink-0 rounded-[6px] border bg-surface-2 transition-colors',
+                  isActiveTarget
+                    ? 'border-brand bg-brand-soft'
+                    : 'border-hairline',
+                )}
               >
                 {/* Column header */}
-                <div className="flex items-center justify-between px-3 pt-3 pb-2">
-                  <div className="min-w-0">
+                <div className="flex items-center justify-between gap-2 px-3 pt-3 pb-2 border-b border-hairline">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       {stage.color && (
-                        <div
-                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                        <span
+                          className="size-2 rounded-[2px] shrink-0"
                           style={{ backgroundColor: stage.color }}
                         />
                       )}
-                      <span className="text-sm font-semibold truncate">
+                      <span className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] font-semibold text-ink truncate">
                         {stage.name}
                       </span>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="ml-auto inline-flex h-[18px] min-w-[22px] items-center justify-center rounded-[3px] bg-surface-4 px-1 text-[10px] font-semibold jordan-tnum text-ink-muted">
                         {stageDeals.length}
                       </span>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {formatCurrency(totalValue)}
-                    </p>
+                    <div className="mt-1 text-[11px] text-ink-faint">
+                      <MetricNumber value={totalValue} format="currency" className="text-[11px]" />
+                    </div>
                   </div>
                   <Button
                     variant="ghost"
@@ -229,16 +242,14 @@ export function KanbanBoard() {
                 </div>
 
                 {/* Cards */}
-                <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-2 min-h-[80px]">
+                <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[80px]">
                   <SortableContext
                     items={stageDeals.map((d) => d.id)}
                     strategy={verticalListSortingStrategy}
                   >
                     {stageDeals.length === 0 && (
-                      <div className="rounded-lg border border-dashed p-4 text-center">
-                        <p className="text-xs text-muted-foreground">
-                          No deals
-                        </p>
+                      <div className="rounded-[6px] border border-dashed border-hairline p-4 text-center">
+                        <p className="text-[11px] text-ink-faint">No deals</p>
                       </div>
                     )}
                     {stageDeals.map((deal) => (
