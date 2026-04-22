@@ -1,139 +1,88 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { activityTypeLabel, formatRelative } from '@/lib/utils'
-import { useRecentActivities } from '@/lib/queries/activities'
-import type { ActivityType } from '@/lib/queries/activities'
 import {
-  Mail,
-  MailOpen,
-  MousePointerClick,
-  Reply,
-  Phone,
-  CalendarCheck,
-  CheckSquare,
-  ArrowRight,
-  AlertCircle,
-  UserMinus,
-
-  PlusCircle,
-  StickyNote,
-  Calendar,
-  Activity,
-} from 'lucide-react'
-
-function ActivityIcon({ type }: { type: ActivityType }) {
-  const cls = 'w-4 h-4 shrink-0'
-  switch (type) {
-    case 'email_sent':
-    case 'email_outbound':
-      return <Mail className={cls} />
-    case 'email_opened':
-      return <MailOpen className={cls} />
-    case 'email_clicked':
-      return <MousePointerClick className={cls} />
-    case 'reply_received':
-    case 'email_inbound':
-      return <Reply className={cls} />
-    case 'call_note':
-      return <Phone className={cls} />
-    case 'meeting_note':
-      return <CalendarCheck className={cls} />
-    case 'meeting_booked':
-      return <Calendar className={cls} />
-    case 'task_completed':
-      return <CheckSquare className={cls} />
-    case 'stage_change':
-      return <ArrowRight className={cls} />
-    case 'bounce':
-      return <AlertCircle className={cls} />
-    case 'unsubscribe':
-      return <UserMinus className={cls} />
-    case 'deal_created':
-      return <PlusCircle className={cls} />
-    case 'note':
-      return <StickyNote className={cls} />
-    default:
-      return <Activity className={cls} />
-  }
-}
-
-function iconColor(type: ActivityType): string {
-  switch (type) {
-    case 'reply_received':
-    case 'email_inbound':
-      return 'text-green-600'
-    case 'meeting_note':
-    case 'meeting_booked':
-      return 'text-blue-600'
-    case 'call_note':
-      return 'text-purple-600'
-    case 'bounce':
-    case 'unsubscribe':
-      return 'text-destructive'
-    case 'deal_created':
-      return 'text-primary'
-    case 'email_opened':
-    case 'email_clicked':
-      return 'text-amber-600'
-    default:
-      return 'text-muted-foreground'
-  }
-}
+  ActivityIcon,
+  ErrorAlert,
+  EmptyState,
+  SkeletonCard,
+  getActivityMeta,
+} from '@/components/primitives'
+import { Activity } from 'lucide-react'
+import { formatRelative } from '@/lib/utils'
+import { useRecentActivities } from '@/lib/queries/activities'
 
 export function RecentActivity() {
-  const { data: activities, isLoading, error } = useRecentActivities(10)
+  const { data: activities, isLoading, error, refetch } = useRecentActivities(10)
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">Recent Activity</CardTitle>
-      </CardHeader>
-      <CardContent className="p-0">
+    <section className="rounded-[6px] border border-hairline bg-surface-1 overflow-hidden">
+      <header className="px-4 py-3 border-b border-hairline">
+        <h2 className="text-[13px] font-semibold text-ink">Recent Activity</h2>
+        <p className="text-[11px] text-ink-faint mt-0.5">Latest 10 events across your pipeline</p>
+      </header>
+      <div className="p-4">
         {isLoading && (
-          <div className="px-4 py-6 text-sm text-muted-foreground">Loading…</div>
+          <div className="space-y-2">
+            <SkeletonCard lines={1} withAvatar />
+            <SkeletonCard lines={1} withAvatar />
+            <SkeletonCard lines={1} withAvatar />
+          </div>
         )}
         {error && (
-          <div className="text-destructive text-sm p-4">
-            Failed to load: {error.message}
-          </div>
+          <ErrorAlert
+            compact
+            title="Failed to load activity"
+            error={error}
+            onRetry={() => refetch()}
+          />
         )}
         {!isLoading && !error && (!activities || activities.length === 0) && (
-          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-            No activity logged yet.
-          </div>
+          <EmptyState
+            compact
+            icon={Activity}
+            title="No activity logged yet"
+            body="Outbound emails, replies and notes will show up here as they happen."
+          />
         )}
-        {!isLoading && activities && activities.length > 0 && (
-          <div className="divide-y">
-            {activities.map((activity) => (
-              <div key={activity.id} className="flex items-start gap-3 px-4 py-3">
-                <div className={`mt-0.5 ${iconColor(activity.activity_type)}`}>
-                  <ActivityIcon type={activity.activity_type} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-xs font-medium text-muted-foreground">
-                      {activityTypeLabel(activity.activity_type)}
-                    </span>
-                    {activity.contact?.full_name && (
-                      <>
-                        <span className="text-xs text-muted-foreground">·</span>
-                        <span className="text-xs text-foreground">
+        {!isLoading && !error && activities && activities.length > 0 && (
+          <ol className="relative">
+            {/* Vertical rail */}
+            <div
+              aria-hidden
+              className="absolute left-[11px] top-3 bottom-3 w-px bg-hairline"
+            />
+            {activities.map((activity) => {
+              const meta = getActivityMeta(activity.activity_type)
+              return (
+                <li
+                  key={activity.id}
+                  className="relative flex gap-3 pb-3 last:pb-0"
+                >
+                  <div className="relative z-[1] mt-0.5 shrink-0">
+                    <ActivityIcon type={activity.activity_type} size="sm" />
+                  </div>
+                  <div className="min-w-0 flex-1 pt-0.5">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
+                        {meta.label}
+                      </span>
+                      {activity.contact?.full_name && (
+                        <span className="truncate text-[12px] text-ink">
                           {activity.contact.full_name}
                         </span>
-                      </>
+                      )}
+                      <span className="ml-auto shrink-0 jordan-tnum text-[11px] text-ink-faint">
+                        {formatRelative(activity.occurred_at)}
+                      </span>
+                    </div>
+                    {activity.subject && (
+                      <p className="mt-0.5 truncate text-[13px] text-ink">{activity.subject}</p>
                     )}
                   </div>
-                  {activity.subject && (
-                    <p className="text-sm truncate mt-0.5">{activity.subject}</p>
-                  )}
-                </div>
-                <span className="text-xs text-muted-foreground shrink-0 pt-0.5">
-                  {formatRelative(activity.occurred_at)}
-                </span>
-              </div>
-            ))}
-          </div>
+                </li>
+              )
+            })}
+          </ol>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   )
 }

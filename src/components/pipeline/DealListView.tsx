@@ -1,101 +1,100 @@
 import { useState, useMemo } from 'react'
-import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+  DataTable,
+  type ColumnDef,
+  FacetBar,
+  type FacetDef,
+  MetricNumber,
+  ScoreBadge,
+  StatusPill,
+} from '@/components/primitives'
+import { Briefcase } from 'lucide-react'
 import { useDeals, type Deal } from '@/lib/queries/deals'
 import { useStages } from '@/lib/queries/stages'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatDate } from '@/lib/utils'
 import { scoreToTier } from '@/lib/queries/contacts'
 import { DealDrawer } from './DealDrawer'
-import { ChevronUp, ChevronDown } from 'lucide-react'
 
-type SortField = 'title' | 'contact' | 'venue' | 'value' | 'days' | 'followup' | 'score'
+type SortField = 'title' | 'venue' | 'value' | 'days' | 'followup' | 'score'
 type SortDir = 'asc' | 'desc'
 
-function scoreBadge(score: number | null | undefined) {
-  if (score == null) return <Badge className="bg-slate-100 text-slate-600 border-0 text-xs">Cold</Badge>
-  if (score >= 80) return <Badge className="bg-red-100 text-red-700 border-0 text-xs">Hot</Badge>
-  if (score >= 50) return <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">Warm</Badge>
-  return <Badge className="bg-slate-100 text-slate-600 border-0 text-xs">Cold</Badge>
-}
-
-function stageBadge(deal: Deal) {
-  if (!deal.stage) return null
-  return (
-    <Badge
-      variant="outline"
-      className="text-xs"
-      style={
-        deal.stage.color
-          ? { borderColor: deal.stage.color, color: deal.stage.color }
-          : {}
-      }
-    >
-      {deal.stage.name}
-    </Badge>
-  )
-}
+type SelectionState = Record<string, string[]>
 
 export function DealListView() {
-  const { data: deals, isLoading, error } = useDeals()
+  const { data: deals, isLoading, error, refetch } = useDeals()
   const { data: stages } = useStages()
 
   const [sortField, setSortField] = useState<SortField>('value')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
-  const [stageFilter, setStageFilter] = useState<string>('all')
-  const [tierFilter, setTierFilter] = useState<string>('all')
+  const [selection, setSelection] = useState<SelectionState>({})
   const [search, setSearch] = useState('')
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null)
 
-  function toggleSort(field: SortField) {
-    if (sortField === field) {
+  function toggleSort(field: string) {
+    const f = field as SortField
+    if (sortField === f) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
     } else {
-      setSortField(field)
+      setSortField(f)
       setSortDir('asc')
     }
   }
 
+  const facets: FacetDef[] = useMemo(
+    () => [
+      {
+        id: 'tier',
+        label: 'Tier',
+        mode: 'single',
+        options: [
+          { value: 'hot', label: 'Hot' },
+          { value: 'warm', label: 'Warm' },
+          { value: 'cold', label: 'Cold' },
+        ],
+      },
+      ...(stages && stages.length > 0
+        ? [
+            {
+              id: 'stage',
+              label: 'Stage',
+              mode: 'multi' as const,
+              options: stages.map((s) => ({ value: s.id, label: s.name })),
+            },
+          ]
+        : []),
+    ],
+    [stages],
+  )
+
   const filtered = useMemo(() => {
     if (!deals) return []
-    let result = deals
+    let rows = deals
 
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      result = result.filter(
+    const q = search.trim().toLowerCase()
+    if (q) {
+      rows = rows.filter(
         (d) =>
           (d.title ?? '').toLowerCase().includes(q) ||
           (d.contact?.full_name ?? '').toLowerCase().includes(q) ||
-          (d.venue?.name ?? '').toLowerCase().includes(q)
+          (d.venue?.name ?? '').toLowerCase().includes(q),
       )
     }
 
-    if (stageFilter !== 'all') {
-      result = result.filter((d) => d.stage_id === stageFilter)
+    const tier = selection.tier?.[0]
+    if (tier) {
+      rows = rows.filter((d) => scoreToTier(d.lead_score?.score) === tier)
     }
 
-    if (tierFilter !== 'all') {
-      result = result.filter(
-        (d) => scoreToTier(d.lead_score?.score) === tierFilter
-      )
+    const stageIds = selection.stage ?? []
+    if (stageIds.length > 0) {
+      rows = rows.filter((d) => d.stage_id && stageIds.includes(d.stage_id))
     }
 
-    return [...result].sort((a, b) => {
+    return [...rows].sort((a, b) => {
       let cmp = 0
       switch (sortField) {
         case 'title':
           cmp = (a.title ?? '').localeCompare(b.title ?? '')
-          break
-        case 'contact':
-          cmp = (a.contact?.full_name ?? '').localeCompare(
-            b.contact?.full_name ?? ''
-          )
           break
         case 'venue':
           cmp = (a.venue?.name ?? '').localeCompare(b.venue?.name ?? '')
@@ -110,186 +109,156 @@ export function DealListView() {
           cmp = (a.follow_up_due ?? '').localeCompare(b.follow_up_due ?? '')
           break
         case 'score':
-          cmp = (a.lead_score?.score ?? 0) - (b.lead_score?.score ?? 0)
+          cmp = (a.lead_score?.score ?? -1) - (b.lead_score?.score ?? -1)
           break
       }
       return sortDir === 'asc' ? cmp : -cmp
     })
-  }, [deals, search, stageFilter, tierFilter, sortField, sortDir])
+  }, [deals, search, selection, sortField, sortDir])
 
-  function SortIcon({ field }: { field: SortField }) {
-    if (sortField !== field) return <ChevronDown className="w-3 h-3 opacity-30" />
-    return sortDir === 'asc' ? (
-      <ChevronUp className="w-3 h-3" />
-    ) : (
-      <ChevronDown className="w-3 h-3" />
-    )
-  }
+  const columns: ColumnDef<Deal>[] = [
+    {
+      id: 'title',
+      header: 'Deal',
+      sortable: true,
+      width: 'minmax(180px, 1.8fr)',
+      cell: (row) => (
+        <span className="truncate font-medium text-ink">{row.title ?? 'Untitled'}</span>
+      ),
+    },
+    {
+      id: 'venue',
+      header: 'Venue',
+      sortable: true,
+      width: 'minmax(140px, 1.4fr)',
+      cell: (row) => (
+        <span className="truncate text-ink-muted">
+          {row.venue?.name ?? row.contact?.full_name ?? '—'}
+        </span>
+      ),
+    },
+    {
+      id: 'stage',
+      header: 'Stage',
+      width: '120px',
+      cell: (row) =>
+        row.stage ? (
+          <StatusPill
+            tone="neutral"
+            className="h-[18px] px-1.5 text-[10px]"
+            style={
+              row.stage.color
+                ? {
+                    color: row.stage.color,
+                    borderColor: row.stage.color,
+                    backgroundColor: 'transparent',
+                    borderWidth: 1,
+                    borderStyle: 'solid',
+                  }
+                : undefined
+            }
+          >
+            {row.stage.name}
+          </StatusPill>
+        ) : (
+          <span className="text-ink-disabled">—</span>
+        ),
+    },
+    {
+      id: 'value',
+      header: 'Value',
+      sortable: true,
+      align: 'right',
+      width: '104px',
+      cell: (row) => (
+        <MetricNumber value={row.contract_value} format="currency" className="text-ink" />
+      ),
+    },
+    {
+      id: 'days',
+      header: 'Days',
+      sortable: true,
+      align: 'right',
+      width: '72px',
+      cell: (row) => {
+        const d = row.days_in_stage ?? 0
+        return (
+          <span className={`jordan-tnum ${d >= 14 ? 'text-warm' : 'text-ink-muted'}`}>
+            {d}d
+          </span>
+        )
+      },
+    },
+    {
+      id: 'followup',
+      header: 'Follow-up',
+      sortable: true,
+      align: 'right',
+      width: '108px',
+      cell: (row) =>
+        row.follow_up_due ? (
+          <span className="jordan-tnum text-ink-muted">{formatDate(row.follow_up_due)}</span>
+        ) : (
+          <span className="text-ink-disabled">—</span>
+        ),
+    },
+    {
+      id: 'score',
+      header: 'Score',
+      sortable: true,
+      align: 'right',
+      width: '92px',
+      cell: (row) => <ScoreBadge score={row.lead_score?.score} />,
+    },
+  ]
 
-  if (isLoading) return (
-    <div className="p-4 sm:p-6 space-y-2">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="flex items-center gap-3 border rounded-lg px-4 py-3 animate-pulse">
-          <div className="flex-1 space-y-1.5">
-            <div className="h-3.5 w-48 rounded bg-muted" />
-            <div className="h-3 w-32 rounded bg-muted" />
-          </div>
-          <div className="h-5 w-20 rounded-full bg-muted hidden sm:block" />
-          <div className="h-4 w-16 rounded bg-muted" />
-        </div>
-      ))}
-    </div>
-  )
-  if (error) return <div className="text-destructive text-sm p-4">Failed to load: {error.message}</div>
+  const totalValue = filtered.reduce((sum, d) => sum + (d.contract_value ?? 0), 0)
+  const anyFilters = search.trim().length > 0 || Object.values(selection).some((v) => v && v.length > 0)
 
   return (
     <>
       <div className="p-4 sm:p-6 space-y-4">
-        {/* Filters */}
-        <div className="flex gap-2 flex-wrap">
-          <Input
-            placeholder="Search deals…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-xs h-8 text-sm"
-          />
-          <Select value={stageFilter} onValueChange={setStageFilter}>
-            <SelectTrigger className="w-36 h-8 text-sm">
-              <SelectValue placeholder="All stages" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All stages</SelectItem>
-              {stages?.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={tierFilter} onValueChange={setTierFilter}>
-            <SelectTrigger className="w-28 h-8 text-sm">
-              <SelectValue placeholder="All tiers" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All tiers</SelectItem>
-              <SelectItem value="hot">Hot</SelectItem>
-              <SelectItem value="warm">Warm</SelectItem>
-              <SelectItem value="cold">Cold</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        <FacetBar
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search title, contact, venue…"
+          facets={facets}
+          selection={selection}
+          onSelectionChange={(facetId, values) =>
+            setSelection((s) => ({ ...s, [facetId]: values }))
+          }
+          onClear={() => {
+            setSelection({})
+            setSearch('')
+          }}
+          summary={
+            <span>
+              {filtered.length}{' '}
+              <span className="text-ink-disabled">deals ·</span>{' '}
+              <MetricNumber value={totalValue} format="currency" />
+            </span>
+          }
+        />
 
-        {filtered.length === 0 && (
-          <div className="text-center py-12 text-sm text-muted-foreground">
-            {search || stageFilter !== 'all' || tierFilter !== 'all'
-              ? 'No deals match your filters.'
-              : 'No deals yet. Add deals from the Kanban view or a contact page.'}
-          </div>
-        )}
-
-        {filtered.length > 0 && (
-          <div className="border rounded-lg overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/40">
-                    <th className="text-left px-3 py-2 font-medium">
-                      <button
-                        className="flex items-center gap-1 hover:text-foreground"
-                        onClick={() => toggleSort('title')}
-                      >
-                        Title <SortIcon field="title" />
-                      </button>
-                    </th>
-                    <th className="text-left px-3 py-2 font-medium hidden sm:table-cell">
-                      <button
-                        className="flex items-center gap-1 hover:text-foreground"
-                        onClick={() => toggleSort('contact')}
-                      >
-                        Contact <SortIcon field="contact" />
-                      </button>
-                    </th>
-                    <th className="text-left px-3 py-2 font-medium hidden md:table-cell">
-                      <button
-                        className="flex items-center gap-1 hover:text-foreground"
-                        onClick={() => toggleSort('venue')}
-                      >
-                        Venue <SortIcon field="venue" />
-                      </button>
-                    </th>
-                    <th className="text-left px-3 py-2 font-medium">
-                      Stage
-                    </th>
-                    <th className="text-left px-3 py-2 font-medium">
-                      <button
-                        className="flex items-center gap-1 hover:text-foreground"
-                        onClick={() => toggleSort('value')}
-                      >
-                        Value <SortIcon field="value" />
-                      </button>
-                    </th>
-                    <th className="text-left px-3 py-2 font-medium hidden sm:table-cell">
-                      <button
-                        className="flex items-center gap-1 hover:text-foreground"
-                        onClick={() => toggleSort('days')}
-                      >
-                        Days <SortIcon field="days" />
-                      </button>
-                    </th>
-                    <th className="text-left px-3 py-2 font-medium hidden lg:table-cell">
-                      <button
-                        className="flex items-center gap-1 hover:text-foreground"
-                        onClick={() => toggleSort('followup')}
-                      >
-                        Follow-up <SortIcon field="followup" />
-                      </button>
-                    </th>
-                    <th className="text-left px-3 py-2 font-medium">
-                      <button
-                        className="flex items-center gap-1 hover:text-foreground"
-                        onClick={() => toggleSort('score')}
-                      >
-                        Score <SortIcon field="score" />
-                      </button>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {filtered.map((deal) => (
-                    <tr
-                      key={deal.id}
-                      className="hover:bg-muted/30 cursor-pointer transition-colors"
-                      onClick={() => setSelectedDeal(deal)}
-                    >
-                      <td className="px-3 py-2.5 font-medium max-w-[160px] truncate">
-                        {deal.title ?? 'Untitled'}
-                      </td>
-                      <td className="px-3 py-2.5 text-muted-foreground hidden sm:table-cell">
-                        {deal.contact?.full_name ?? '—'}
-                      </td>
-                      <td className="px-3 py-2.5 text-muted-foreground hidden md:table-cell">
-                        {deal.venue?.name ?? '—'}
-                      </td>
-                      <td className="px-3 py-2.5">{stageBadge(deal)}</td>
-                      <td className="px-3 py-2.5 font-medium">
-                        {formatCurrency(deal.contract_value)}
-                      </td>
-                      <td className="px-3 py-2.5 text-muted-foreground hidden sm:table-cell">
-                        {deal.days_in_stage ?? 0}d
-                      </td>
-                      <td className="px-3 py-2.5 text-muted-foreground hidden lg:table-cell">
-                        {formatDate(deal.follow_up_due)}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        {scoreBadge(deal.lead_score?.score)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+        <DataTable
+          ariaLabel="Deals"
+          columns={columns}
+          rows={filtered}
+          rowKey={(row) => row.id}
+          loading={isLoading}
+          error={error}
+          onRetry={() => refetch()}
+          sort={{ columnId: sortField, direction: sortDir }}
+          onSortChange={toggleSort}
+          onRowClick={(row) => setSelectedDeal(row)}
+          empty={{
+            icon: Briefcase,
+            title: anyFilters ? 'No deals match your filters' : 'No deals yet',
+            body: anyFilters
+              ? 'Try clearing filters or adjusting the search.'
+              : 'Add a deal from the Kanban view or from a contact page.',
+          }}
+        />
       </div>
 
       {selectedDeal && (

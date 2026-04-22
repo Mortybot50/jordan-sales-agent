@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { KanbanBoard } from '@/components/pipeline/KanbanBoard'
 import { DealListView } from '@/components/pipeline/DealListView'
+import { PageHeader } from '@/components/primitives'
 import { LayoutGrid, List } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -30,39 +31,43 @@ export function PipelinePage() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b shrink-0">
-        <h1 className="text-xl font-semibold">Pipeline</h1>
-        <div className="flex items-center gap-1 border rounded-lg p-0.5">
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn(
-              'h-7 px-2.5',
-              effectiveView === 'kanban' && 'bg-muted'
-            )}
-            onClick={() => setView('kanban')}
-            title="Kanban view"
-          >
-            <LayoutGrid className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn(
-              'h-7 px-2.5',
-              effectiveView === 'list' && 'bg-muted'
-            )}
-            onClick={() => setView('list')}
-            title="List view"
-          >
-            <List className="w-4 h-4" />
-          </Button>
-        </div>
+      <div className="px-4 sm:px-6 pt-4 sm:pt-6 shrink-0">
+        <PageHeader
+          eyebrow="Workspace"
+          title="Pipeline"
+          description="Drag deals between stages · click to expand"
+          actions={
+            <div className="flex items-center gap-1 rounded-[6px] border border-hairline bg-surface-1 p-0.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  'h-7 px-2.5',
+                  effectiveView === 'kanban' && 'bg-surface-4 text-ink',
+                )}
+                onClick={() => setView('kanban')}
+                title="Kanban view"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  'h-7 px-2.5',
+                  effectiveView === 'list' && 'bg-surface-4 text-ink',
+                )}
+                onClick={() => setView('list')}
+                title="List view"
+              >
+                <List className="w-4 h-4" />
+              </Button>
+            </div>
+          }
+        />
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto pt-3">
         {effectiveView === 'kanban' ? <KanbanBoard /> : <DealListView />}
       </div>
     </div>

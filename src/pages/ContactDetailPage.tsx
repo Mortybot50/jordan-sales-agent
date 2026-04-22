@@ -2,13 +2,20 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
+import {
+  ArrowLeft,
+  Briefcase,
+  Globe,
+  Loader2,
+  MapPin,
+  Plus,
+  Sparkles,
+} from 'lucide-react'
+
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
   DialogContent,
@@ -22,95 +29,59 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
+
+import {
+  ActivityIcon,
+  DraftTypeBadge,
+  EmptyState,
+  ErrorAlert,
+  FieldRow,
+  MetricNumber,
+  PageHeader,
+  ScoreBadge,
+  SkeletonBlock,
+  StatusPill,
+  getActivityMeta,
+} from '@/components/primitives'
+
 import { useContact, useUpdateContact } from '@/lib/queries/contacts'
 import { useContactDeals, useCreateDeal } from '@/lib/queries/deals'
-import { useContactActivities, useCreateActivity } from '@/lib/queries/activities'
+import {
+  useContactActivities,
+  useCreateActivity,
+} from '@/lib/queries/activities'
 import { useStages } from '@/lib/queries/stages'
 import { useGenerateDraft } from '@/lib/queries/drafts'
 import { useAuth } from '@/hooks/useAuth'
 import { dealFormSchema, type DealFormValues } from '@/lib/schemas/deal'
-import { activityFormSchema, type ActivityFormValues } from '@/lib/schemas/activity'
+import {
+  activityFormSchema,
+  type ActivityFormValues,
+} from '@/lib/schemas/activity'
 import {
   formatCurrency,
   formatDate,
   formatRelative,
-  venueTypeLabel,
   roleLabel,
-  activityTypeLabel,
+  venueTypeLabel,
   cn,
 } from '@/lib/utils'
-import {
-  ArrowLeft,
-  Globe,
-  MapPin,
-  Pencil,
-  X,
-  Check,
-  Plus,
-  Mail,
-  MailOpen,
-  MousePointerClick,
-  Reply,
-  Phone,
-  CalendarCheck,
-  CheckSquare,
-  ArrowRight,
-  AlertCircle,
-  UserMinus,
-  PlusCircle,
-  StickyNote,
-  Calendar,
-  Activity,
-  Sparkles,
-  Loader2,
-} from 'lucide-react'
-import type { ActivityType } from '@/lib/queries/activities'
 import type { DraftType } from '@/lib/queries/drafts'
 
-const contactEditSchema = z.object({
-  full_name: z.string().min(1, 'Name is required'),
-  role: z.string().optional(),
-  email: z.string().email('Invalid email').optional().or(z.literal('')),
-  phone: z.string().optional(),
-  linkedin_url: z.string().url('Invalid URL').optional().or(z.literal('')),
-  notes: z.string().optional(),
-})
-type ContactEditValues = z.infer<typeof contactEditSchema>
-
-function ActivityIcon({ type }: { type: ActivityType }) {
-  const cls = 'w-4 h-4 shrink-0'
-  switch (type) {
-    case 'email_sent': case 'email_outbound': return <Mail className={cls} />
-    case 'email_opened': return <MailOpen className={cls} />
-    case 'email_clicked': return <MousePointerClick className={cls} />
-    case 'reply_received': case 'email_inbound': return <Reply className={cls} />
-    case 'call_note': return <Phone className={cls} />
-    case 'meeting_note': return <CalendarCheck className={cls} />
-    case 'meeting_booked': return <Calendar className={cls} />
-    case 'task_completed': return <CheckSquare className={cls} />
-    case 'stage_change': return <ArrowRight className={cls} />
-    case 'bounce': return <AlertCircle className={cls} />
-    case 'unsubscribe': return <UserMinus className={cls} />
-    case 'deal_created': return <PlusCircle className={cls} />
-    case 'note': return <StickyNote className={cls} />
-    default: return <Activity className={cls} />
-  }
-}
-
-function scoreBadge(score: number | null | undefined) {
-  if (score == null) return null
-  if (score >= 80) return <Badge className="bg-red-100 text-red-700 border-0">Hot · {score}</Badge>
-  if (score >= 50) return <Badge className="bg-amber-100 text-amber-700 border-0">Warm · {score}</Badge>
-  return <Badge className="bg-slate-100 text-slate-600 border-0">Cold · {score}</Badge>
-}
+const ROLES = [
+  { value: 'venue_manager', label: 'Venue Manager' },
+  { value: 'owner', label: 'Owner' },
+  { value: 'f_b_director', label: 'F&B Director' },
+  { value: 'head_chef', label: 'Head Chef' },
+  { value: 'events_manager', label: 'Events Manager' },
+]
 
 export function ContactDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
 
-  const { data: contact, isLoading, error } = useContact(id ?? '')
+  const { data: contact, isLoading, error, refetch } = useContact(id ?? '')
   const { data: deals } = useContactDeals(id ?? '')
   const { data: activities } = useContactActivities(id ?? '')
   const { data: stages } = useStages()
@@ -118,53 +89,44 @@ export function ContactDetailPage() {
   const updateContact = useUpdateContact(id ?? '')
   const createDeal = useCreateDeal()
   const createActivity = useCreateActivity()
+  const generateDraft = useGenerateDraft()
 
-  const [editing, setEditing] = useState(false)
   const [dealDialogOpen, setDealDialogOpen] = useState(false)
   const [activityDialogOpen, setActivityDialogOpen] = useState(false)
   const [draftDialogOpen, setDraftDialogOpen] = useState(false)
   const [draftType, setDraftType] = useState<DraftType>('cold_outreach')
   const [draftHint, setDraftHint] = useState('')
 
-  const generateDraft = useGenerateDraft()
-
-  const editForm = useForm<ContactEditValues>({
-    resolver: zodResolver(contactEditSchema),
-  })
-
   const dealForm = useForm<DealFormValues>({
     resolver: zodResolver(dealFormSchema),
     defaultValues: { contract_value: 800 },
   })
-
   const activityForm = useForm<ActivityFormValues>({
     resolver: zodResolver(activityFormSchema),
     defaultValues: { occurred_at: new Date().toISOString().split('T')[0] },
   })
 
-  function startEdit() {
+  // Inline editing state per field (role, email, phone, linkedin_url, notes)
+  type EditableField = 'role' | 'email' | 'phone' | 'linkedin_url' | 'notes'
+  const [editingField, setEditingField] = useState<EditableField | null>(null)
+  const [fieldDraft, setFieldDraft] = useState<Record<string, string>>({})
+
+  function openField(name: EditableField) {
     if (!contact) return
-    editForm.reset({
-      full_name: contact.full_name,
-      role: contact.role ?? '',
-      email: contact.email ?? '',
-      phone: contact.phone ?? '',
-      linkedin_url: contact.linkedin_url ?? '',
-      notes: contact.notes ?? '',
-    })
-    setEditing(true)
+    setFieldDraft((d) => ({
+      ...d,
+      [name]: ((contact[name as keyof typeof contact] as string) ?? '') as string,
+    }))
+    setEditingField(name)
   }
 
-  async function saveEdit(values: ContactEditValues) {
+  async function commitField(name: EditableField) {
+    if (!contact) return
+    const value = (fieldDraft[name] ?? '').trim()
     await updateContact.mutateAsync({
-      full_name: values.full_name,
-      role: values.role || null,
-      email: values.email || null,
-      phone: values.phone || null,
-      linkedin_url: values.linkedin_url || null,
-      notes: values.notes || null,
+      [name]: value === '' ? null : value,
     })
-    setEditing(false)
+    setEditingField(null)
   }
 
   async function submitDeal(values: DealFormValues) {
@@ -180,7 +142,7 @@ export function ContactDetailPage() {
       notes: values.notes,
     })
     setDealDialogOpen(false)
-    dealForm.reset()
+    dealForm.reset({ contract_value: 800 })
   }
 
   async function submitActivity(values: ActivityFormValues) {
@@ -200,450 +162,579 @@ export function ContactDetailPage() {
   }
 
   if (isLoading) {
-    return <div className="p-6 text-sm text-muted-foreground">Loading…</div>
+    return (
+      <div className="p-4 sm:p-6 max-w-[1400px] space-y-5">
+        <SkeletonBlock height={28} width={180} />
+        <SkeletonBlock height={72} />
+        <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)_320px] gap-4">
+          <SkeletonBlock height={320} />
+          <SkeletonBlock height={320} />
+          <SkeletonBlock height={320} />
+        </div>
+      </div>
+    )
   }
   if (error) {
     return (
-      <div className="text-destructive text-sm p-4">
-        Failed to load: {error.message}
+      <div className="p-4 sm:p-6 max-w-2xl">
+        <ErrorAlert error={error} onRetry={() => refetch()} title="Couldn't load contact" />
       </div>
     )
   }
   if (!contact) {
-    return <div className="p-6 text-sm text-muted-foreground">Contact not found.</div>
+    return (
+      <div className="p-4 sm:p-6 max-w-2xl">
+        <EmptyState title="Contact not found" body="This contact may have been deleted." />
+      </div>
+    )
   }
 
-  const venue = contact.venue as {
-    id: string
-    name: string
-    venue_type: string | null
-    address: string | null
-    suburb: string | null
-    website: string | null
-    cover_count: number | null
-    licence_type: string | null
-    avg_spend_tier: string | null
-    neighbourhood: string | null
-    kitchen_type: string | null
-    competitor_water_usage: string | null
-    licensing_status: string | null
-    seasonality_window: string | null
-  } | null | undefined
+  const venue = contact.venue as
+    | {
+        id: string
+        name: string
+        venue_type: string | null
+        address: string | null
+        suburb: string | null
+        website: string | null
+        cover_count: number | null
+        licence_type: string | null
+        avg_spend_tier: string | null
+        neighbourhood: string | null
+      }
+    | null
+    | undefined
 
-  const encodedAddress = encodeURIComponent(
-    [venue?.address, venue?.suburb].filter(Boolean).join(', ') ?? ''
-  )
+  const score = contact.lead_score?.score ?? null
 
   return (
-    <div className="p-4 sm:p-6 space-y-6 max-w-4xl">
+    <div className="p-4 sm:p-6 max-w-[1400px] space-y-5">
       {/* Back */}
       <button
-        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        type="button"
         onClick={() => navigate('/contacts')}
+        className="inline-flex items-center gap-1.5 text-[12px] text-ink-faint transition-colors hover:text-ink-muted"
       >
-        <ArrowLeft className="w-4 h-4" />
+        <ArrowLeft className="w-3.5 h-3.5" />
         Back to contacts
       </button>
 
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="space-y-1.5">
-          {editing ? (
-            <Input
-              {...editForm.register('full_name')}
-              className="text-2xl font-semibold h-auto py-1 text-2xl"
-            />
-          ) : (
-            <h1 className="text-2xl font-semibold">{contact.full_name}</h1>
-          )}
-          <div className="flex items-center gap-2 flex-wrap">
+      <PageHeader
+        eyebrow={venue?.name ? `${venue.name}` : 'Contact'}
+        title={contact.full_name}
+        description={
+          <span className="inline-flex items-center gap-2">
             {contact.role && (
-              <Badge variant="outline">{roleLabel(contact.role)}</Badge>
+              <StatusPill tone="neutral">{roleLabel(contact.role)}</StatusPill>
             )}
-            {venue?.name && (
-              <span className="text-sm text-muted-foreground">{venue.name}</span>
-            )}
-            {contact.lead_score?.score != null &&
-              scoreBadge(contact.lead_score.score)}
-          </div>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setDraftDialogOpen(true)}
-            disabled={generateDraft.isPending}
-          >
-            {generateDraft.isPending
-              ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Generating…</>
-              : <><Sparkles className="w-4 h-4 mr-1.5" />Generate Draft</>
-            }
-          </Button>
-          {!editing ? (
-            <Button variant="outline" size="sm" onClick={startEdit}>
-              <Pencil className="w-4 h-4 mr-1.5" />
-              Edit
+            {score != null && <ScoreBadge score={score} withLabel />}
+            {contact.email && <span className="text-ink-muted">{contact.email}</span>}
+          </span>
+        }
+        actions={
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8"
+              onClick={() => setDraftDialogOpen(true)}
+              disabled={generateDraft.isPending}
+            >
+              {generateDraft.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                  Generating…
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-1.5" />
+                  Generate draft
+                </>
+              )}
             </Button>
-          ) : (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setEditing(false)}
-              >
-                <X className="w-4 h-4 mr-1.5" />
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                onClick={editForm.handleSubmit(saveEdit)}
-                disabled={updateContact.isPending}
-              >
-                <Check className="w-4 h-4 mr-1.5" />
-                Save
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
+            <Button
+              size="sm"
+              className="h-8"
+              onClick={() => setDealDialogOpen(true)}
+            >
+              <Plus className="w-4 h-4 mr-1.5" />
+              Add to pipeline
+            </Button>
+          </>
+        }
+      />
 
-      {/* Contact fields */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Contact Details</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {editing ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Role</Label>
+      {/* Three-pane workbench (collapses to stacked on <lg) */}
+      <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
+        {/* ─── Pane 1 — Attributes ──────────────────────────────── */}
+        <section
+          aria-label="Contact details"
+          className="rounded-[var(--jordan-radius-md)] border border-hairline bg-surface-1"
+        >
+          <header className="flex items-center justify-between border-b border-hairline px-3 py-2">
+            <span className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
+              Details
+            </span>
+          </header>
+          <div className="px-3">
+            <FieldRow
+              label="Role"
+              value={contact.role ? roleLabel(contact.role) : <span className="text-ink-disabled">—</span>}
+              editing={editingField === 'role'}
+              onEditingChange={(e) => (e ? openField('role') : setEditingField(null))}
+              onCommit={() => commitField('role')}
+            >
+              {({ commit, close }) => (
                 <Select
-                  value={editForm.watch('role') ?? ''}
-                  onValueChange={(v) => editForm.setValue('role', v)}
+                  value={fieldDraft.role ?? ''}
+                  onValueChange={(v) => {
+                    setFieldDraft((d) => ({ ...d, role: v }))
+                    commit()
+                  }}
+                  open
+                  onOpenChange={(o) => !o && close()}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="h-7 text-[13px]">
                     <SelectValue placeholder="Select role" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="venue_manager">Venue Manager</SelectItem>
-                    <SelectItem value="owner">Owner</SelectItem>
-                    <SelectItem value="f_b_director">F&B Director</SelectItem>
-                    <SelectItem value="head_chef">Head Chef</SelectItem>
-                    <SelectItem value="events_manager">Events Manager</SelectItem>
+                    {ROLES.map((r) => (
+                      <SelectItem key={r.value} value={r.value}>
+                        {r.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-                {editForm.formState.errors.role && (
-                  <p className="text-xs text-destructive">{editForm.formState.errors.role.message}</p>
-                )}
-              </div>
-              <div className="space-y-1">
-                <Label>Email</Label>
-                <Input {...editForm.register('email')} type="email" />
-                {editForm.formState.errors.email && (
-                  <p className="text-xs text-destructive">{editForm.formState.errors.email.message}</p>
-                )}
-              </div>
-              <div className="space-y-1">
-                <Label>Phone</Label>
-                <Input {...editForm.register('phone')} type="tel" />
-              </div>
-              <div className="space-y-1">
-                <Label>LinkedIn URL</Label>
-                <Input {...editForm.register('linkedin_url')} type="url" />
-                {editForm.formState.errors.linkedin_url && (
-                  <p className="text-xs text-destructive">{editForm.formState.errors.linkedin_url.message}</p>
-                )}
-              </div>
-              <div className="col-span-full space-y-1">
-                <Label>Notes</Label>
-                <Textarea {...editForm.register('notes')} rows={3} />
-              </div>
-            </div>
-          ) : (
-            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 text-sm">
-              <div>
-                <dt className="text-xs text-muted-foreground">Email</dt>
-                <dd>{contact.email ?? '—'}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">Phone</dt>
-                <dd>{contact.phone ?? '—'}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">LinkedIn</dt>
-                <dd>
-                  {contact.linkedin_url ? (
-                    <a
-                      href={contact.linkedin_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary hover:underline truncate block max-w-[160px]"
-                    >
-                      View profile
-                    </a>
-                  ) : (
-                    '—'
-                  )}
-                </dd>
-              </div>
-              {contact.notes && (
-                <div className="col-span-full">
-                  <dt className="text-xs text-muted-foreground">Notes</dt>
-                  <dd className="text-sm whitespace-pre-wrap">{contact.notes}</dd>
-                </div>
               )}
-            </dl>
-          )}
-        </CardContent>
-      </Card>
+            </FieldRow>
 
-      {/* Venue card */}
-      {venue && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">{venue.name}</CardTitle>
-            {venue.venue_type && (
-              <Badge variant="outline" className="w-fit">
-                {venueTypeLabel(venue.venue_type)}
-              </Badge>
-            )}
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-sm">
-              {venue.address && (
-                <div className="col-span-full">
-                  <dt className="text-xs text-muted-foreground flex items-center gap-1">
-                    <MapPin className="w-3 h-3" /> Address
-                  </dt>
-                  <dd>
-                    {venue.address}
-                    {venue.suburb && `, ${venue.suburb}`}
-                  </dd>
-                </div>
-              )}
-              {venue.cover_count != null && (
-                <div>
-                  <dt className="text-xs text-muted-foreground">Covers</dt>
-                  <dd>{venue.cover_count}</dd>
-                </div>
-              )}
-              {venue.neighbourhood && (
-                <div>
-                  <dt className="text-xs text-muted-foreground">Neighbourhood</dt>
-                  <dd>{venue.neighbourhood}</dd>
-                </div>
-              )}
-              {venue.licence_type && (
-                <div>
-                  <dt className="text-xs text-muted-foreground">Licence</dt>
-                  <dd className="capitalize">{venue.licence_type.replace(/_/g, ' ')}</dd>
-                </div>
-              )}
-              {venue.avg_spend_tier && (
-                <div>
-                  <dt className="text-xs text-muted-foreground">Avg spend</dt>
-                  <dd className="font-mono">{venue.avg_spend_tier}</dd>
-                </div>
-              )}
-              {venue.kitchen_type && (
-                <div>
-                  <dt className="text-xs text-muted-foreground">Kitchen</dt>
-                  <dd className="capitalize">{venue.kitchen_type.replace(/_/g, ' ')}</dd>
-                </div>
-              )}
-              {venue.licensing_status && (
-                <div>
-                  <dt className="text-xs text-muted-foreground">Licensing status</dt>
-                  <dd className="capitalize">{venue.licensing_status.replace(/_/g, ' ')}</dd>
-                </div>
-              )}
-              {venue.seasonality_window && (
-                <div>
-                  <dt className="text-xs text-muted-foreground">Seasonality</dt>
-                  <dd>{venue.seasonality_window}</dd>
-                </div>
-              )}
-              {venue.competitor_water_usage && (
-                <div>
-                  <dt className="text-xs text-muted-foreground">Current water supplier</dt>
-                  <dd>{venue.competitor_water_usage}</dd>
-                </div>
-              )}
-              {venue.website && (
-                <div>
-                  <dt className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Globe className="w-3 h-3" /> Website
-                  </dt>
-                  <dd>
-                    <a
-                      href={venue.website}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary hover:underline"
-                    >
-                      {venue.website.replace(/^https?:\/\//, '')}
-                    </a>
-                  </dd>
-                </div>
-              )}
-            </dl>
-
-            {encodedAddress && (
-              <div className="rounded-lg overflow-hidden border">
-                {import.meta.env.VITE_GOOGLE_MAPS_API_KEY ? (
-                  <iframe
-                    src={`https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&q=${encodedAddress}`}
-                    width="100%"
-                    height="192"
-                    style={{ border: 0, display: 'block' }}
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                    title="Venue location"
-                  />
+            <FieldRow
+              label="Email"
+              value={
+                contact.email ? (
+                  <span className="truncate text-ink">{contact.email}</span>
                 ) : (
+                  <span className="text-ink-disabled">—</span>
+                )
+              }
+              editing={editingField === 'email'}
+              onEditingChange={(e) => (e ? openField('email') : setEditingField(null))}
+              onCommit={() => commitField('email')}
+            >
+              {({ commit, close }) => (
+                <Input
+                  autoFocus
+                  type="email"
+                  value={fieldDraft.email ?? ''}
+                  onChange={(e) =>
+                    setFieldDraft((d) => ({ ...d, email: e.target.value }))
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      commit()
+                    }
+                    if (e.key === 'Escape') close()
+                  }}
+                  className="h-7 text-[13px]"
+                />
+              )}
+            </FieldRow>
+
+            <FieldRow
+              label="Phone"
+              value={
+                contact.phone ? (
+                  <span className="jordan-tnum font-mono text-ink">{contact.phone}</span>
+                ) : (
+                  <span className="text-ink-disabled">—</span>
+                )
+              }
+              editing={editingField === 'phone'}
+              onEditingChange={(e) => (e ? openField('phone') : setEditingField(null))}
+              onCommit={() => commitField('phone')}
+            >
+              {({ commit, close }) => (
+                <Input
+                  autoFocus
+                  type="tel"
+                  value={fieldDraft.phone ?? ''}
+                  onChange={(e) =>
+                    setFieldDraft((d) => ({ ...d, phone: e.target.value }))
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      commit()
+                    }
+                    if (e.key === 'Escape') close()
+                  }}
+                  className="h-7 text-[13px]"
+                />
+              )}
+            </FieldRow>
+
+            <FieldRow
+              label="LinkedIn"
+              value={
+                contact.linkedin_url ? (
                   <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodedAddress}`}
+                    href={contact.linkedin_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 px-3 py-3 text-sm text-primary hover:underline"
+                    className="truncate text-[color:var(--jordan-accent)] hover:underline"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <MapPin className="w-4 h-4 shrink-0" />
-                    View on Google Maps
+                    View profile
                   </a>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+                ) : (
+                  <span className="text-ink-disabled">—</span>
+                )
+              }
+              editing={editingField === 'linkedin_url'}
+              onEditingChange={(e) =>
+                e ? openField('linkedin_url') : setEditingField(null)
+              }
+              onCommit={() => commitField('linkedin_url')}
+            >
+              {({ commit, close }) => (
+                <Input
+                  autoFocus
+                  type="url"
+                  value={fieldDraft.linkedin_url ?? ''}
+                  onChange={(e) =>
+                    setFieldDraft((d) => ({ ...d, linkedin_url: e.target.value }))
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      commit()
+                    }
+                    if (e.key === 'Escape') close()
+                  }}
+                  className="h-7 text-[13px]"
+                />
+              )}
+            </FieldRow>
 
-      <Separator />
-
-      {/* Deals section */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold">
-            Deals {deals && deals.length > 0 && <span className="text-muted-foreground font-normal">({deals.length})</span>}
-          </h2>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setDealDialogOpen(true)}
-          >
-            <Plus className="w-4 h-4 mr-1.5" />
-            Add to pipeline
-          </Button>
-        </div>
-
-        {(!deals || deals.length === 0) && (
-          <p className="text-sm text-muted-foreground py-3">No deals yet. Add this contact to the pipeline to start tracking.</p>
-        )}
-
-        {deals && deals.length > 0 && (
-          <div className="space-y-2">
-            {deals.map((deal) => (
-              <div key={deal.id} className="border rounded-lg p-3 flex items-center gap-3 flex-wrap">
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{deal.title ?? 'Untitled deal'}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {deal.follow_up_due ? `Follow-up: ${formatDate(deal.follow_up_due)}` : 'No follow-up set'}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {deal.stage?.name && (
-                    <Badge
-                      variant="outline"
-                      style={deal.stage.color ? { borderColor: deal.stage.color, color: deal.stage.color } : {}}
-                    >
-                      {deal.stage.name}
-                    </Badge>
-                  )}
-                  <span className="text-sm font-medium">
-                    {formatCurrency(deal.contract_value)}
+            <FieldRow
+              label="Notes"
+              value={
+                contact.notes ? (
+                  <span className="line-clamp-2 whitespace-pre-wrap text-ink">
+                    {contact.notes}
                   </span>
-                  <span className="text-xs text-muted-foreground">
-                    {deal.days_in_stage ?? 0}d in stage
-                  </span>
-                </div>
-              </div>
-            ))}
+                ) : (
+                  <span className="text-ink-disabled">—</span>
+                )
+              }
+              editing={editingField === 'notes'}
+              onEditingChange={(e) => (e ? openField('notes') : setEditingField(null))}
+              onCommit={() => commitField('notes')}
+            >
+              {({ commit, close }) => (
+                <Textarea
+                  autoFocus
+                  value={fieldDraft.notes ?? ''}
+                  onChange={(e) =>
+                    setFieldDraft((d) => ({ ...d, notes: e.target.value }))
+                  }
+                  onKeyDown={(e) => {
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                      e.preventDefault()
+                      commit()
+                    }
+                    if (e.key === 'Escape') close()
+                  }}
+                  rows={3}
+                  className="text-[13px]"
+                />
+              )}
+            </FieldRow>
           </div>
-        )}
-      </div>
 
-      <Separator />
-
-      {/* Activities section */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold">
-            Activity {activities && activities.length > 0 && (
-              <span className="text-muted-foreground font-normal">({activities.length})</span>
-            )}
-          </h2>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setActivityDialogOpen(true)}
-          >
-            <Plus className="w-4 h-4 mr-1.5" />
-            Log activity
-          </Button>
-        </div>
-
-        {(!activities || activities.length === 0) && (
-          <p className="text-sm text-muted-foreground py-3">No activity logged yet.</p>
-        )}
-
-        {activities && activities.length > 0 && (
-          <div className="space-y-1">
-            {activities.map((activity) => (
-              <div key={activity.id} className="flex items-start gap-3 py-2 border-b last:border-0">
-                <div className="mt-0.5 text-muted-foreground">
-                  <ActivityIcon type={activity.activity_type} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-xs font-medium text-muted-foreground">
-                      {activityTypeLabel(activity.activity_type)}
-                    </span>
-                    {activity.deal?.title && (
-                      <>
-                        <span className="text-xs text-muted-foreground">·</span>
-                        <span className="text-xs">{activity.deal.title}</span>
-                      </>
-                    )}
-                  </div>
-                  {activity.subject && (
-                    <p className="text-sm truncate mt-0.5">{activity.subject}</p>
-                  )}
-                  {activity.body && (
-                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                      {activity.body}
-                    </p>
-                  )}
-                </div>
-                <span className="text-xs text-muted-foreground shrink-0 pt-0.5">
-                  {formatRelative(activity.occurred_at)}
+          {venue && (
+            <>
+              <header className="flex items-center justify-between border-y border-hairline bg-surface-2 px-3 py-2">
+                <span className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
+                  Venue
                 </span>
-              </div>
-            ))}
+                {venue.venue_type && (
+                  <StatusPill tone="neutral" className="h-[16px] text-[10px]">
+                    {venueTypeLabel(venue.venue_type)}
+                  </StatusPill>
+                )}
+              </header>
+              <dl className="px-3 py-2 text-[13px] space-y-2">
+                <div>
+                  <dt className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
+                    {venue.name}
+                  </dt>
+                  {venue.address && (
+                    <dd className="mt-0.5 flex items-start gap-1.5 text-ink-muted">
+                      <MapPin className="w-3 h-3 mt-0.5 shrink-0 text-ink-faint" />
+                      <span>
+                        {venue.address}
+                        {venue.suburb && `, ${venue.suburb}`}
+                      </span>
+                    </dd>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {venue.cover_count != null && (
+                    <div>
+                      <dt className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
+                        Covers
+                      </dt>
+                      <dd className="jordan-tnum font-mono text-ink">
+                        <MetricNumber value={venue.cover_count} />
+                      </dd>
+                    </div>
+                  )}
+                  {venue.avg_spend_tier && (
+                    <div>
+                      <dt className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
+                        Avg spend
+                      </dt>
+                      <dd className="jordan-tnum font-mono text-ink">
+                        {venue.avg_spend_tier}
+                      </dd>
+                    </div>
+                  )}
+                  {venue.licence_type && (
+                    <div>
+                      <dt className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
+                        Licence
+                      </dt>
+                      <dd className="capitalize text-ink-muted">
+                        {venue.licence_type.replace(/_/g, ' ')}
+                      </dd>
+                    </div>
+                  )}
+                  {venue.neighbourhood && (
+                    <div>
+                      <dt className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
+                        Neighbourhood
+                      </dt>
+                      <dd className="text-ink-muted">{venue.neighbourhood}</dd>
+                    </div>
+                  )}
+                </div>
+                {venue.website && (
+                  <div>
+                    <dt className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
+                      Website
+                    </dt>
+                    <dd className="mt-0.5 flex items-center gap-1.5">
+                      <Globe className="w-3 h-3 text-ink-faint" />
+                      <a
+                        href={venue.website}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="truncate text-[color:var(--jordan-accent)] hover:underline"
+                      >
+                        {venue.website.replace(/^https?:\/\//, '')}
+                      </a>
+                    </dd>
+                  </div>
+                )}
+              </dl>
+            </>
+          )}
+        </section>
+
+        {/* ─── Pane 2 — Activity timeline ──────────────────────── */}
+        <section
+          aria-label="Activity"
+          className="rounded-[var(--jordan-radius-md)] border border-hairline bg-surface-1"
+        >
+          <header className="flex items-center justify-between border-b border-hairline px-3 py-2">
+            <span className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
+              Activity
+              {activities && activities.length > 0 && (
+                <span className="ml-1.5 jordan-tnum font-mono normal-case tracking-normal">
+                  {activities.length}
+                </span>
+              )}
+            </span>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-[12px]"
+              onClick={() => setActivityDialogOpen(true)}
+            >
+              <Plus className="w-3.5 h-3.5 mr-1" />
+              Log
+            </Button>
+          </header>
+
+          {(!activities || activities.length === 0) ? (
+            <EmptyState
+              compact
+              title="No activity yet"
+              body="Log a call, meeting or note to start building the timeline."
+            />
+          ) : (
+            <ol className="relative px-3 py-3">
+              {/* Vertical rail */}
+              <div
+                aria-hidden
+                className="absolute left-[22px] top-3 bottom-3 w-px bg-hairline"
+              />
+              {activities.map((a) => {
+                const meta = getActivityMeta(a.activity_type)
+                return (
+                  <li key={a.id} className="relative flex gap-3 py-2">
+                    <div className="relative z-[1] flex h-6 items-start">
+                      <ActivityIcon type={a.activity_type} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
+                          {meta.label}
+                        </span>
+                        {a.deal?.title && (
+                          <>
+                            <span className="text-ink-faint">·</span>
+                            <span className="text-[12px] text-ink-muted truncate">
+                              {a.deal.title}
+                            </span>
+                          </>
+                        )}
+                        <span className="ml-auto jordan-tnum font-mono text-[11px] text-ink-faint shrink-0">
+                          {formatRelative(a.occurred_at)}
+                        </span>
+                      </div>
+                      {a.subject && (
+                        <p className="mt-0.5 text-[13px] text-ink truncate">
+                          {a.subject}
+                        </p>
+                      )}
+                      {a.body && (
+                        <p className="mt-0.5 text-[12px] text-ink-muted line-clamp-2 whitespace-pre-wrap">
+                          {a.body}
+                        </p>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
+            </ol>
+          )}
+        </section>
+
+        {/* ─── Pane 3 — Deals + drafts ─────────────────────────── */}
+        <section
+          aria-label="Deals and drafts"
+          className="flex flex-col gap-4 min-w-0"
+        >
+          <div className="rounded-[var(--jordan-radius-md)] border border-hairline bg-surface-1">
+            <header className="flex items-center justify-between border-b border-hairline px-3 py-2">
+              <span className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
+                Deals
+                {deals && deals.length > 0 && (
+                  <span className="ml-1.5 jordan-tnum font-mono normal-case tracking-normal">
+                    {deals.length}
+                  </span>
+                )}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-[12px]"
+                onClick={() => setDealDialogOpen(true)}
+              >
+                <Plus className="w-3.5 h-3.5 mr-1" />
+                Add
+              </Button>
+            </header>
+
+            {(!deals || deals.length === 0) ? (
+              <EmptyState
+                compact
+                icon={Briefcase}
+                title="No deals yet"
+                body="Track interest and movement by adding this contact to a pipeline stage."
+              />
+            ) : (
+              <ul className="divide-y divide-hairline">
+                {deals.map((d) => (
+                  <li
+                    key={d.id}
+                    className="px-3 py-2.5 text-[13px] transition-colors hover:bg-surface-3"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-medium text-ink">
+                        {d.title ?? 'Untitled deal'}
+                      </span>
+                      <span className="ml-auto jordan-tnum font-mono text-[13px] text-ink">
+                        {formatCurrency(d.contract_value)}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between gap-2">
+                      {d.stage?.name && (
+                        <StatusPill tone="accent" className="h-[16px] text-[10px]">
+                          {d.stage.name}
+                        </StatusPill>
+                      )}
+                      <span className="ml-auto jordan-tnum font-mono text-[11px] text-ink-faint">
+                        {d.follow_up_due
+                          ? `Follow up ${formatDate(d.follow_up_due)}`
+                          : `${d.days_in_stage ?? 0}d in stage`}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-        )}
+
+          <div className="rounded-[var(--jordan-radius-md)] border border-hairline bg-surface-1">
+            <header className="flex items-center justify-between border-b border-hairline px-3 py-2">
+              <span className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
+                AI drafts
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-[12px]"
+                onClick={() => setDraftDialogOpen(true)}
+              >
+                <Sparkles className="w-3.5 h-3.5 mr-1" />
+                Generate
+              </Button>
+            </header>
+            <div className="px-3 py-3 text-[12px] text-ink-muted space-y-1.5">
+              <p>Generate a cold outreach, follow-up, or reply tailored to this contact.</p>
+              <div className="flex flex-wrap gap-1.5">
+                <DraftTypeBadge type="cold_outreach" />
+                <DraftTypeBadge type="follow_up" />
+                <DraftTypeBadge type="reply" />
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
 
-      {/* Add Deal Dialog */}
+      {/* ── Dialogs (kept) ────────────────────────────────────── */}
+      {/* Add Deal */}
       <Dialog open={dealDialogOpen} onOpenChange={setDealDialogOpen}>
         <DialogContent className="max-w-md" aria-describedby={undefined}>
           <DialogHeader>
-            <DialogTitle>Add to Pipeline</DialogTitle>
+            <DialogTitle>Add to pipeline</DialogTitle>
           </DialogHeader>
           <form onSubmit={dealForm.handleSubmit(submitDeal)} className="space-y-3 mt-2">
             <div className="space-y-1">
               <Label>Deal title *</Label>
-              <Input {...dealForm.register('title')} placeholder="e.g. Purezza x The Espy" />
+              <Input
+                {...dealForm.register('title')}
+                placeholder="e.g. Purezza × The Espy"
+              />
               {dealForm.formState.errors.title && (
-                <p className="text-xs text-destructive">{dealForm.formState.errors.title.message}</p>
+                <p className="text-xs text-destructive">
+                  {dealForm.formState.errors.title.message}
+                </p>
               )}
             </div>
             <div className="space-y-1">
@@ -652,18 +743,19 @@ export function ContactDetailPage() {
                 value={dealForm.watch('stage_id') ?? ''}
                 onValueChange={(v) => dealForm.setValue('stage_id', v)}
               >
-                <SelectTrigger className={cn(dealForm.formState.errors.stage_id && 'border-destructive')}>
+                <SelectTrigger
+                  className={cn(dealForm.formState.errors.stage_id && 'border-destructive')}
+                >
                   <SelectValue placeholder="Select a stage" />
                 </SelectTrigger>
                 <SelectContent>
                   {stages?.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {dealForm.formState.errors.stage_id && (
-                <p className="text-xs text-destructive">{dealForm.formState.errors.stage_id.message}</p>
-              )}
             </div>
             <div className="space-y-1">
               <Label>Contract value (AUD)</Label>
@@ -695,18 +787,13 @@ export function ContactDetailPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Generate Draft Dialog */}
+      {/* Generate Draft */}
       <Dialog open={draftDialogOpen} onOpenChange={setDraftDialogOpen}>
         <DialogContent className="max-w-md" aria-describedby={undefined}>
           <DialogHeader>
-            <DialogTitle>Generate AI Draft</DialogTitle>
+            <DialogTitle>Generate AI draft</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 mt-1">
-            {!import.meta.env.VITE_SUPABASE_URL && (
-              <p className="text-sm text-amber-600 bg-amber-50 rounded px-3 py-2">
-                Anthropic API key not yet configured — ask admin.
-              </p>
-            )}
             <div className="space-y-1">
               <Label>Draft type</Label>
               <Select value={draftType} onValueChange={(v) => setDraftType(v as DraftType)}>
@@ -714,14 +801,17 @@ export function ContactDetailPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="cold_outreach">Cold Outreach</SelectItem>
+                  <SelectItem value="cold_outreach">Cold outreach</SelectItem>
                   <SelectItem value="follow_up">Follow-up</SelectItem>
-                  <SelectItem value="reply">Reply (to their last message)</SelectItem>
+                  <SelectItem value="reply">Reply</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Context hint <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              <Label>
+                Context hint{' '}
+                <span className="text-muted-foreground text-xs">(optional)</span>
+              </Label>
               <Textarea
                 rows={3}
                 placeholder="e.g. mention the nearby venue install, ask about Thursday call"
@@ -730,7 +820,11 @@ export function ContactDetailPage() {
               />
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => setDraftDialogOpen(false)}>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setDraftDialogOpen(false)}
+              >
                 Cancel
               </Button>
               <Button
@@ -748,25 +842,32 @@ export function ContactDetailPage() {
                     setDraftHint('')
                     navigate('/drafts')
                   } catch {
-                    // error shown by mutation
+                    /* error shown by mutation toast */
                   }
                 }}
               >
-                {generateDraft.isPending
-                  ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Generating…</>
-                  : <><Sparkles className="w-4 h-4 mr-1.5" />Generate</>
-                }
+                {generateDraft.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                    Generating…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-1.5" />
+                    Generate
+                  </>
+                )}
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Log Activity Dialog */}
+      {/* Log Activity */}
       <Dialog open={activityDialogOpen} onOpenChange={setActivityDialogOpen}>
         <DialogContent className="max-w-md" aria-describedby={undefined}>
           <DialogHeader>
-            <DialogTitle>Log Activity</DialogTitle>
+            <DialogTitle>Log activity</DialogTitle>
           </DialogHeader>
           <form
             onSubmit={activityForm.handleSubmit(submitActivity)}
@@ -779,7 +880,7 @@ export function ContactDetailPage() {
                 onValueChange={(v) =>
                   activityForm.setValue(
                     'activity_type',
-                    v as ActivityFormValues['activity_type']
+                    v as ActivityFormValues['activity_type'],
                   )
                 }
               >
@@ -790,27 +891,21 @@ export function ContactDetailPage() {
                   <SelectItem value="call_note">Call</SelectItem>
                   <SelectItem value="meeting_note">Meeting</SelectItem>
                   <SelectItem value="note">Note</SelectItem>
-                  <SelectItem value="email_outbound">Outbound Email</SelectItem>
+                  <SelectItem value="email_outbound">Outbound email</SelectItem>
                 </SelectContent>
               </Select>
-              {activityForm.formState.errors.activity_type && (
-                <p className="text-xs text-destructive">
-                  {activityForm.formState.errors.activity_type.message}
-                </p>
-              )}
             </div>
             <div className="space-y-1">
               <Label>Subject *</Label>
               <Input {...activityForm.register('subject')} placeholder="e.g. Intro call" />
-              {activityForm.formState.errors.subject && (
-                <p className="text-xs text-destructive">
-                  {activityForm.formState.errors.subject.message}
-                </p>
-              )}
             </div>
             <div className="space-y-1">
               <Label>Notes</Label>
-              <Textarea {...activityForm.register('body')} rows={3} placeholder="What happened?" />
+              <Textarea
+                {...activityForm.register('body')}
+                rows={3}
+                placeholder="What happened?"
+              />
             </div>
             <div className="space-y-1">
               <Label>Date</Label>
@@ -825,11 +920,7 @@ export function ContactDetailPage() {
               >
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                className="flex-1"
-                disabled={createActivity.isPending}
-              >
+              <Button type="submit" className="flex-1" disabled={createActivity.isPending}>
                 {createActivity.isPending ? 'Saving…' : 'Log activity'}
               </Button>
             </div>
