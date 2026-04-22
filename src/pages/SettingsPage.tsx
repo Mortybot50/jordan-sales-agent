@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
@@ -31,8 +31,9 @@ import { useDeals } from '@/lib/queries/deals'
 import { profileFormSchema, icpFormSchema, type ProfileFormValues, type IcpFormValues } from '@/lib/schemas/user'
 import { venueTypeLabel, cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
-import { Plus, Trash2, ChevronUp, ChevronDown, CheckCircle2, XCircle, CheckCircle, ExternalLink } from 'lucide-react'
+import { Plus, Trash2, ChevronUp, ChevronDown, CheckCircle2, XCircle, CheckCircle, ExternalLink, ShieldAlert, ArrowRight } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSuppressionList } from '@/lib/queries/suppression'
 
 // --- Profile Tab ---
 function ProfileTab() {
@@ -781,11 +782,49 @@ function IntegrationsTab() {
   )
 }
 
+// --- Suppression summary tab ---
+function SuppressionTab() {
+  const { data: entries, isLoading } = useSuppressionList()
+  const total = entries?.length ?? 0
+  const manual = (entries ?? []).filter((e) => e.reason === 'manual_exclude').length
+  const compliance = total - manual
+
+  return (
+    <div className="space-y-4 max-w-lg">
+      <Card>
+        <CardContent className="flex items-start gap-3 py-4 px-4">
+          <div className="shrink-0 size-9 rounded-full bg-amber-50 text-amber-700 flex items-center justify-center">
+            <ShieldAlert className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0 space-y-1">
+            <p className="text-sm font-medium">Outbound firewall</p>
+            <p className="text-xs text-muted-foreground">
+              Every contact is checked against the suppression list before we draft, enrol or brief. Addresses added here will never receive outbound.
+            </p>
+            {!isLoading && (
+              <p className="text-xs text-muted-foreground pt-1">
+                <strong className="text-foreground">{total}</strong> total · {manual} manual · {compliance} compliance
+              </p>
+            )}
+          </div>
+          <Link
+            to="/settings/suppression-list"
+            className="shrink-0 inline-flex items-center gap-1 text-sm text-primary hover:underline"
+          >
+            Manage
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 // --- Main Settings Page ---
 export function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get('tab')
-  const defaultTab = ['profile', 'stages', 'icp', 'integrations'].includes(tabParam ?? '')
+  const defaultTab = ['profile', 'stages', 'icp', 'integrations', 'suppression'].includes(tabParam ?? '')
     ? tabParam!
     : 'profile'
 
@@ -815,6 +854,7 @@ export function SettingsPage() {
           <TabsTrigger value="stages">Pipeline Stages</TabsTrigger>
           <TabsTrigger value="icp">ICP</TabsTrigger>
           <TabsTrigger value="integrations">Integrations</TabsTrigger>
+          <TabsTrigger value="suppression">Suppression</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile">
@@ -863,6 +903,20 @@ export function SettingsPage() {
             </CardHeader>
             <CardContent>
               <IntegrationsTab />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="suppression">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Suppression list</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Addresses that must never receive outbound — bounces, unsubscribes, and anyone you've already emailed personally.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <SuppressionTab />
             </CardContent>
           </Card>
         </TabsContent>

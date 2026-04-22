@@ -12,6 +12,7 @@ import { ContactImportPage } from '@/pages/ContactImportPage'
 import { DraftsPage } from '@/pages/DraftsPage'
 import { BriefingPage } from '@/pages/BriefingPage'
 import { SettingsPage } from '@/pages/SettingsPage'
+import { SuppressionListPage } from '@/pages/SuppressionListPage'
 import PrimitivesPage from '@/pages/_primitives'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -57,6 +58,7 @@ export default function App() {
           <Route path="drafts" element={<DraftsPage />} />
           <Route path="briefing" element={<BriefingPage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="settings/suppression-list" element={<SuppressionListPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
