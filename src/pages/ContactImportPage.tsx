@@ -16,6 +16,7 @@ import { useCreateContact } from '@/lib/queries/contacts'
 import { useCreateVenue } from '@/lib/queries/venues'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
+import { getSuppressionSet, isSuppressed } from '@/lib/suppression'
 import { ArrowLeft, Upload, FileText, CheckCircle, AlertCircle } from 'lucide-react'
 
 const EXPECTED_FIELDS = [
@@ -36,6 +37,7 @@ type Step = 'upload' | 'map' | 'importing' | 'done'
 interface ImportResult {
   imported: number
   skipped: number
+  suppressed: number
   errors: string[]
 }
 
@@ -112,16 +114,30 @@ export function ContactImportPage() {
 
     const imported = { count: 0 }
     const skipped = { count: 0 }
+    const suppressed = { count: 0 }
     const errors: string[] = []
     const venueCache: Record<string, string> = {}
+
+    // Pre-load suppression set once for the whole batch (Filter Point A: enrolment)
+    const suppressionSet = await getSuppressionSet(user.org_id).catch(() => ({
+      emails: new Set<string>(),
+      domains: new Set<string>(),
+    }))
 
     for (let i = 0; i < allRows.length; i++) {
       const row = allRows[i]
       const firstName = get(row, 'first_name')
       const lastName = get(row, 'last_name')
+      const email = get(row, 'email')
 
       if (!firstName || !lastName) {
         skipped.count++
+        setProgress(Math.round(((i + 1) / allRows.length) * 100))
+        continue
+      }
+
+      if (email && isSuppressed(email, suppressionSet)) {
+        suppressed.count++
         setProgress(Math.round(((i + 1) / allRows.length) * 100))
         continue
       }
@@ -187,6 +203,7 @@ export function ContactImportPage() {
     setResult({
       imported: imported.count,
       skipped: skipped.count,
+      suppressed: suppressed.count,
       errors,
     })
     setStep('done')
@@ -403,7 +420,7 @@ export function ContactImportPage() {
             <h2 className="text-lg font-semibold">Import complete</h2>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-4 gap-3">
             <Card>
               <CardContent className="pt-4 pb-3 text-center">
                 <p className="text-2xl font-bold text-green-600">{result.imported}</p>
@@ -414,6 +431,12 @@ export function ContactImportPage() {
               <CardContent className="pt-4 pb-3 text-center">
                 <p className="text-2xl font-bold text-amber-600">{result.skipped}</p>
                 <p className="text-xs text-muted-foreground">Skipped</p>
+              </CardContent>
+            </Card>
+            <Card title="Matched the suppression list — will not receive outbound">
+              <CardContent className="pt-4 pb-3 text-center">
+                <p className="text-2xl font-bold text-amber-600">{result.suppressed}</p>
+                <p className="text-xs text-muted-foreground">Suppressed</p>
               </CardContent>
             </Card>
             <Card>
