@@ -763,24 +763,33 @@ export type Database = {
       }
       suppression_list: {
         Row: {
+          added_by_user_id: string | null
+          domain_suppression: boolean
           email: string
           id: string
+          notes: string | null
           org_id: string
           reason: string
           source: string | null
           suppressed_at: string | null
         }
         Insert: {
+          added_by_user_id?: string | null
+          domain_suppression?: boolean
           email: string
           id?: string
+          notes?: string | null
           org_id: string
           reason: string
           source?: string | null
           suppressed_at?: string | null
         }
         Update: {
+          added_by_user_id?: string | null
+          domain_suppression?: boolean
           email?: string
           id?: string
+          notes?: string | null
           org_id?: string
           reason?: string
           source?: string | null
