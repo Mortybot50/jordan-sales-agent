@@ -1,6 +1,29 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { subHours, subDays, endOfDay } from 'date-fns'
+import { getSuppressionSet, isSuppressed, type SuppressionSet } from '@/lib/suppression'
+
+async function loadSuppressionSetSafe(orgId: string | undefined | null): Promise<SuppressionSet> {
+  if (!orgId) return { emails: new Set(), domains: new Set() }
+  try {
+    return await getSuppressionSet(orgId)
+  } catch {
+    // Briefing shouldn't fail if suppression lookup hiccups — return empty.
+    return { emails: new Set(), domains: new Set() }
+  }
+}
+
+async function currentOrgId(): Promise<string | null> {
+  const { data } = await supabase.auth.getUser()
+  const uid = data.user?.id
+  if (!uid) return null
+  const { data: profile } = await supabase
+    .from('users')
+    .select('org_id')
+    .eq('id', uid)
+    .maybeSingle()
+  return (profile?.org_id as string | undefined) ?? null
+}
 
 export interface BriefingReply {
   id: string
@@ -23,7 +46,7 @@ export function useOvernightReplies() {
         .from('activities')
         .select(`
           id, contact_id, deal_id, subject, body, occurred_at,
-          contact:contacts(id, full_name, venue:venues(name))
+          contact:contacts(id, full_name, email, venue:venues(name))
         `)
         .in('activity_type', ['reply_received', 'email_inbound'])
         .is('archived_at', null)
@@ -32,19 +55,27 @@ export function useOvernightReplies() {
 
       if (error) throw error
 
-      return (data ?? []).map((a) => {
-        const c = a.contact as { full_name: string; venue: { name: string } | null } | null
-        return {
-          id: a.id,
-          contact_id: a.contact_id,
-          deal_id: (a as { deal_id?: string | null }).deal_id ?? null,
-          contact_name: c?.full_name ?? 'Unknown',
-          venue_name: c?.venue?.name ?? null,
-          subject: a.subject,
-          body: a.body,
-          occurred_at: a.occurred_at ?? new Date().toISOString(),
-        }
-      })
+      const orgId = await currentOrgId()
+      const suppression = await loadSuppressionSetSafe(orgId)
+
+      return (data ?? [])
+        .filter((a) => {
+          const c = a.contact as { email: string | null } | null
+          return !isSuppressed(c?.email ?? null, suppression)
+        })
+        .map((a) => {
+          const c = a.contact as { full_name: string; venue: { name: string } | null } | null
+          return {
+            id: a.id,
+            contact_id: a.contact_id,
+            deal_id: (a as { deal_id?: string | null }).deal_id ?? null,
+            contact_name: c?.full_name ?? 'Unknown',
+            venue_name: c?.venue?.name ?? null,
+            subject: a.subject,
+            body: a.body,
+            occurred_at: a.occurred_at ?? new Date().toISOString(),
+          }
+        })
     },
   })
 }
@@ -152,10 +183,13 @@ export function useReengagementOpportunities() {
       // Filter to contacts with no activities in 42+ days
       const { data: contacts } = await supabase
         .from('contacts')
-        .select('id, full_name, venue:venues(name)')
+        .select('id, full_name, email, org_id, venue:venues(name)')
         .in('id', contactIds)
 
       if (!contacts || contacts.length === 0) return []
+
+      const orgIdForSet = contacts[0]?.org_id as string | undefined
+      const suppression = await loadSuppressionSetSafe(orgIdForSet)
 
       const { data: recentActivities } = await supabase
         .from('activities')
@@ -181,6 +215,7 @@ export function useReengagementOpportunities() {
       const now = new Date()
       return contacts
         .filter((c) => !recentContactIds.has(c.id))
+        .filter((c) => !isSuppressed((c as { email: string | null }).email, suppression))
         .map((c) => {
           const lastAt = lastActivityMap[c.id]
           const days = lastAt

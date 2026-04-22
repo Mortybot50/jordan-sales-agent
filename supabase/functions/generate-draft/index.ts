@@ -92,6 +92,42 @@ Deno.serve(async (req) => {
     })
   }
 
+  // Suppression check (Spam Act 2003 compliance + manual exclusions)
+  if (contact.email) {
+    const rawEmail = String(contact.email).trim().toLowerCase()
+    const at = rawEmail.indexOf('@')
+    const local = at >= 0 ? rawEmail.slice(0, at).split('+')[0] : rawEmail
+    const domain = at >= 0 ? rawEmail.slice(at + 1) : ''
+    const normalisedEmail = at >= 0 ? `${local}@${domain}` : rawEmail
+
+    const { data: suppressionHits } = await supabase
+      .from('suppression_list')
+      .select('email, reason, domain_suppression')
+      .eq('org_id', userProfile.org_id)
+      .or(`email.eq.${normalisedEmail},email.eq.${domain}`)
+
+    const matched = (suppressionHits ?? []).find((row: {
+      email: string
+      reason: string
+      domain_suppression: boolean
+    }) => {
+      if (row.domain_suppression) return row.email === domain
+      return row.email === normalisedEmail
+    })
+
+    if (matched) {
+      return new Response(
+        JSON.stringify({
+          error: `Cannot generate draft — email is on suppression list (${matched.reason}).`,
+          suppressed: true,
+          reason: matched.reason,
+          domain_suppression: matched.domain_suppression,
+        }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+  }
+
   // Load last 3 activities for this contact
   const { data: activities } = await supabase
     .from('activities')

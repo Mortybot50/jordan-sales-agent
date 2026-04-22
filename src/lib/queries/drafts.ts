@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
+import { getSuppressionSet, isSuppressed } from '@/lib/suppression'
 
 export type DraftStatus = 'pending' | 'edited' | 'approved' | 'rejected' | 'sent' | 'draft_failed'
 export type DraftType = 'cold_outreach' | 'follow_up' | 'follow_up_soft' | 'follow_up_close' | 'reply'
@@ -167,6 +168,25 @@ export function useGenerateDraft() {
       draft_type: DraftType
       context_hint?: string
     }) => {
+      // Pre-flight suppression check — avoids API spend on a hit
+      const { data: contact } = await supabase
+        .from('contacts')
+        .select('email, org_id')
+        .eq('id', contact_id)
+        .single()
+
+      if (contact?.email && contact.org_id) {
+        try {
+          const set = await getSuppressionSet(contact.org_id)
+          if (isSuppressed(contact.email, set)) {
+            throw new Error('Cannot generate draft — email is on suppression list.')
+          }
+        } catch (e) {
+          // Re-throw suppression errors, but don't fail on transient lookup errors
+          if ((e as Error).message.startsWith('Cannot generate draft')) throw e
+        }
+      }
+
       const { data, error } = await supabase.functions.invoke('generate-draft', {
         body: { contact_id, draft_type, context_hint },
       })
