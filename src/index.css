@@ -81,6 +81,7 @@
   /* ── Jordan design tokens exposed as Tailwind utilities ────── */
   /* Neutrals → bg-ink, text-ink, bg-ink-muted, etc. */
   --color-ink: var(--jordan-ink);
+  --color-ink-soft: var(--jordan-ink-soft);
   --color-ink-muted: var(--jordan-ink-muted);
   --color-ink-subtle: var(--jordan-ink-subtle);
   --color-ink-faint: var(--jordan-ink-faint);
@@ -90,6 +91,7 @@
   --color-surface-2: var(--jordan-surface-2);
   --color-surface-3: var(--jordan-surface-3);
   --color-surface-4: var(--jordan-surface-4);
+  --color-surface-bg: var(--jordan-surface-bg);
   --color-canvas: var(--jordan-canvas);
 
   /* Jordan accent (kept under `brand-*` utility name to avoid
@@ -97,6 +99,12 @@
   --color-brand: var(--jordan-accent);
   --color-brand-hover: var(--jordan-accent-hover);
   --color-brand-soft: var(--jordan-accent-soft);
+
+  /* Phase F — Dark Anchor */
+  --color-mint: var(--jordan-accent-mint);
+  --color-mint-soft: var(--jordan-accent-mint-soft);
+  --color-delta-up: var(--jordan-delta-up);
+  --color-delta-down: var(--jordan-delta-down);
 
   /* Tones */
   --color-hot: var(--jordan-hot);
