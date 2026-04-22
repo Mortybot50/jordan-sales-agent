@@ -26,14 +26,20 @@ import {
 } from 'lucide-react'
 import {
   ActivityIcon,
+  CapsLabel,
   CommandPalette,
+  DarkMetricCard,
   DataTable,
+  DeltaBadge,
+  DotSeries,
   DraftTypeBadge,
   EmptyState,
   ErrorAlert,
   FacetBar,
   FieldRow,
   KbdHint,
+  LivePill,
+  MeterRail,
   MetricNumber,
   PageHeader,
   ScoreBadge,
@@ -521,8 +527,124 @@ export default function PrimitivesPage() {
           />
         </Section>
 
+        {/* ─── PHASE F — DARK ANCHOR ──────────────────────────── */}
+        <Section
+          id="phase-f-dark-anchor"
+          title="Phase F · Dark Anchor"
+          description="Dark-on-light mosaic, segmented meter rails, delta pills with arrows. Dark cards are hero-only (max 4 Dashboard, max 3 Pipeline)."
+        >
+          <div>
+            <div className="mb-2"><CapsLabel>Dark-anchor palette</CapsLabel></div>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+              <Swatch name="ink"             value="var(--jordan-ink)" />
+              <Swatch name="ink-soft"        value="var(--jordan-ink-soft)" />
+              <Swatch name="accent-mint"     value="var(--jordan-accent-mint)" />
+              <Swatch name="accent-mint-soft" value="var(--jordan-accent-mint-soft)" />
+              <Swatch name="delta-up"        value="var(--jordan-delta-up)" />
+              <Swatch name="delta-down"      value="var(--jordan-delta-down)" />
+              <Swatch name="surface-bg"      value="var(--jordan-surface-bg)" />
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-2"><CapsLabel>CapsLabel · LivePill</CapsLabel></div>
+            <div className="flex flex-wrap items-center gap-4">
+              <CapsLabel>Available credit</CapsLabel>
+              <CapsLabel tone="ink">Finance</CapsLabel>
+              <LivePill />
+              <LivePill label="Synced 2m ago" />
+              <LivePill label="Degraded" tone="warning" />
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-2"><CapsLabel>DeltaBadge</CapsLabel></div>
+            <div className="flex flex-wrap items-center gap-2">
+              <DeltaBadge value={12} suffix="%" />
+              <DeltaBadge value={-3} />
+              <DeltaBadge value={0} direction="flat" />
+              <span className="inline-flex items-center rounded-[6px] bg-[color:var(--jordan-ink)] px-2 py-1">
+                <DeltaBadge value={8} suffix="%" onDark />
+              </span>
+              <span className="inline-flex items-center rounded-[6px] bg-[color:var(--jordan-ink)] px-2 py-1">
+                <DeltaBadge value={-5} onDark />
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-2"><CapsLabel>MeterRail</CapsLabel></div>
+            <div className="space-y-2 max-w-sm">
+              <MeterRail segments={8} filled={5} tone="mint" />
+              <MeterRail segments={6} filled={2} tone="blue" />
+              <MeterRail segments={10} filled={9} tone="warning" />
+              <div className="bg-[color:var(--jordan-ink)] p-3 rounded-[6px]">
+                <MeterRail segments={8} filled={3} tone="onDark" />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-2"><CapsLabel>DotSeries</CapsLabel></div>
+            <div className="flex flex-wrap items-center gap-4">
+              <DotSeries total={7} filled={5} />
+              <DotSeries total={7} filled={0} />
+              <DotSeries total={10} filled={7} size="md" tone="blue" />
+              <span className="inline-flex items-center rounded-[6px] bg-[color:var(--jordan-ink)] px-3 py-1.5">
+                <DotSeries total={7} filled={4} tone="onDark" />
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-2"><CapsLabel>DarkMetricCard</CapsLabel></div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <DarkMetricCard
+                eyebrow="PIPELINE"
+                title="Open pipeline value"
+                value="$1.2M"
+                delta={12}
+                deltaSuffix="%"
+                meter={{ segments: 5, filled: 3, label: '3 of 5 stages active' }}
+              />
+              <DarkMetricCard
+                eyebrow="JORDAN SCORE"
+                title="Elite · composite"
+                value={82}
+                valueSuffix="/ 100"
+                delta={4}
+                meter={{ segments: 10, filled: 9, label: 'Tier 9 · Elite' }}
+                footer={
+                  <div className="flex items-center justify-between">
+                    <CapsLabel tone="onDark" className="text-[color:var(--jordan-dark-faint)]">Last 7 days</CapsLabel>
+                    <DotSeries total={7} filled={5} tone="onDark" />
+                  </div>
+                }
+              />
+              <DarkMetricCard
+                eyebrow="MEETINGS"
+                title="Qualified · this month"
+                value={11}
+                valueSuffix="/ 15"
+                delta={2}
+                meter={{ segments: 15, filled: 11, label: '11 of 15 target' }}
+              />
+              <DarkMetricCard
+                variant="ink-soft"
+                eyebrow="RESPONSE"
+                title="Reply rate · this week"
+                value={18}
+                valueSuffix="%"
+                delta={3}
+                deltaSuffix="%"
+                meter={{ segments: 6, filled: 4, label: 'vs 15% peer benchmark' }}
+              />
+            </div>
+          </div>
+        </Section>
+
         <footer className="py-12 text-center text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
-          Jordan Re-skin · Phase A · tokens v1 · primitives v1
+          Jordan Re-skin · Phase F · Dark Anchor · primitives v2
         </footer>
       </div>
     </div>

@@ -32,3 +32,15 @@ export {
   type CommandPaletteProps,
   type CommandItem,
 } from './CommandPalette'
+
+/* ── Phase F — Dark Anchor ─────────────────────────────────────── */
+export { CapsLabel, type CapsLabelProps } from './CapsLabel'
+export { MeterRail, type MeterRailProps } from './MeterRail'
+export { DeltaBadge, type DeltaBadgeProps } from './DeltaBadge'
+export { DotSeries, type DotSeriesProps } from './DotSeries'
+export { LivePill, type LivePillProps } from './LivePill'
+export {
+  DarkMetricCard,
+  type DarkMetricCardProps,
+  type DarkMetricCardMeter,
+} from './DarkMetricCard'

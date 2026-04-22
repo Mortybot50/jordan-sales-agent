@@ -38,14 +38,19 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const FROM_ADDRESS = 'Jordan Briefing <briefing@jordan.purezza.com.au>'
 
 // ── Jordan design tokens (inline — email-safe subset) ──────────────
+// Phase F "Dark Anchor" adds INK_DARK + MINT for the hero card at top.
 const INK = '#0f172a'
+const INK_DARK = '#0f1113'
+const INK_DARK_FAINT = 'rgba(255,255,255,0.55)'
 const INK_MUTED = '#334155'
 const INK_FAINT = '#64748b'
 const HAIRLINE = '#e4e7eb'
+const DARK_SEG = 'rgba(255,255,255,0.12)'
 const SURFACE_1 = '#ffffff'
 const SURFACE_2 = '#fafbfc'
 const ACCENT = '#2563eb'
 const ACCENT_SOFT = '#eff6ff'
+const MINT = '#2dd47c'
 const WARM_SOFT = '#fffbeb'
 const WARM_TEXT = '#b45309'
 const SUCCESS_SOFT = '#ecfdf5'
@@ -238,6 +243,97 @@ async function buildBriefingHtml(
     .limit(5)
   const candidates: BriefingCandidateRow[] = candidatesData ?? []
 
+  // 4. Jordan Score — mirrors src/lib/metrics/jordanScore.ts (keep in sync).
+  const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const monthStartIso = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    1,
+  ).toISOString()
+
+  const [
+    { count: sentWeek },
+    { count: repliesWeek },
+    { count: sent30 },
+    { count: replies30 },
+    { count: meetingsMonth },
+  ] = await Promise.all([
+    supabase
+      .from('activities')
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', orgId)
+      .eq('activity_type', 'email_outbound')
+      .gte('occurred_at', since7d),
+    supabase
+      .from('activities')
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', orgId)
+      .in('activity_type', ['reply_received', 'email_inbound'])
+      .gte('occurred_at', since7d),
+    supabase
+      .from('activities')
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', orgId)
+      .eq('activity_type', 'email_outbound')
+      .gte('occurred_at', since30d),
+    supabase
+      .from('activities')
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', orgId)
+      .in('activity_type', ['reply_received', 'email_inbound'])
+      .gte('occurred_at', since30d),
+    supabase
+      .from('activities')
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', orgId)
+      .in('activity_type', ['meeting_note', 'meeting_booked'])
+      .gte('occurred_at', monthStartIso),
+  ])
+
+  const weekResponseRate = (sentWeek ?? 0) > 0
+    ? Math.round(((repliesWeek ?? 0) / (sentWeek ?? 1)) * 100)
+    : 0
+  const monthResponseRate = (sent30 ?? 0) > 0
+    ? Math.round(((replies30 ?? 0) / (sent30 ?? 1)) * 100)
+    : 0
+  const meetingsTarget = 15
+  const meetingsCount = meetingsMonth ?? 0
+
+  const respComp = Math.max(0, Math.min(100, weekResponseRate))
+  const meetComp = Math.max(0, Math.min(100, (meetingsCount / meetingsTarget) * 100))
+  const velComp = Math.max(0, Math.min(100, 50 + (weekResponseRate - monthResponseRate) / 2))
+  const jordanScore = Math.max(
+    0,
+    Math.min(100, Math.round(respComp * 0.3 + meetComp * 0.5 + velComp * 0.2)),
+  )
+  const tier = Math.max(1, Math.min(10, Math.ceil(jordanScore / 10) || 1))
+  const tierLabel = jordanScore >= 85
+    ? 'Elite'
+    : jordanScore >= 70
+      ? 'Strong'
+      : jordanScore >= 55
+        ? 'Solid'
+        : jordanScore >= 40
+          ? 'Fair'
+          : jordanScore >= 20
+            ? 'Building'
+            : 'Dormant'
+  const yesterdayDelta = weekResponseRate - monthResponseRate // proxy — no persisted daily score yet
+  const deltaArrow = yesterdayDelta > 0 ? '↗' : yesterdayDelta < 0 ? '↘' : '→'
+  const deltaSign = yesterdayDelta > 0 ? '+' : ''
+  const deltaColor = yesterdayDelta > 0 ? MINT : yesterdayDelta < 0 ? '#ff7a7a' : INK_DARK_FAINT
+
+  // Meter rail: 8 cells, fill proportional to tier (on 10 scale -> 8 scale).
+  const meterFilled = Math.round((tier / 10) * 8)
+  const meterCells: string[] = []
+  for (let i = 0; i < 8; i++) {
+    const on = i < meterFilled
+    meterCells.push(
+      `<td width="11%" style="padding:0 1px;"><div style="height:6px;background:${on ? MINT : DARK_SEG};border-radius:1px;font-size:0;line-height:0;">&nbsp;</div></td>`,
+    )
+  }
+
   const dateStr = new Date().toLocaleDateString('en-AU', {
     weekday: 'long',
     day: 'numeric',
@@ -355,6 +451,50 @@ async function buildBriefingHtml(
               <div style="font-family:${FONT};font-size:13px;line-height:20px;color:${INK_MUTED};margin-top:2px;">
                 Good morning, ${escapeHtml(firstName)}. Here's what's waiting.
               </div>
+            </td>
+          </tr>
+
+          <!-- Phase F — Jordan Score dark hero card -->
+          <tr>
+            <td style="padding:16px 16px 0 16px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${INK_DARK};border-radius:12px;padding:0;">
+                <tr>
+                  <td style="padding:20px 22px 18px 22px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td style="font-family:${FONT};font-size:10px;line-height:14px;color:${INK_DARK_FAINT};text-transform:uppercase;letter-spacing:0.08em;font-weight:700;">
+                          Jordan Score · Today
+                        </td>
+                        <td align="right" style="font-family:${FONT};font-size:11px;line-height:16px;color:${deltaColor};font-weight:600;">
+                          ${deltaArrow} ${deltaSign}${yesterdayDelta}%
+                        </td>
+                      </tr>
+                      <tr>
+                        <td colspan="2" style="padding-top:10px;font-family:${FONT};font-size:13px;line-height:18px;color:${INK_DARK_FAINT};">
+                          ${escapeHtml(tierLabel)} · composite performance
+                        </td>
+                      </tr>
+                      <tr>
+                        <td colspan="2" style="padding-top:6px;">
+                          <span style="font-family:${FONT_MONO};font-variant-numeric:tabular-nums;font-size:44px;line-height:1;color:#ffffff;font-weight:700;letter-spacing:-0.01em;">${jordanScore}</span><span style="font-family:${FONT_MONO};font-variant-numeric:tabular-nums;font-size:18px;color:${INK_DARK_FAINT};font-weight:600;padding-left:4px;">/100</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td colspan="2" style="padding-top:14px;">
+                          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;">
+                            <tr>${meterCells.join('')}</tr>
+                          </table>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td colspan="2" style="padding-top:8px;font-family:${FONT};font-size:11px;line-height:16px;color:${INK_DARK_FAINT};text-transform:uppercase;letter-spacing:0.08em;">
+                          Tier ${tier} · ${meetingsCount}/${meetingsTarget} meetings · ${weekResponseRate}% reply rate
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
 

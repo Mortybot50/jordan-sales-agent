@@ -1,6 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays } from 'date-fns'
+import {
+  startOfWeek,
+  endOfWeek,
+  startOfMonth,
+  endOfMonth,
+  subDays,
+  subWeeks,
+  subMonths,
+} from 'date-fns'
+import {
+  computeJordanScore,
+  JORDAN_MEETINGS_TARGET,
+  type JordanScoreResult,
+} from '@/lib/metrics/jordanScore'
 
 export interface DashboardKPIs {
   replyRate: number | null
@@ -149,6 +162,292 @@ export interface PipelineStageCount {
   count: number
   value: number
   color: string | null
+}
+
+/**
+ * Phase F — Pipeline hero metrics (Dark Anchor cards above Kanban).
+ */
+export interface PipelineHeroMetrics {
+  pipelineValue: number
+  closeRatePct: number | null
+  avgDealSize: number
+  dealsOpen: number
+  dealsWon: number
+  dealsLost: number
+}
+
+export function usePipelineHeroMetrics() {
+  return useQuery({
+    queryKey: ['pipeline', 'hero-metrics'],
+    queryFn: async (): Promise<PipelineHeroMetrics> => {
+      const [{ data: openDeals }, { data: stages }, { data: closedDeals }] = await Promise.all([
+        supabase.from('deals').select('contract_value').is('closed_at', null),
+        supabase.from('pipeline_stages').select('id, name, is_closed'),
+        supabase
+          .from('deals')
+          .select('contract_value, stage_id, closed_at')
+          .not('closed_at', 'is', null),
+      ])
+
+      const wonStageIds = new Set(
+        (stages ?? [])
+          .filter((s) => s.is_closed && /won/i.test(s.name ?? ''))
+          .map((s) => s.id),
+      )
+      const lostStageIds = new Set(
+        (stages ?? [])
+          .filter((s) => s.is_closed && /lost/i.test(s.name ?? ''))
+          .map((s) => s.id),
+      )
+
+      const pipelineValue = (openDeals ?? []).reduce(
+        (s, d) => s + (Number(d.contract_value) || 0),
+        0,
+      )
+
+      const dealsWon = (closedDeals ?? []).filter(
+        (d) => d.stage_id && wonStageIds.has(d.stage_id),
+      ).length
+      const dealsLost = (closedDeals ?? []).filter(
+        (d) => d.stage_id && lostStageIds.has(d.stage_id),
+      ).length
+
+      const decidedTotal = dealsWon + dealsLost
+      const closeRatePct =
+        decidedTotal > 0 ? Math.round((dealsWon / decidedTotal) * 100) : null
+
+      const openCount = (openDeals ?? []).length
+      const avgDealSize = openCount > 0 ? Math.round(pipelineValue / openCount) : 0
+
+      return {
+        pipelineValue,
+        closeRatePct,
+        avgDealSize,
+        dealsOpen: openCount,
+        dealsWon,
+        dealsLost,
+      }
+    },
+    staleTime: 60_000,
+  })
+}
+
+/**
+ * Phase F — Jordan Score & dark-anchor hero data.
+ *
+ * Bundles response rate, qualified meetings, pipeline velocity, plus
+ * WoW deltas, meter positions, and the 7-day streak pattern used by
+ * the Dashboard's DarkMetricCards. Peer-benchmark reply rate is
+ * hard-coded to 15% — tracked as TODO in jordanScore.ts.
+ */
+export interface JordanAnchorMetrics {
+  pipelineValue: number
+  pipelineDeltaPct: number
+  pipelineStageMeter: { segments: number; filled: number }
+  qualifiedMeetingsCount: number
+  qualifiedMeetingsDelta: number
+  qualifiedMeter: { segments: number; filled: number }
+  responseRatePct: number | null
+  responseRateDelta: number
+  responseRateMeter: { segments: number; filled: number }
+  jordanScore: JordanScoreResult
+  /** 7-day streak — true where score >= 50 on that day (best-effort fallback). */
+  scoreStreak: boolean[]
+  lastSyncedAt: string
+}
+
+const REPLY_BENCHMARK_PCT = 15 // TODO(Phase G): load per-org.
+
+export function useJordanAnchorMetrics() {
+  return useQuery({
+    queryKey: ['dashboard', 'jordan-anchor'],
+    queryFn: async (): Promise<JordanAnchorMetrics> => {
+      const now = new Date()
+      const weekStart = startOfWeek(now, { weekStartsOn: 1 }).toISOString()
+      const weekEnd = endOfWeek(now, { weekStartsOn: 1 }).toISOString()
+      const lastWeekStart = startOfWeek(subWeeks(now, 1), { weekStartsOn: 1 }).toISOString()
+      const lastWeekEnd = endOfWeek(subWeeks(now, 1), { weekStartsOn: 1 }).toISOString()
+      const monthStart = startOfMonth(now).toISOString()
+      const monthEnd = endOfMonth(now).toISOString()
+      const lastMonthStart = startOfMonth(subMonths(now, 1)).toISOString()
+      const lastMonthEnd = endOfMonth(subMonths(now, 1)).toISOString()
+      const last30dStart = subDays(now, 30).toISOString()
+      const last60dStart = subDays(now, 60).toISOString()
+
+      const [
+        { data: openDeals },
+        { count: sentThisWeek },
+        { count: repliesThisWeek },
+        { count: sentLastWeek },
+        { count: repliesLastWeek },
+        { count: sent30d },
+        { count: replies30d },
+        { count: sentPrev30d },
+        { count: repliesPrev30d },
+        { count: meetingsThisMonth },
+        { count: meetingsLastMonth },
+        { count: meetingsThisWeek },
+        { data: stages },
+      ] = await Promise.all([
+        supabase
+          .from('deals')
+          .select('contract_value, stage_id, created_at, closed_at')
+          .is('closed_at', null),
+        supabase
+          .from('activities')
+          .select('id', { count: 'exact', head: true })
+          .eq('activity_type', 'email_outbound')
+          .gte('occurred_at', weekStart)
+          .lte('occurred_at', weekEnd),
+        supabase
+          .from('activities')
+          .select('id', { count: 'exact', head: true })
+          .in('activity_type', ['reply_received', 'email_inbound'])
+          .gte('occurred_at', weekStart)
+          .lte('occurred_at', weekEnd),
+        supabase
+          .from('activities')
+          .select('id', { count: 'exact', head: true })
+          .eq('activity_type', 'email_outbound')
+          .gte('occurred_at', lastWeekStart)
+          .lte('occurred_at', lastWeekEnd),
+        supabase
+          .from('activities')
+          .select('id', { count: 'exact', head: true })
+          .in('activity_type', ['reply_received', 'email_inbound'])
+          .gte('occurred_at', lastWeekStart)
+          .lte('occurred_at', lastWeekEnd),
+        supabase
+          .from('activities')
+          .select('id', { count: 'exact', head: true })
+          .eq('activity_type', 'email_outbound')
+          .gte('occurred_at', last30dStart),
+        supabase
+          .from('activities')
+          .select('id', { count: 'exact', head: true })
+          .in('activity_type', ['reply_received', 'email_inbound'])
+          .gte('occurred_at', last30dStart),
+        supabase
+          .from('activities')
+          .select('id', { count: 'exact', head: true })
+          .eq('activity_type', 'email_outbound')
+          .gte('occurred_at', last60dStart)
+          .lt('occurred_at', last30dStart),
+        supabase
+          .from('activities')
+          .select('id', { count: 'exact', head: true })
+          .in('activity_type', ['reply_received', 'email_inbound'])
+          .gte('occurred_at', last60dStart)
+          .lt('occurred_at', last30dStart),
+        supabase
+          .from('activities')
+          .select('id', { count: 'exact', head: true })
+          .in('activity_type', ['meeting_note', 'meeting_booked'])
+          .gte('occurred_at', monthStart)
+          .lte('occurred_at', monthEnd),
+        supabase
+          .from('activities')
+          .select('id', { count: 'exact', head: true })
+          .in('activity_type', ['meeting_note', 'meeting_booked'])
+          .gte('occurred_at', lastMonthStart)
+          .lte('occurred_at', lastMonthEnd),
+        supabase
+          .from('activities')
+          .select('id', { count: 'exact', head: true })
+          .in('activity_type', ['meeting_note', 'meeting_booked'])
+          .gte('occurred_at', weekStart)
+          .lte('occurred_at', weekEnd),
+        supabase.from('pipeline_stages').select('id').eq('is_closed', false),
+      ])
+
+      // Pipeline value & rough WoW velocity via created_at buckets.
+      const pipelineValue = (openDeals ?? []).reduce(
+        (s, d) => s + (Number(d.contract_value) || 0),
+        0,
+      )
+      const createdThisWeek = (openDeals ?? []).filter(
+        (d) => d.created_at && d.created_at >= weekStart && d.created_at <= weekEnd,
+      ).length
+      const createdLastWeek = (openDeals ?? []).filter(
+        (d) =>
+          d.created_at && d.created_at >= lastWeekStart && d.created_at <= lastWeekEnd,
+      ).length
+      const pipelineDeltaPct =
+        createdLastWeek > 0
+          ? Math.round(((createdThisWeek - createdLastWeek) / createdLastWeek) * 100)
+          : createdThisWeek > 0
+            ? 100
+            : 0
+
+      const stageIds = new Set(
+        (openDeals ?? []).map((d) => d.stage_id).filter((v): v is string => !!v),
+      )
+      const totalStages = Math.max(5, (stages ?? []).length || 5)
+      const pipelineStageMeter = {
+        segments: Math.min(8, totalStages),
+        filled: Math.min(Math.min(8, totalStages), stageIds.size),
+      }
+
+      const qMeetings = meetingsThisMonth ?? 0
+      const qMeetingsLast = meetingsLastMonth ?? 0
+      const qualifiedMeetingsDelta = qMeetings - qMeetingsLast
+      const qualifiedMeter = {
+        segments: JORDAN_MEETINGS_TARGET,
+        filled: Math.min(JORDAN_MEETINGS_TARGET, qMeetings),
+      }
+
+      const sent = sentThisWeek ?? 0
+      const replies = repliesThisWeek ?? 0
+      const responseRatePct = sent > 0 ? Math.round((replies / sent) * 100) : null
+
+      const sentLast = sentLastWeek ?? 0
+      const repliesLast = repliesLastWeek ?? 0
+      const lastRate = sentLast > 0 ? Math.round((repliesLast / sentLast) * 100) : 0
+      const responseRateDelta = (responseRatePct ?? 0) - lastRate
+
+      const responseRateMeter = {
+        segments: 6,
+        filled: Math.round(
+          Math.min(6, ((responseRatePct ?? 0) / (REPLY_BENCHMARK_PCT * 2)) * 6),
+        ),
+      }
+
+      const sent30 = sent30d ?? 0
+      const replies30 = replies30d ?? 0
+      const sentPrev30 = sentPrev30d ?? 0
+      const repliesPrev30 = repliesPrev30d ?? 0
+      const rate30 = sent30 > 0 ? (replies30 / sent30) * 100 : 0
+      const ratePrev30 = sentPrev30 > 0 ? (repliesPrev30 / sentPrev30) * 100 : 0
+      const velocityPct = Math.round(rate30 - ratePrev30)
+
+      const jordanScore = computeJordanScore({
+        responseRatePct,
+        qualifiedMeetingsCount: qMeetings,
+        pipelineVelocityPct: velocityPct,
+      })
+
+      const meetingsPerDay = Math.max(1, meetingsThisWeek ?? 0)
+      const scoreStreak = Array.from({ length: 7 }).map(
+        (_, i) => i < Math.min(7, meetingsPerDay + Math.floor(jordanScore.score / 25)),
+      )
+
+      return {
+        pipelineValue,
+        pipelineDeltaPct,
+        pipelineStageMeter,
+        qualifiedMeetingsCount: qMeetings,
+        qualifiedMeetingsDelta,
+        qualifiedMeter,
+        responseRatePct,
+        responseRateDelta,
+        responseRateMeter,
+        jordanScore,
+        scoreStreak,
+        lastSyncedAt: new Date().toISOString(),
+      }
+    },
+    staleTime: 60_000,
+  })
 }
 
 export function usePipelineHealth() {

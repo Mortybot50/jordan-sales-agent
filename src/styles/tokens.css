@@ -21,7 +21,8 @@
 
 :root {
   /* ── Neutrals (slate scale) ─────────────────────────────────── */
-  --jordan-ink:            #0f172a;   /* primary text                */
+  --jordan-ink:            #0f1113;   /* primary text / dark cards   */
+  --jordan-ink-soft:       #1a1d21;   /* dark card alt / inner       */
   --jordan-ink-muted:      #334155;   /* secondary text              */
   --jordan-ink-subtle:     #475569;   /* tertiary                    */
   --jordan-ink-faint:      #64748b;   /* labels                      */
@@ -32,12 +33,28 @@
   --jordan-surface-3:      #f8fafc;   /* row hover                   */
   --jordan-surface-4:      #f1f5f9;   /* active row, filter chip     */
   --jordan-canvas:         #ffffff;   /* page background             */
+  --jordan-surface-bg:     #f4f5f6;   /* Phase F warm base bg        */
 
   /* ── Accent — one and only ──────────────────────────────────── */
   --jordan-accent:         #2563eb;
   --jordan-accent-hover:   #1e40af;
   --jordan-accent-soft:    #eff6ff;
   --jordan-accent-ring:    rgba(37, 99, 235, 0.25);
+
+  /* ── Phase F — "Dark Anchor" accents ────────────────────────── */
+  /* Rule: mint + blue NEVER co-occur on the same element.
+   *   blue  = interactive / brand (buttons, focus, links)
+   *   mint  = data-positive only (active, up-delta, live)
+   * Rule: dark cards = hero metrics ONLY (max 4 per screen). Light
+   *   cards = everything else. Mixing dark-on-light is the signature
+   *   move — treat dark as a focal mechanism, not a palette choice. */
+  --jordan-accent-mint:    #2dd47c;   /* positive / active / live   */
+  --jordan-accent-mint-soft: #e8fbf0;
+  --jordan-delta-up:       #10b981;
+  --jordan-delta-down:     #ef4444;
+  --jordan-dark-border:    rgba(255, 255, 255, 0.08);
+  --jordan-dark-muted:     rgba(255, 255, 255, 0.55);
+  --jordan-dark-faint:     rgba(255, 255, 255, 0.35);
 
   /* ── Semantic tones ─────────────────────────────────────────── */
   --jordan-hot:            #ef4444;

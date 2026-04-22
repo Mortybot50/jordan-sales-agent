@@ -13,40 +13,103 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
+import { CapsLabel, LivePill, MeterRail } from '@/components/primitives'
+import { useJordanAnchorMetrics } from '@/lib/queries/dashboard'
+import { JORDAN_MEETINGS_TARGET } from '@/lib/metrics/jordanScore'
 import { cn } from '@/lib/utils'
 
-const NAV_ITEMS = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/pipeline', label: 'Pipeline', icon: KanbanSquare },
-  { to: '/contacts', label: 'Contacts', icon: Users },
-  { to: '/drafts', label: 'Draft Queue', icon: Mail },
-  { to: '/briefing', label: 'Briefing', icon: Sun },
-  { to: '/settings', label: 'Settings', icon: Settings },
+interface NavItem {
+  to: string
+  label: string
+  icon: typeof LayoutDashboard
+}
+
+const NAV_SECTIONS: { id: string; label: string; items: NavItem[] }[] = [
+  {
+    id: 'sales',
+    label: 'Sales',
+    items: [
+      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { to: '/pipeline', label: 'Pipeline', icon: KanbanSquare },
+      { to: '/briefing', label: 'Briefing', icon: Sun },
+    ],
+  },
+  {
+    id: 'leads',
+    label: 'Leads',
+    items: [
+      { to: '/contacts', label: 'Contacts', icon: Users },
+      { to: '/drafts', label: 'Draft Queue', icon: Mail },
+    ],
+  },
+  {
+    id: 'settings',
+    label: 'Settings',
+    items: [{ to: '/settings', label: 'Settings', icon: Settings }],
+  },
 ]
 
 function NavItems({ onNavigate }: { onNavigate?: () => void }) {
   return (
-    <nav className="flex-1 p-3 space-y-1">
-      {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
-        <NavLink
-          key={to}
-          to={to}
-          onClick={onNavigate}
-          className={({ isActive }) =>
-            cn(
-              'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors',
-              isActive
-                ? 'bg-primary text-primary-foreground font-medium'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-            )
-          }
-        >
-          <Icon className="size-4 shrink-0" />
-          {label}
-        </NavLink>
+    <nav className="flex-1 overflow-y-auto px-3 pb-3 space-y-5">
+      {NAV_SECTIONS.map((section) => (
+        <div key={section.id} className="space-y-1">
+          <CapsLabel className="px-3 text-[9px] tracking-[0.12em]">
+            {section.label}
+          </CapsLabel>
+          <div className="space-y-0.5">
+            {section.items.map(({ to, label, icon: Icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                onClick={onNavigate}
+                className={({ isActive }) =>
+                  cn(
+                    'flex items-center gap-2.5 px-3 py-2 rounded-[6px] text-sm transition-colors',
+                    isActive
+                      ? 'bg-[color:var(--jordan-accent-soft)] text-[color:var(--jordan-accent-hover)] font-medium'
+                      : 'text-ink-muted hover:text-ink hover:bg-surface-3',
+                  )
+                }
+              >
+                <Icon className="size-4 shrink-0" />
+                <span>{label}</span>
+              </NavLink>
+            ))}
+          </div>
+        </div>
       ))}
     </nav>
+  )
+}
+
+function TargetWidget() {
+  const { data, isLoading } = useJordanAnchorMetrics()
+  const filled = Math.min(JORDAN_MEETINGS_TARGET, data?.qualifiedMeetingsCount ?? 0)
+
+  return (
+    <div className="mx-3 rounded-[10px] bg-[color:var(--jordan-ink)] text-white p-4 flex flex-col gap-3 border border-[color:var(--jordan-dark-border)]">
+      <div className="flex items-start justify-between gap-2">
+        <CapsLabel tone="onDark" className="text-[color:var(--jordan-dark-faint)]">
+          This week's target
+        </CapsLabel>
+        {filled > 0 && <LivePill label="Active" tone="onDark" />}
+      </div>
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-[22px] leading-none font-semibold jordan-tnum">
+          {isLoading ? '—' : filled}
+        </span>
+        <span className="text-[13px] text-[color:var(--jordan-dark-muted)] jordan-tnum">
+          / {JORDAN_MEETINGS_TARGET} meetings
+        </span>
+      </div>
+      <MeterRail
+        segments={JORDAN_MEETINGS_TARGET}
+        filled={filled}
+        tone="mint"
+        ariaLabel="Weekly qualified meetings progress"
+      />
+    </div>
   )
 }
 
@@ -61,15 +124,20 @@ export function AppShell() {
     <>
       <div className="p-4">
         <h1 className="text-lg font-semibold tracking-tight">LeadFlow</h1>
-        <p className="text-xs text-muted-foreground">Jordan's Sales Agent</p>
+        <p className="text-[11px] text-ink-faint">Jordan's Sales Agent</p>
       </div>
-      <Separator />
+
+      <div className="pb-4">
+        <TargetWidget />
+      </div>
+
       <NavItems onNavigate={() => setMobileOpen(false)} />
-      <div className="p-3 border-t">
+
+      <div className="p-3 border-t border-hairline">
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
-          className="w-full justify-start gap-2.5"
+          className="w-full justify-center gap-2 rounded-full h-9 border-hairline text-ink-muted hover:text-ink hover:bg-surface-3"
           onClick={handleSignOut}
         >
           <LogOut className="size-4" />
@@ -80,9 +148,9 @@ export function AppShell() {
   )
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex bg-[color:var(--jordan-surface-bg)]">
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex w-56 shrink-0 border-r bg-sidebar flex-col">
+      <aside className="hidden lg:flex w-60 shrink-0 border-r border-hairline bg-surface-1 flex-col">
         <SidebarContent />
       </aside>
 
@@ -97,30 +165,31 @@ export function AppShell() {
       {/* Mobile sidebar drawer */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-64 bg-sidebar border-r flex flex-col transition-transform duration-200 lg:hidden',
-          mobileOpen ? 'translate-x-0' : '-translate-x-full'
+          'fixed inset-y-0 left-0 z-50 w-64 bg-surface-1 border-r border-hairline flex flex-col transition-transform duration-150 lg:hidden',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
         <div className="flex items-center justify-between p-4">
           <div>
             <h1 className="text-lg font-semibold tracking-tight">LeadFlow</h1>
-            <p className="text-xs text-muted-foreground">Jordan's Sales Agent</p>
+            <p className="text-[11px] text-ink-faint">Jordan's Sales Agent</p>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setMobileOpen(false)}
-          >
+          <Button variant="ghost" size="icon" onClick={() => setMobileOpen(false)}>
             <X className="size-4" />
           </Button>
         </div>
-        <Separator />
+
+        <div className="pb-4">
+          <TargetWidget />
+        </div>
+
         <NavItems onNavigate={() => setMobileOpen(false)} />
-        <div className="p-3 border-t">
+
+        <div className="p-3 border-t border-hairline">
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
-            className="w-full justify-start gap-2.5"
+            className="w-full justify-center gap-2 rounded-full h-9 border-hairline text-ink-muted hover:text-ink hover:bg-surface-3"
             onClick={handleSignOut}
           >
             <LogOut className="size-4" />
@@ -132,12 +201,8 @@ export function AppShell() {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile top bar */}
-        <header className="lg:hidden flex items-center gap-3 px-4 h-14 border-b bg-background shrink-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setMobileOpen(true)}
-          >
+        <header className="lg:hidden flex items-center gap-3 px-4 h-14 border-b border-hairline bg-surface-1 shrink-0">
+          <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)}>
             <Menu className="size-5" />
           </Button>
           <span className="font-semibold text-sm">LeadFlow</span>
