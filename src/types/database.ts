@@ -22,10 +22,12 @@ export type Database = {
           contact_id: string | null
           created_at: string | null
           deal_id: string | null
+          external_message_id: string | null
           id: string
           metadata: Json | null
           occurred_at: string | null
           org_id: string
+          raw_headers: Json | null
           subject: string | null
         }
         Insert: {
@@ -35,10 +37,12 @@ export type Database = {
           contact_id?: string | null
           created_at?: string | null
           deal_id?: string | null
+          external_message_id?: string | null
           id?: string
           metadata?: Json | null
           occurred_at?: string | null
           org_id: string
+          raw_headers?: Json | null
           subject?: string | null
         }
         Update: {
@@ -48,10 +52,12 @@ export type Database = {
           contact_id?: string | null
           created_at?: string | null
           deal_id?: string | null
+          external_message_id?: string | null
           id?: string
           metadata?: Json | null
           occurred_at?: string | null
           org_id?: string
+          raw_headers?: Json | null
           subject?: string | null
         }
         Relationships: [
@@ -133,36 +139,52 @@ export type Database = {
       }
       calendly_events: {
         Row: {
+          contact_id: string | null
           deal_id: string | null
+          event_name: string | null
           event_start: string | null
           event_type: string | null
           id: string
           invitee_email: string | null
+          invitee_name: string | null
           org_id: string
           raw_payload: Json | null
           received_at: string | null
         }
         Insert: {
+          contact_id?: string | null
           deal_id?: string | null
+          event_name?: string | null
           event_start?: string | null
           event_type?: string | null
           id?: string
           invitee_email?: string | null
+          invitee_name?: string | null
           org_id: string
           raw_payload?: Json | null
           received_at?: string | null
         }
         Update: {
+          contact_id?: string | null
           deal_id?: string | null
+          event_name?: string | null
           event_start?: string | null
           event_type?: string | null
           id?: string
           invitee_email?: string | null
+          invitee_name?: string | null
           org_id?: string
           raw_payload?: Json | null
           received_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "calendly_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "calendly_events_deal_id_fkey"
             columns: ["deal_id"]
@@ -369,42 +391,54 @@ export type Database = {
       }
       email_drafts: {
         Row: {
+          approved_at: string | null
           body: string | null
           contact_id: string | null
+          context_json: Json | null
           created_at: string | null
+          created_by: string | null
           deal_id: string | null
           draft_type: string
+          generated_at: string | null
           id: string
+          model: string | null
           org_id: string
-          prompt_context: Json | null
           sendgrid_msg_id: string | null
           sent_at: string | null
           status: string | null
           subject: string | null
         }
         Insert: {
+          approved_at?: string | null
           body?: string | null
           contact_id?: string | null
+          context_json?: Json | null
           created_at?: string | null
+          created_by?: string | null
           deal_id?: string | null
           draft_type: string
+          generated_at?: string | null
           id?: string
+          model?: string | null
           org_id: string
-          prompt_context?: Json | null
           sendgrid_msg_id?: string | null
           sent_at?: string | null
           status?: string | null
           subject?: string | null
         }
         Update: {
+          approved_at?: string | null
           body?: string | null
           contact_id?: string | null
+          context_json?: Json | null
           created_at?: string | null
+          created_by?: string | null
           deal_id?: string | null
           draft_type?: string
+          generated_at?: string | null
           id?: string
+          model?: string | null
           org_id?: string
-          prompt_context?: Json | null
           sendgrid_msg_id?: string | null
           sent_at?: string | null
           status?: string | null
@@ -427,6 +461,56 @@ export type Database = {
           },
           {
             foreignKeyName: "email_drafts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gmail_connections: {
+        Row: {
+          access_token_encrypted: string | null
+          access_token_expires_at: string | null
+          created_at: string | null
+          email: string
+          history_id: string | null
+          id: string
+          org_id: string
+          refresh_token_encrypted: string | null
+          updated_at: string | null
+          user_id: string
+          watch_expires_at: string | null
+        }
+        Insert: {
+          access_token_encrypted?: string | null
+          access_token_expires_at?: string | null
+          created_at?: string | null
+          email: string
+          history_id?: string | null
+          id?: string
+          org_id: string
+          refresh_token_encrypted?: string | null
+          updated_at?: string | null
+          user_id: string
+          watch_expires_at?: string | null
+        }
+        Update: {
+          access_token_encrypted?: string | null
+          access_token_expires_at?: string | null
+          created_at?: string | null
+          email?: string
+          history_id?: string | null
+          id?: string
+          org_id?: string
+          refresh_token_encrypted?: string | null
+          updated_at?: string | null
+          user_id?: string
+          watch_expires_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gmail_connections_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
@@ -868,37 +952,46 @@ export type Database = {
       }
       users: {
         Row: {
+          calendly_token_encrypted: string | null
           calendly_url: string | null
           created_at: string | null
           email: string | null
+          email_notifications: Json
           email_signature: string | null
           full_name: string | null
           icp_config: Json | null
           id: string
           org_id: string
           role: string | null
+          voice_rules: string | null
         }
         Insert: {
+          calendly_token_encrypted?: string | null
           calendly_url?: string | null
           created_at?: string | null
           email?: string | null
+          email_notifications?: Json
           email_signature?: string | null
           full_name?: string | null
           icp_config?: Json | null
           id: string
           org_id: string
           role?: string | null
+          voice_rules?: string | null
         }
         Update: {
+          calendly_token_encrypted?: string | null
           calendly_url?: string | null
           created_at?: string | null
           email?: string | null
+          email_notifications?: Json
           email_signature?: string | null
           full_name?: string | null
           icp_config?: Json | null
           id?: string
           org_id?: string
           role?: string | null
+          voice_rules?: string | null
         }
         Relationships: [
           {
@@ -913,6 +1006,7 @@ export type Database = {
       venues: {
         Row: {
           address: string | null
+          avg_spend_tier: string | null
           competitor_water_usage: string | null
           cover_count: number | null
           created_at: string | null
@@ -921,8 +1015,10 @@ export type Database = {
           id: string
           is_excluded: boolean | null
           kitchen_type: string | null
+          licence_type: string | null
           licensing_status: string | null
           name: string
+          neighbourhood: string | null
           notes: string | null
           org_id: string
           phone: string | null
@@ -939,6 +1035,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          avg_spend_tier?: string | null
           competitor_water_usage?: string | null
           cover_count?: number | null
           created_at?: string | null
@@ -947,8 +1044,10 @@ export type Database = {
           id?: string
           is_excluded?: boolean | null
           kitchen_type?: string | null
+          licence_type?: string | null
           licensing_status?: string | null
           name: string
+          neighbourhood?: string | null
           notes?: string | null
           org_id: string
           phone?: string | null
@@ -965,6 +1064,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          avg_spend_tier?: string | null
           competitor_water_usage?: string | null
           cover_count?: number | null
           created_at?: string | null
@@ -973,8 +1073,10 @@ export type Database = {
           id?: string
           is_excluded?: boolean | null
           kitchen_type?: string | null
+          licence_type?: string | null
           licensing_status?: string | null
           name?: string
+          neighbourhood?: string | null
           notes?: string | null
           org_id?: string
           phone?: string | null
@@ -1049,6 +1151,7 @@ export type Database = {
     }
     Functions: {
       auth_org_id: { Args: never; Returns: string }
+      compute_lead_score: { Args: { p_contact_id: string }; Returns: number }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
     }
     Enums: {

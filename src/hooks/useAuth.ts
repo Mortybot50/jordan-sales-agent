@@ -10,6 +10,7 @@ export interface AppUser {
   role: string
   calendly_url: string | null
   email_signature: string | null
+  voice_rules: string | null
   icp_config: Record<string, unknown>
   email_notifications: { morning_briefing: boolean; briefing_time_hour: number }
 }
@@ -23,7 +24,7 @@ interface AuthState {
 async function fetchUserProfile(userId: string): Promise<AppUser | null> {
   const { data, error } = await supabase
     .from('users')
-    .select('id, org_id, full_name, email, role, calendly_url, email_signature, icp_config, email_notifications')
+    .select('id, org_id, full_name, email, role, calendly_url, email_signature, voice_rules, icp_config, email_notifications')
     .eq('id', userId)
     .maybeSingle()
 
@@ -38,6 +39,7 @@ async function fetchUserProfile(userId: string): Promise<AppUser | null> {
     role: (d.role as string | null) ?? 'member',
     calendly_url: d.calendly_url as string | null,
     email_signature: d.email_signature as string | null,
+    voice_rules: d.voice_rules as string | null,
     icp_config: ((d.icp_config ?? {}) as Record<string, unknown>),
     email_notifications: ((d.email_notifications ?? { morning_briefing: true, briefing_time_hour: 7 }) as { morning_briefing: boolean; briefing_time_hour: number }),
   }

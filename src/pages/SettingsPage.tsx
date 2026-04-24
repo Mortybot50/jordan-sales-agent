@@ -177,6 +177,45 @@ function ProfileTab() {
   )
 }
 
+// --- Voice & Style Rules ---
+function VoiceRulesSection() {
+  const { user } = useAuth()
+  const updateProfile = useUpdateUserProfile()
+  const [value, setValue] = useState(user?.voice_rules ?? '')
+
+  useEffect(() => {
+    setValue(user?.voice_rules ?? '')
+  }, [user?.voice_rules])
+
+  async function handleSave() {
+    if (!user) return
+    await updateProfile.mutateAsync({
+      id: user.id,
+      voice_rules: value.trim() === '' ? null : value,
+    })
+  }
+
+  return (
+    <div className="space-y-3 max-w-lg">
+      <p className="text-xs text-muted-foreground">
+        Rules injected into every AI draft. Use plain English bullets. Examples:
+        "Never use specific times like 1:48pm", "Stay under 80 words for cold outreach".
+        Leave blank to use Jordan's default voice only.
+      </p>
+      <Textarea
+        rows={8}
+        className="font-mono text-xs"
+        placeholder={'- Never use oddly specific times like "1:48pm"\n- Stay under 80 words for cold outreach'}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+      />
+      <Button type="button" onClick={handleSave} disabled={updateProfile.isPending}>
+        {updateProfile.isPending ? 'Saving…' : 'Save voice rules'}
+      </Button>
+    </div>
+  )
+}
+
 // --- Pipeline Stages Tab ---
 function PipelineStagesTab() {
   const { user } = useAuth()
@@ -857,13 +896,22 @@ export function SettingsPage() {
           <TabsTrigger value="suppression">Suppression</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="profile">
+        <TabsContent value="profile" className="space-y-4">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Your Profile</CardTitle>
             </CardHeader>
             <CardContent>
               <ProfileTab />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Voice & Style Rules</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <VoiceRulesSection />
             </CardContent>
           </Card>
         </TabsContent>
