@@ -9,6 +9,7 @@ import {
 } from '@/components/primitives'
 import { DraftQueueRow } from '@/components/drafts/DraftQueueRow'
 import { DraftPreviewPane } from '@/components/drafts/DraftPreviewPane'
+import { LearningBanner } from '@/components/drafts/LearningBanner'
 import { useDrafts, useApproveDraft } from '@/lib/queries/drafts'
 
 /**
@@ -192,6 +193,9 @@ export function DraftsPage() {
           }
         />
       </div>
+
+      {/* Learning Loop banner — renders only when a pending digest exists */}
+      <LearningBanner digestIdFromUrl={searchParams.get('learning')} />
 
       {/* Mobile kbd summary */}
       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 px-4 text-[11px] text-ink-faint md:hidden sm:px-6">

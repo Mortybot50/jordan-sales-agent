@@ -72,10 +72,31 @@ export function useApproveDraft() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
+      // Learning Loop — read current vs original to capture the edit delta.
+      // Approve is the "sent" signal in this app today; if Jordan changed
+      // subject or body before approving, record the diff for weekly analysis.
+      const { data: current } = await supabase
+        .from('email_drafts')
+        .select('subject, body, original_subject, original_body')
+        .eq('id', id)
+        .single()
+
+      const now = new Date().toISOString()
+      const subjectChanged = !!current && current.subject !== current.original_subject
+      const bodyChanged = !!current && current.body !== current.original_body
+
+      const updates: Record<string, unknown> = {
+        status: 'approved',
+        approved_at: now,
+        edit_logged_at: now,
+      }
+      if (subjectChanged) updates.edited_subject = current?.subject ?? null
+      if (bodyChanged) updates.edited_body = current?.body ?? null
+
       const { error } = await supabase
         .from('email_drafts')
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .update({ status: 'approved', approved_at: new Date().toISOString() } as any)
+        .update(updates as any)
         .eq('id', id)
       if (error) throw error
     },
