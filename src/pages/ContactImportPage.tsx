@@ -17,7 +17,13 @@ import { useCreateVenue } from '@/lib/queries/venues'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { getSuppressionSet, isSuppressed } from '@/lib/suppression'
-import { ArrowLeft, Upload, FileText, CheckCircle, AlertCircle } from 'lucide-react'
+import {
+  evaluateBatch,
+  HYGIENE_FLAG_LABEL,
+  type HygieneSummary,
+  type HygieneVerdict,
+} from '@/lib/emailHygiene'
+import { ArrowLeft, Upload, FileText, CheckCircle, AlertCircle, ShieldCheck, Info } from 'lucide-react'
 
 const EXPECTED_FIELDS = [
   { key: 'first_name', label: 'First Name', required: true },
@@ -32,12 +38,13 @@ const EXPECTED_FIELDS = [
   { key: 'venue_cover_count', label: 'Venue Cover Count', required: false },
 ]
 
-type Step = 'upload' | 'map' | 'importing' | 'done'
+type Step = 'upload' | 'map' | 'hygiene' | 'importing' | 'done'
 
 interface ImportResult {
   imported: number
   skipped: number
   suppressed: number
+  excluded: number
   errors: string[]
 }
 
@@ -74,6 +81,24 @@ export function ContactImportPage() {
   const [result, setResult] = useState<ImportResult | null>(null)
   const [fileName, setFileName] = useState('')
 
+  // Hygiene step state
+  const [hygieneLoading, setHygieneLoading] = useState(false)
+  const [hygieneVerdicts, setHygieneVerdicts] = useState<Map<number, HygieneVerdict>>(
+    new Map(),
+  )
+  const [hygieneSummary, setHygieneSummary] = useState<HygieneSummary | null>(null)
+  const [excludeSuspicious, setExcludeSuspicious] = useState(true)
+  // Row indexes that hygiene would exclude when toggle is ON.
+  // Rows with no email at all are ignored here — they're still imported (email is optional).
+  const excludedRowIndexes = (() => {
+    const set = new Set<number>()
+    if (!excludeSuspicious) return set
+    hygieneVerdicts.forEach((v, idx) => {
+      if (v.suspicious) set.add(idx)
+    })
+    return set
+  })()
+
   function parseFile(file: File) {
     setFileName(file.name)
     Papa.parse<Record<string, string>>(file, {
@@ -107,6 +132,35 @@ export function ContactImportPage() {
     return col ? (row[col] ?? '').trim() : ''
   }
 
+  async function runHygiene() {
+    setStep('hygiene')
+    setHygieneLoading(true)
+    setHygieneSummary(null)
+    setHygieneVerdicts(new Map())
+
+    const emailCol = columnMapping['email']
+    const indexedEmails: Array<{ idx: number; email: string }> = []
+    if (emailCol) {
+      allRows.forEach((row, idx) => {
+        const e = (row[emailCol] ?? '').trim()
+        if (e) indexedEmails.push({ idx, email: e })
+      })
+    }
+
+    const { verdicts, summary } = await evaluateBatch(
+      indexedEmails.map((e) => e.email),
+      { concurrency: 20 },
+    )
+
+    const map = new Map<number, HygieneVerdict>()
+    indexedEmails.forEach((entry, i) => {
+      map.set(entry.idx, verdicts[i])
+    })
+    setHygieneVerdicts(map)
+    setHygieneSummary(summary)
+    setHygieneLoading(false)
+  }
+
   async function runImport() {
     if (!user) return
     setStep('importing')
@@ -115,6 +169,7 @@ export function ContactImportPage() {
     const imported = { count: 0 }
     const skipped = { count: 0 }
     const suppressed = { count: 0 }
+    const excluded = { count: 0 }
     const errors: string[] = []
     const venueCache: Record<string, string> = {}
 
@@ -132,6 +187,12 @@ export function ContactImportPage() {
 
       if (!firstName || !lastName) {
         skipped.count++
+        setProgress(Math.round(((i + 1) / allRows.length) * 100))
+        continue
+      }
+
+      if (excludedRowIndexes.has(i)) {
+        excluded.count++
         setProgress(Math.round(((i + 1) / allRows.length) * 100))
         continue
       }
@@ -204,6 +265,7 @@ export function ContactImportPage() {
       imported: imported.count,
       skipped: skipped.count,
       suppressed: suppressed.count,
+      excluded: excluded.count,
       errors,
     })
     setStep('done')
@@ -229,27 +291,30 @@ export function ContactImportPage() {
 
       {/* Step indicator */}
       <div className="flex items-center gap-2 text-xs">
-        {(['upload', 'map', 'importing', 'done'] as Step[]).map((s, idx) => (
-          <div key={s} className="flex items-center gap-2">
-            {idx > 0 && <div className="w-6 h-px bg-border" />}
-            <div
-              className={`flex items-center gap-1 ${
-                step === s
-                  ? 'text-primary font-medium'
-                  : ['done', 'importing'].includes(step) && idx < ['upload', 'map', 'importing', 'done'].indexOf(step)
-                  ? 'text-muted-foreground'
-                  : 'text-muted-foreground'
-              }`}
-            >
-              <span className={`w-5 h-5 rounded-full text-xs flex items-center justify-center ${
-                step === s ? 'bg-primary text-primary-foreground' : 'bg-muted'
-              }`}>
-                {idx + 1}
-              </span>
-              <span className="capitalize">{s}</span>
+        {(['upload', 'map', 'hygiene', 'importing', 'done'] as Step[]).map((s, idx) => {
+          const order: Step[] = ['upload', 'map', 'hygiene', 'importing', 'done']
+          return (
+            <div key={s} className="flex items-center gap-2">
+              {idx > 0 && <div className="w-6 h-px bg-border" />}
+              <div
+                className={`flex items-center gap-1 ${
+                  step === s
+                    ? 'text-primary font-medium'
+                    : idx < order.indexOf(step)
+                    ? 'text-muted-foreground'
+                    : 'text-muted-foreground'
+                }`}
+              >
+                <span className={`w-5 h-5 rounded-full text-xs flex items-center justify-center ${
+                  step === s ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                }`}>
+                  {idx + 1}
+                </span>
+                <span className="capitalize">{s}</span>
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Step 1: Upload */}
@@ -393,14 +458,182 @@ export function ContactImportPage() {
             >
               Back
             </Button>
-            <Button onClick={runImport} className="flex-1">
-              Start import ({allRows.length} rows)
+            <Button onClick={runHygiene} className="flex-1">
+              Check & continue ({allRows.length} rows)
             </Button>
           </div>
         </div>
       )}
 
-      {/* Step 3: Importing */}
+      {/* Step 3: Hygiene */}
+      {step === 'hygiene' && (
+        <div className="space-y-5">
+          <div className="flex items-center gap-2 text-sm">
+            <ShieldCheck className="w-4 h-4 text-muted-foreground" />
+            <span className="font-medium">Email hygiene check</span>
+            <Badge variant="outline">{allRows.length} rows</Badge>
+          </div>
+
+          {/* NeverBounce stub banner */}
+          <div className="flex items-start gap-2 rounded-md border border-dashed border-border bg-muted/40 p-3">
+            <Info className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
+            <div className="text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">
+                Deeper verification coming Week 6.
+              </span>{' '}
+              Today's check uses regex + MX DNS lookup + role/freemail detection.
+              NeverBounce-style per-address SMTP probing ships with the paid plan.
+            </div>
+          </div>
+
+          {hygieneLoading ? (
+            <div className="space-y-3 py-6">
+              <div className="w-8 h-8 rounded-full border-[3px] border-primary border-t-transparent animate-spin mx-auto" />
+              <p className="text-xs text-center text-muted-foreground">
+                Validating emails & looking up MX records…
+              </p>
+            </div>
+          ) : hygieneSummary ? (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <Card>
+                  <CardContent className="pt-4 pb-3 text-center">
+                    <p className="text-2xl font-bold">{hygieneSummary.total}</p>
+                    <p className="text-xs text-muted-foreground">Emails checked</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4 pb-3 text-center">
+                    <p className="text-2xl font-bold text-green-600">
+                      {hygieneSummary.valid}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Clean</p>
+                  </CardContent>
+                </Card>
+                <Card title="Couldn't be parsed as an email">
+                  <CardContent className="pt-4 pb-3 text-center">
+                    <p className="text-2xl font-bold text-destructive">
+                      {hygieneSummary.invalid}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Invalid</p>
+                  </CardContent>
+                </Card>
+                <Card title="Shared mailboxes (info@, sales@, noreply@…) — poor cold-outreach performance">
+                  <CardContent className="pt-4 pb-3 text-center">
+                    <p className="text-2xl font-bold text-amber-600">
+                      {hygieneSummary.role}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Role</p>
+                  </CardContent>
+                </Card>
+                <Card title="Personal addresses (gmail.com, yahoo.com…) — rarely decision-makers for hospitality venues">
+                  <CardContent className="pt-4 pb-3 text-center">
+                    <p className="text-2xl font-bold text-amber-600">
+                      {hygieneSummary.freemail}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Freemail</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardContent className="pt-4 pb-4 flex items-start justify-between gap-4">
+                  <div className="text-sm">
+                    <label className="font-medium flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={excludeSuspicious}
+                        onChange={(e) => setExcludeSuspicious(e.target.checked)}
+                        className="w-4 h-4"
+                      />
+                      Exclude invalid / suspicious rows
+                    </label>
+                    <p className="text-xs text-muted-foreground mt-1 ml-6">
+                      Excludes rows flagged invalid_format, role_address, freemail, or no_mx.
+                      Rows with no email at all are unaffected.
+                    </p>
+                  </div>
+                  <div className="text-right text-xs text-muted-foreground shrink-0">
+                    <div className="font-medium text-foreground">
+                      {excludedRowIndexes.size} would be excluded
+                    </div>
+                    <div>
+                      {allRows.length - excludedRowIndexes.size} will import
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Per-row suspicious detail (cap at 50 for UI) */}
+              {hygieneSummary.valid < hygieneSummary.total && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">
+                      Flagged rows ({hygieneSummary.total - hygieneSummary.valid})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left px-3 py-2 font-medium text-muted-foreground">
+                              Row
+                            </th>
+                            <th className="text-left px-3 py-2 font-medium text-muted-foreground">
+                              Email
+                            </th>
+                            <th className="text-left px-3 py-2 font-medium text-muted-foreground">
+                              Flags
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Array.from(hygieneVerdicts.entries())
+                            .filter(([, v]) => v.suspicious || v.flags.includes('mx_lookup_failed'))
+                            .slice(0, 50)
+                            .map(([idx, v]) => (
+                              <tr key={idx} className="border-b last:border-0">
+                                <td className="px-3 py-1.5 text-muted-foreground">
+                                  {idx + 1}
+                                </td>
+                                <td className="px-3 py-1.5 font-mono">{v.normalised}</td>
+                                <td className="px-3 py-1.5">
+                                  <div className="flex flex-wrap gap-1">
+                                    {v.flags.map((f) => (
+                                      <Badge
+                                        key={f}
+                                        variant="outline"
+                                        className="text-[10px] font-normal"
+                                      >
+                                        {HYGIENE_FLAG_LABEL[f]}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={() => setStep('map')}>
+                  Back
+                </Button>
+                <Button onClick={runImport} className="flex-1">
+                  Start import ({allRows.length - excludedRowIndexes.size} rows)
+                </Button>
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
+
+      {/* Step 4: Importing */}
       {step === 'importing' && (
         <div className="space-y-4 py-8">
           <div className="text-center space-y-2">
@@ -420,17 +653,23 @@ export function ContactImportPage() {
             <h2 className="text-lg font-semibold">Import complete</h2>
           </div>
 
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <Card>
               <CardContent className="pt-4 pb-3 text-center">
                 <p className="text-2xl font-bold text-green-600">{result.imported}</p>
                 <p className="text-xs text-muted-foreground">Imported</p>
               </CardContent>
             </Card>
-            <Card>
+            <Card title="Missing required fields (first/last name)">
               <CardContent className="pt-4 pb-3 text-center">
                 <p className="text-2xl font-bold text-amber-600">{result.skipped}</p>
                 <p className="text-xs text-muted-foreground">Skipped</p>
+              </CardContent>
+            </Card>
+            <Card title="Excluded by hygiene check (invalid / role / freemail / no MX)">
+              <CardContent className="pt-4 pb-3 text-center">
+                <p className="text-2xl font-bold text-amber-600">{result.excluded}</p>
+                <p className="text-xs text-muted-foreground">Excluded</p>
               </CardContent>
             </Card>
             <Card title="Matched the suppression list — will not receive outbound">

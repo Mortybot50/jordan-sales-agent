@@ -7,11 +7,11 @@ import {
   endOfMonth,
   subDays,
   subWeeks,
-  subMonths,
 } from 'date-fns'
 import {
   computeJordanScore,
-  JORDAN_MEETINGS_TARGET,
+  JORDAN_MEETINGS_WEEKLY_TARGET_MAX,
+  qualifiedMeetingsTone,
   type JordanScoreResult,
 } from '@/lib/metrics/jordanScore'
 
@@ -237,15 +237,19 @@ export function usePipelineHeroMetrics() {
  *
  * Bundles response rate, qualified meetings, pipeline velocity, plus
  * WoW deltas, meter positions, and the 7-day streak pattern used by
- * the Dashboard's DarkMetricCards. Peer-benchmark reply rate is
- * hard-coded to 15% — tracked as TODO in jordanScore.ts.
+ * the Dashboard's DarkMetricCards. Reply-benchmark is anchored to the
+ * hospitality 8–14% band (mid-point 12%), not generic-B2B 15%.
  */
 export interface JordanAnchorMetrics {
   pipelineValue: number
   pipelineDeltaPct: number
   pipelineStageMeter: { segments: number; filled: number }
+  /** Qualified meetings booked THIS WEEK (Mon–Sun, local). */
   qualifiedMeetingsCount: number
+  /** WoW delta (count-this-week minus count-last-week). */
   qualifiedMeetingsDelta: number
+  /** Meter tone driven by target band: ≥8 mint, 4–7 warning, <4 danger. */
+  qualifiedMeetingsTone: 'mint' | 'warning' | 'danger'
   qualifiedMeter: { segments: number; filled: number }
   responseRatePct: number | null
   responseRateDelta: number
@@ -256,7 +260,12 @@ export interface JordanAnchorMetrics {
   lastSyncedAt: string
 }
 
-const REPLY_BENCHMARK_PCT = 15 // TODO(Phase G): load per-org.
+/**
+ * Hospitality cold-reply benchmark (not generic-SaaS 15%).
+ * 8–14% reply is healthy for cold hospitality; below 5% means
+ * deliverability, offer or targeting is broken.
+ */
+const REPLY_BENCHMARK_PCT = 12 // hospitality mid-band
 
 export function useJordanAnchorMetrics() {
   return useQuery({
@@ -269,8 +278,6 @@ export function useJordanAnchorMetrics() {
       const lastWeekEnd = endOfWeek(subWeeks(now, 1), { weekStartsOn: 1 }).toISOString()
       const monthStart = startOfMonth(now).toISOString()
       const monthEnd = endOfMonth(now).toISOString()
-      const lastMonthStart = startOfMonth(subMonths(now, 1)).toISOString()
-      const lastMonthEnd = endOfMonth(subMonths(now, 1)).toISOString()
       const last30dStart = subDays(now, 30).toISOString()
       const last60dStart = subDays(now, 60).toISOString()
 
@@ -285,8 +292,8 @@ export function useJordanAnchorMetrics() {
         { count: sentPrev30d },
         { count: repliesPrev30d },
         { count: meetingsThisMonth },
-        { count: meetingsLastMonth },
         { count: meetingsThisWeek },
+        { count: meetingsLastWeek },
         { data: stages },
       ] = await Promise.all([
         supabase
@@ -349,14 +356,14 @@ export function useJordanAnchorMetrics() {
           .from('activities')
           .select('id', { count: 'exact', head: true })
           .in('activity_type', ['meeting_note', 'meeting_booked'])
-          .gte('occurred_at', lastMonthStart)
-          .lte('occurred_at', lastMonthEnd),
+          .gte('occurred_at', weekStart)
+          .lte('occurred_at', weekEnd),
         supabase
           .from('activities')
           .select('id', { count: 'exact', head: true })
           .in('activity_type', ['meeting_note', 'meeting_booked'])
-          .gte('occurred_at', weekStart)
-          .lte('occurred_at', weekEnd),
+          .gte('occurred_at', lastWeekStart)
+          .lte('occurred_at', lastWeekEnd),
         supabase.from('pipeline_stages').select('id').eq('is_closed', false),
       ])
 
@@ -388,12 +395,19 @@ export function useJordanAnchorMetrics() {
         filled: Math.min(Math.min(8, totalStages), stageIds.size),
       }
 
-      const qMeetings = meetingsThisMonth ?? 0
-      const qMeetingsLast = meetingsLastMonth ?? 0
-      const qualifiedMeetingsDelta = qMeetings - qMeetingsLast
+      // Jordan Score still tracks the monthly cadence (existing weighting).
+      const qMeetingsMonth = meetingsThisMonth ?? 0
+
+      // KPI tile switched to weekly (hospitality reality): count this week +
+      // WoW delta, meter anchored to the 8–12 target band.
+      const qMeetingsWeek = meetingsThisWeek ?? 0
+      const qMeetingsWeekLast = meetingsLastWeek ?? 0
+      const qualifiedMeetingsDelta = qMeetingsWeek - qMeetingsWeekLast
+
+      const qMeetingsTone = qualifiedMeetingsTone(qMeetingsWeek)
       const qualifiedMeter = {
-        segments: JORDAN_MEETINGS_TARGET,
-        filled: Math.min(JORDAN_MEETINGS_TARGET, qMeetings),
+        segments: JORDAN_MEETINGS_WEEKLY_TARGET_MAX,
+        filled: Math.min(JORDAN_MEETINGS_WEEKLY_TARGET_MAX, qMeetingsWeek),
       }
 
       const sent = sentThisWeek ?? 0
@@ -422,11 +436,11 @@ export function useJordanAnchorMetrics() {
 
       const jordanScore = computeJordanScore({
         responseRatePct,
-        qualifiedMeetingsCount: qMeetings,
+        qualifiedMeetingsCount: qMeetingsMonth,
         pipelineVelocityPct: velocityPct,
       })
 
-      const meetingsPerDay = Math.max(1, meetingsThisWeek ?? 0)
+      const meetingsPerDay = Math.max(1, qMeetingsWeek)
       const scoreStreak = Array.from({ length: 7 }).map(
         (_, i) => i < Math.min(7, meetingsPerDay + Math.floor(jordanScore.score / 25)),
       )
@@ -435,8 +449,9 @@ export function useJordanAnchorMetrics() {
         pipelineValue,
         pipelineDeltaPct,
         pipelineStageMeter,
-        qualifiedMeetingsCount: qMeetings,
+        qualifiedMeetingsCount: qMeetingsWeek,
         qualifiedMeetingsDelta,
+        qualifiedMeetingsTone: qMeetingsTone,
         qualifiedMeter,
         responseRatePct,
         responseRateDelta,

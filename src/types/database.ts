@@ -690,6 +690,71 @@ export type Database = {
           },
         ]
       }
+      sending_domains: {
+        Row: {
+          created_at: string
+          dkim_status: string | null
+          dmarc_status: string | null
+          domain: string
+          id: string
+          inbox_count: number
+          last_checked_at: string | null
+          notes: string | null
+          org_id: string
+          provider: string | null
+          spf_status: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          warmup_day: number
+          warmup_target_day: number
+        }
+        Insert: {
+          created_at?: string
+          dkim_status?: string | null
+          dmarc_status?: string | null
+          domain: string
+          id?: string
+          inbox_count?: number
+          last_checked_at?: string | null
+          notes?: string | null
+          org_id: string
+          provider?: string | null
+          spf_status?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          warmup_day?: number
+          warmup_target_day?: number
+        }
+        Update: {
+          created_at?: string
+          dkim_status?: string | null
+          dmarc_status?: string | null
+          domain?: string
+          id?: string
+          inbox_count?: number
+          last_checked_at?: string | null
+          notes?: string | null
+          org_id?: string
+          provider?: string | null
+          spf_status?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          warmup_day?: number
+          warmup_target_day?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sending_domains_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sequence_enrollments: {
         Row: {
           completed_at: string | null

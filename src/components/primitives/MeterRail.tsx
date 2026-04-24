@@ -16,7 +16,7 @@ export interface MeterRailProps {
   /** How many filled from the left. Clamped to [0, segments]. */
   filled: number
   /** Tone of the filled segments. */
-  tone?: 'mint' | 'blue' | 'warning' | 'onDark'
+  tone?: 'mint' | 'blue' | 'warning' | 'danger' | 'onDark'
   className?: string
   ariaLabel?: string
 }
@@ -25,6 +25,7 @@ const toneFill: Record<NonNullable<MeterRailProps['tone']>, string> = {
   mint: 'bg-[color:var(--jordan-accent-mint)]',
   blue: 'bg-[color:var(--jordan-accent)]',
   warning: 'bg-[color:var(--jordan-warning)]',
+  danger: 'bg-[color:var(--jordan-danger)]',
   onDark: 'bg-white',
 }
 
@@ -32,6 +33,7 @@ const toneEmpty: Record<NonNullable<MeterRailProps['tone']>, string> = {
   mint: 'bg-[color:var(--jordan-surface-4)]',
   blue: 'bg-[color:var(--jordan-surface-4)]',
   warning: 'bg-[color:var(--jordan-surface-4)]',
+  danger: 'bg-[color:var(--jordan-surface-4)]',
   onDark: 'bg-[color:var(--jordan-dark-border)]',
 }
 

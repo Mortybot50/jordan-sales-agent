@@ -15,7 +15,10 @@ import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { CapsLabel, LivePill, MeterRail } from '@/components/primitives'
 import { useJordanAnchorMetrics } from '@/lib/queries/dashboard'
-import { JORDAN_MEETINGS_TARGET } from '@/lib/metrics/jordanScore'
+import {
+  JORDAN_MEETINGS_WEEKLY_TARGET_MIN,
+  JORDAN_MEETINGS_WEEKLY_TARGET_MAX,
+} from '@/lib/metrics/jordanScore'
 import { cn } from '@/lib/utils'
 
 interface NavItem {
@@ -85,7 +88,9 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
 
 function TargetWidget() {
   const { data, isLoading } = useJordanAnchorMetrics()
-  const filled = Math.min(JORDAN_MEETINGS_TARGET, data?.qualifiedMeetingsCount ?? 0)
+  const count = data?.qualifiedMeetingsCount ?? 0
+  const filled = Math.min(JORDAN_MEETINGS_WEEKLY_TARGET_MAX, count)
+  const tone = data?.qualifiedMeetingsTone ?? 'mint'
 
   return (
     <div className="mx-3 rounded-[10px] bg-[color:var(--jordan-ink)] text-white p-4 flex flex-col gap-3 border border-[color:var(--jordan-dark-border)]">
@@ -97,16 +102,16 @@ function TargetWidget() {
       </div>
       <div className="flex items-baseline gap-1.5">
         <span className="text-[22px] leading-none font-semibold jordan-tnum">
-          {isLoading ? '—' : filled}
+          {isLoading ? '—' : count}
         </span>
         <span className="text-[13px] text-[color:var(--jordan-dark-muted)] jordan-tnum">
-          / {JORDAN_MEETINGS_TARGET} meetings
+          / {JORDAN_MEETINGS_WEEKLY_TARGET_MIN}–{JORDAN_MEETINGS_WEEKLY_TARGET_MAX} meetings
         </span>
       </div>
       <MeterRail
-        segments={JORDAN_MEETINGS_TARGET}
+        segments={JORDAN_MEETINGS_WEEKLY_TARGET_MAX}
         filled={filled}
-        tone="mint"
+        tone={tone}
         ariaLabel="Weekly qualified meetings progress"
       />
     </div>
