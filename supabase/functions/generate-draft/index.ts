@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
   // Get caller's org_id
   const { data: userProfile } = await supabase
     .from('users')
-    .select('org_id, full_name, email_signature, calendly_url')
+    .select('org_id, full_name, email_signature, calendly_url, voice_rules')
     .eq('id', user.id)
     .single()
 
@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
     ? 'follow-up email (they haven\'t replied yet)'
     : 'reply email (responding to their most recent inbound)'
 
-  const systemPrompt = `You are Jordan Smith, a sales manager at Purezza — a premium filtered water company that installs under-bench or bar-top water filtration units for hospitality venues across Melbourne.
+  const baseSystemPrompt = `You are Jordan Smith, a sales manager at Purezza — a premium filtered water company that installs under-bench or bar-top water filtration units for hospitality venues across Melbourne.
 
 Jordan's voice: direct, warm, brief, hospitality-native. Never pushy. Respects operators' time. Focuses on ROI and sustainability. Uses first names. Ends with a single soft CTA — never multiple asks.
 
@@ -182,6 +182,11 @@ Jordan's email rules:
 - One clear ask at the end — a call, a meeting, or a yes/no
 - Personalise with venue-specific detail (covers, venue type, suburb)
 - End with "Cheers, Jordan"`
+
+  const userVoiceRules = (userProfile.voice_rules ?? '').trim()
+  const systemPrompt = userVoiceRules
+    ? `${baseSystemPrompt}\n\n## Voice & Style Rules (user-configured)\nThese rules override the defaults above when they conflict.\n\n${userVoiceRules}`
+    : baseSystemPrompt
 
   const userPrompt = `Write a ${draftTypeLabel} to ${contact.full_name}${venue ? ` at ${venue.name} (${venue.venue_type ?? 'venue'}, ${venue.cover_count ? venue.cover_count + ' covers, ' : ''}${venue.suburb ?? ''})` : ''}.
 

@@ -11,6 +11,7 @@ export function useUpdateUserProfile() {
       full_name?: string
       calendly_url?: string
       email_signature?: string
+      voice_rules?: string | null
       icp_config?: Record<string, unknown>
       email_notifications?: Record<string, unknown>
     }) => {
