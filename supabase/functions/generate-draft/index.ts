@@ -261,7 +261,8 @@ Respond with ONLY valid JSON in this exact format (no markdown, no explanation):
     context_hint: context_hint ?? null,
   }
 
-  // Store draft
+  // Store draft (original_* mirrors subject/body at generation time — used by
+  // the Learning Loop to detect what the rep edits before sending)
   const { data: draft, error: insertError } = await supabase
     .from('email_drafts')
     .insert({
@@ -271,6 +272,8 @@ Respond with ONLY valid JSON in this exact format (no markdown, no explanation):
       draft_type,
       subject,
       body,
+      original_subject: subject,
+      original_body: body,
       context_json: contextJson,
       model: MODEL,
       status: 'pending',

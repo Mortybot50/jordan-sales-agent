@@ -399,10 +399,15 @@ export type Database = {
           created_by: string | null
           deal_id: string | null
           draft_type: string
+          edit_logged_at: string | null
+          edited_body: string | null
+          edited_subject: string | null
           generated_at: string | null
           id: string
           model: string | null
           org_id: string
+          original_body: string | null
+          original_subject: string | null
           sendgrid_msg_id: string | null
           sent_at: string | null
           status: string | null
@@ -417,10 +422,15 @@ export type Database = {
           created_by?: string | null
           deal_id?: string | null
           draft_type: string
+          edit_logged_at?: string | null
+          edited_body?: string | null
+          edited_subject?: string | null
           generated_at?: string | null
           id?: string
           model?: string | null
           org_id: string
+          original_body?: string | null
+          original_subject?: string | null
           sendgrid_msg_id?: string | null
           sent_at?: string | null
           status?: string | null
@@ -435,10 +445,15 @@ export type Database = {
           created_by?: string | null
           deal_id?: string | null
           draft_type?: string
+          edit_logged_at?: string | null
+          edited_body?: string | null
+          edited_subject?: string | null
           generated_at?: string | null
           id?: string
           model?: string | null
           org_id?: string
+          original_body?: string | null
+          original_subject?: string | null
           sendgrid_msg_id?: string | null
           sent_at?: string | null
           status?: string | null
@@ -556,6 +571,59 @@ export type Database = {
           },
           {
             foreignKeyName: "lead_scores_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      learning_digests: {
+        Row: {
+          created_at: string
+          drafts_analysed: number
+          email_sent_at: string | null
+          generated_at: string
+          id: string
+          org_id: string
+          proposed_rules: Json
+          status: string
+          updated_at: string
+          user_id: string
+          week_end: string
+          week_start: string
+        }
+        Insert: {
+          created_at?: string
+          drafts_analysed?: number
+          email_sent_at?: string | null
+          generated_at?: string
+          id?: string
+          org_id: string
+          proposed_rules?: Json
+          status?: string
+          updated_at?: string
+          user_id: string
+          week_end: string
+          week_start: string
+        }
+        Update: {
+          created_at?: string
+          drafts_analysed?: number
+          email_sent_at?: string | null
+          generated_at?: string
+          id?: string
+          org_id?: string
+          proposed_rules?: Json
+          status?: string
+          updated_at?: string
+          user_id?: string
+          week_end?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "learning_digests_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
