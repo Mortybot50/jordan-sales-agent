@@ -17,12 +17,17 @@ export interface DarkMetricCardMeter {
   segments: number
   filled: number
   label?: string
-  tone?: 'mint' | 'onDark'
+  tone?: 'mint' | 'blue' | 'warning' | 'danger' | 'onDark'
 }
 
-export interface DarkMetricCardProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface DarkMetricCardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> {
   eyebrow?: string
   title: string
+  /**
+   * Native HTML `title` tooltip — hovers as the browser's built-in tooltip.
+   * Separated from the `title` prop so subtitle text and tooltip don't collide.
+   */
+  titleAttr?: string
   /** The hero number (or any ReactNode — wrap your own composition). */
   value: React.ReactNode
   valueSuffix?: React.ReactNode
@@ -40,6 +45,7 @@ export const DarkMetricCard = React.forwardRef<HTMLDivElement, DarkMetricCardPro
     {
       eyebrow,
       title,
+      titleAttr,
       value,
       valueSuffix,
       delta,
@@ -57,6 +63,7 @@ export const DarkMetricCard = React.forwardRef<HTMLDivElement, DarkMetricCardPro
       <div
         ref={ref}
         data-slot="dark-metric-card"
+        title={titleAttr}
         className={cn(
           'relative flex flex-col gap-4 rounded-[10px] p-5 text-white',
           'border border-[color:var(--jordan-dark-border)]',

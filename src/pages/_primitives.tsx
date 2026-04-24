@@ -623,21 +623,20 @@ export default function PrimitivesPage() {
               />
               <DarkMetricCard
                 eyebrow="MEETINGS"
-                title="Qualified · this month"
-                value={11}
-                valueSuffix="/ 15"
+                title="Qualified · this week"
+                value={9}
                 delta={2}
-                meter={{ segments: 15, filled: 11, label: '11 of 15 target' }}
+                meter={{ segments: 12, filled: 9, label: 'Target band: 8–12/week', tone: 'mint' }}
               />
               <DarkMetricCard
                 variant="ink-soft"
                 eyebrow="RESPONSE"
                 title="Reply rate · this week"
-                value={18}
+                value={11}
                 valueSuffix="%"
                 delta={3}
                 deltaSuffix="%"
-                meter={{ segments: 6, filled: 4, label: 'vs 15% peer benchmark' }}
+                meter={{ segments: 6, filled: 4, label: 'Hospitality cold: 8–14%' }}
               />
             </div>
           </div>

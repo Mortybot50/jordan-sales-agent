@@ -1,6 +1,9 @@
 import { DarkMetricCard, DotSeries, SkeletonBlock } from '@/components/primitives'
 import type { JordanAnchorMetrics } from '@/lib/queries/dashboard'
-import { JORDAN_MEETINGS_TARGET } from '@/lib/metrics/jordanScore'
+import {
+  JORDAN_MEETINGS_WEEKLY_TARGET_MIN,
+  JORDAN_MEETINGS_WEEKLY_TARGET_MAX,
+} from '@/lib/metrics/jordanScore'
 
 interface DarkAnchorBarProps {
   data?: JordanAnchorMetrics
@@ -37,6 +40,7 @@ export function DarkAnchorBar({ data, loading }: DarkAnchorBarProps) {
     pipelineStageMeter,
     qualifiedMeetingsCount,
     qualifiedMeetingsDelta,
+    qualifiedMeetingsTone,
     qualifiedMeter,
     responseRatePct,
     responseRateDelta,
@@ -44,6 +48,17 @@ export function DarkAnchorBar({ data, loading }: DarkAnchorBarProps) {
     jordanScore,
     scoreStreak,
   } = data
+
+  // Hospitality meetings tooltip: 3–5% cold-to-meeting conversion on ~100
+  // touches/week = ~4 meetings; warm + referral pipeline lifts the ceiling
+  // into the 8–12/week target band.
+  const meetingsTooltip =
+    'Hospitality benchmark: 3–5% cold-to-meeting conversion. ' +
+    '100 touches/week × 4% = 4 meetings. ' +
+    `Target ${JORDAN_MEETINGS_WEEKLY_TARGET_MIN}–${JORDAN_MEETINGS_WEEKLY_TARGET_MAX}/week across all channels (cold + referral + warm).`
+
+  const replyTooltip =
+    'Hospitality cold benchmark: 8–14%. Below 5% means deliverability, offer, or targeting is broken.'
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -59,28 +74,35 @@ export function DarkAnchorBar({ data, loading }: DarkAnchorBarProps) {
         }}
       />
 
+      {/*
+        title prop on DarkMetricCard is the visible subtitle. The native
+        HTML tooltip is the `titleAttr` below, which hover-renders the
+        hospitality benchmark copy in lieu of a proper tooltip primitive.
+      */}
       <DarkMetricCard
         eyebrow="MEETINGS"
-        title="Qualified · this month"
+        title="Qualified · this week"
+        titleAttr={meetingsTooltip}
         value={qualifiedMeetingsCount}
-        valueSuffix={`/ ${JORDAN_MEETINGS_TARGET}`}
         delta={qualifiedMeetingsDelta}
         meter={{
           ...qualifiedMeter,
-          label: `${qualifiedMeter.filled} of ${JORDAN_MEETINGS_TARGET} target`,
+          tone: qualifiedMeetingsTone,
+          label: `Target band: ${JORDAN_MEETINGS_WEEKLY_TARGET_MIN}–${JORDAN_MEETINGS_WEEKLY_TARGET_MAX}/week`,
         }}
       />
 
       <DarkMetricCard
         eyebrow="RESPONSE"
         title="Reply rate · this week"
+        titleAttr={replyTooltip}
         value={responseRatePct === null ? '—' : responseRatePct}
         valueSuffix={responseRatePct === null ? undefined : '%'}
         delta={responseRateDelta}
         deltaSuffix="%"
         meter={{
           ...responseRateMeter,
-          label: 'vs 15% peer benchmark',
+          label: 'Hospitality cold: 8–14%',
         }}
       />
 

@@ -44,6 +44,23 @@ export interface JordanScoreResult {
 /** Monthly qualified-meetings target (Spectra benchmark). */
 export const JORDAN_MEETINGS_TARGET = 15
 
+/**
+ * Weekly qualified-meetings target band (hospitality benchmark).
+ * 100 touches/week × 3–5% cold-to-meeting conversion = ~4, plus warm/referral
+ * pipeline lifts the ceiling to ~12. Dashboard colours:
+ *   ≥ MIN  → mint    (on-track)
+ *    >= 4  → amber   (below target)
+ *    < 4   → red     (off-target)
+ */
+export const JORDAN_MEETINGS_WEEKLY_TARGET_MIN = 8
+export const JORDAN_MEETINGS_WEEKLY_TARGET_MAX = 12
+
+export function qualifiedMeetingsTone(count: number): 'mint' | 'warning' | 'danger' {
+  if (count >= JORDAN_MEETINGS_WEEKLY_TARGET_MIN) return 'mint'
+  if (count >= 4) return 'warning'
+  return 'danger'
+}
+
 export function computeJordanScore({
   responseRatePct,
   qualifiedMeetingsCount,

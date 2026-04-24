@@ -34,6 +34,7 @@ import { supabase } from '@/lib/supabase'
 import { Plus, Trash2, ChevronUp, ChevronDown, CheckCircle2, XCircle, CheckCircle, ExternalLink, ShieldAlert, ArrowRight } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSuppressionList } from '@/lib/queries/suppression'
+import { SendingInfrastructureCard } from '@/components/settings/SendingInfrastructureCard'
 
 // --- Profile Tab ---
 function ProfileTab() {
@@ -532,6 +533,12 @@ function IcpTab() {
 
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5 max-w-lg">
+      <p className="text-xs text-muted-foreground -mt-1">
+        Hospitality ICP: cover count, suburb, licence type, kitchen style,
+        service style, spend tier. Melbourne hospitality cycle is typically
+        60–90 days with a single decision-maker; fit here is what makes cold
+        outreach land.
+      </p>
       <div className="space-y-2">
         <Label>Target venue types</Label>
         <div className="flex flex-wrap gap-1.5">
@@ -914,6 +921,8 @@ export function SettingsPage() {
               <VoiceRulesSection />
             </CardContent>
           </Card>
+
+          <SendingInfrastructureCard />
         </TabsContent>
 
         <TabsContent value="stages">
