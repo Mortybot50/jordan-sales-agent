@@ -213,6 +213,7 @@ export type Database = {
           org_id: string
           phone: string | null
           role: string | null
+          signal_reopening: Json | null
           updated_at: string | null
           venue_id: string | null
         }
@@ -227,6 +228,7 @@ export type Database = {
           org_id: string
           phone?: string | null
           role?: string | null
+          signal_reopening?: Json | null
           updated_at?: string | null
           venue_id?: string | null
         }
@@ -241,6 +243,7 @@ export type Database = {
           org_id?: string
           phone?: string | null
           role?: string | null
+          signal_reopening?: Json | null
           updated_at?: string | null
           venue_id?: string | null
         }
@@ -690,6 +693,71 @@ export type Database = {
           },
         ]
       }
+      reopening_events: {
+        Row: {
+          contact_id: string | null
+          created_at: string | null
+          detected_at: string
+          dismissed_at: string | null
+          event_type: string
+          id: string
+          org_id: string
+          venue_observation_new: string
+          venue_observation_prior: string | null
+        }
+        Insert: {
+          contact_id?: string | null
+          created_at?: string | null
+          detected_at?: string
+          dismissed_at?: string | null
+          event_type: string
+          id?: string
+          org_id: string
+          venue_observation_new: string
+          venue_observation_prior?: string | null
+        }
+        Update: {
+          contact_id?: string | null
+          created_at?: string | null
+          detected_at?: string
+          dismissed_at?: string | null
+          event_type?: string
+          id?: string
+          org_id?: string
+          venue_observation_new?: string
+          venue_observation_prior?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reopening_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reopening_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reopening_events_venue_observation_new_fkey"
+            columns: ["venue_observation_new"]
+            isOneToOne: false
+            referencedRelation: "venue_observations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reopening_events_venue_observation_prior_fkey"
+            columns: ["venue_observation_prior"]
+            isOneToOne: false
+            referencedRelation: "venue_observations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sending_domains: {
         Row: {
           created_at: string
@@ -1129,6 +1197,68 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "users_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      venue_observations: {
+        Row: {
+          address: string | null
+          business_status: string
+          created_at: string | null
+          evidence_url: string | null
+          external_id: string | null
+          id: string
+          licence_number: string | null
+          licence_type: string | null
+          licensee: string | null
+          observed_at: string
+          org_id: string
+          raw: Json | null
+          source: string
+          suburb: string | null
+          venue_name: string
+        }
+        Insert: {
+          address?: string | null
+          business_status: string
+          created_at?: string | null
+          evidence_url?: string | null
+          external_id?: string | null
+          id?: string
+          licence_number?: string | null
+          licence_type?: string | null
+          licensee?: string | null
+          observed_at?: string
+          org_id: string
+          raw?: Json | null
+          source: string
+          suburb?: string | null
+          venue_name: string
+        }
+        Update: {
+          address?: string | null
+          business_status?: string
+          created_at?: string | null
+          evidence_url?: string | null
+          external_id?: string | null
+          id?: string
+          licence_number?: string | null
+          licence_type?: string | null
+          licensee?: string | null
+          observed_at?: string
+          org_id?: string
+          raw?: Json | null
+          source?: string
+          suburb?: string | null
+          venue_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_observations_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"

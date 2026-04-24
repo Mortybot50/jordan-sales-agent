@@ -10,6 +10,7 @@ import {
   LogOut,
   Menu,
   X,
+  Radar,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -34,6 +35,7 @@ const NAV_SECTIONS: { id: string; label: string; items: NavItem[] }[] = [
     items: [
       { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { to: '/pipeline', label: 'Pipeline', icon: KanbanSquare },
+      { to: '/reopening-radar', label: 'Reopening Radar', icon: Radar },
       { to: '/briefing', label: 'Briefing', icon: Sun },
     ],
   },

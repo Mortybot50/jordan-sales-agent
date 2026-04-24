@@ -3,6 +3,7 @@ import { RefreshCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { LivePill, PageHeader } from '@/components/primitives'
 import { DarkAnchorBar } from '@/components/dashboard/DarkAnchorBar'
+import { ReopeningRadarCard } from '@/components/dashboard/ReopeningRadarCard'
 import { WarmLeads } from '@/components/dashboard/WarmLeads'
 import { PipelineHealth } from '@/components/dashboard/PipelineHealth'
 import { RecentActivity } from '@/components/dashboard/RecentActivity'
@@ -49,6 +50,10 @@ export function DashboardPage() {
       />
 
       <DarkAnchorBar data={anchor} loading={anchorLoading} />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <ReopeningRadarCard />
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <WarmLeads />
