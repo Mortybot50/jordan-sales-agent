@@ -27,6 +27,7 @@ export function DealCard({ deal, onClick }: DealCardProps) {
 
   const days = deal.days_in_stage ?? 0
   const stale = days >= 14
+  const recentlyReopened = Boolean(deal.contact?.signal_reopening)
 
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
@@ -49,6 +50,14 @@ export function DealCard({ deal, onClick }: DealCardProps) {
         {...listeners}
       >
         <div className="space-y-1.5">
+          {recentlyReopened && (
+            <span
+              className="inline-flex items-center rounded-[3px] bg-[color:var(--jordan-accent-mint-soft)] text-[color:var(--jordan-success-text)] px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-[var(--jordan-tracking-label)]"
+              title="Venue recently reopened — detected via Reopening Radar"
+            >
+              Recently reopened
+            </span>
+          )}
           <p className="text-[13px] leading-[18px] font-medium text-ink line-clamp-2">
             {deal.title ?? 'Untitled deal'}
           </p>

@@ -94,6 +94,14 @@ cp .env.local.example .env.local
 # Fill in VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (minimum to boot)
 ```
 
+#### Feature flags (Supabase Edge Function env)
+
+| Var | Default | Purpose |
+|-----|---------|---------|
+| `REOPENING_RADAR_LIVE` | `false` | Flip to `true` to enable VCGLR + Google Places live scraping in `reopening-radar-poll`. Leave off until GATE-5 (VCGLR validation) clears. |
+| `GOOGLE_PLACES_API_KEY` | unset | Only consumed when `REOPENING_RADAR_LIVE=true`. |
+
+
 ### 3. Apply database migrations
 
 ```bash

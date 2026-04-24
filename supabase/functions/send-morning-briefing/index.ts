@@ -191,6 +191,19 @@ interface BriefingCandidateRow {
   icp_score_guess: number | null
 }
 
+interface BriefingReopeningRow {
+  id: string
+  detected_at: string
+  event_type: string
+  evidence_url: string | null
+  venue_name: string
+  suburb: string | null
+  address: string | null
+  prior_name: string | null
+  prior_licensee: string | null
+  new_licensee: string | null
+}
+
 async function buildBriefingHtml(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
@@ -242,6 +255,55 @@ async function buildBriefingHtml(
     .order('icp_score_guess', { ascending: false })
     .limit(5)
   const candidates: BriefingCandidateRow[] = candidatesData ?? []
+
+  // 3b. Reopened this week — undismissed, unconverted reopening_events
+  const since7dReopen = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const { data: reopeningsData } = await supabase
+    .from('reopening_events')
+    .select(`
+      id, detected_at, event_type,
+      venue_observation_new:venue_observations!reopening_events_venue_observation_new_fkey(
+        venue_name, address, suburb, licensee, evidence_url
+      ),
+      venue_observation_prior:venue_observations!reopening_events_venue_observation_prior_fkey(
+        venue_name, licensee
+      )
+    `)
+    .eq('org_id', orgId)
+    .is('dismissed_at', null)
+    .is('contact_id', null)
+    .gte('detected_at', since7dReopen)
+    .order('detected_at', { ascending: false })
+    .limit(5)
+
+  type ReopeningRawRow = {
+    id: string
+    detected_at: string
+    event_type: string
+    venue_observation_new: {
+      venue_name: string
+      address: string | null
+      suburb: string | null
+      licensee: string | null
+      evidence_url: string | null
+    } | null
+    venue_observation_prior: {
+      venue_name: string | null
+      licensee: string | null
+    } | null
+  }
+  const reopenings: BriefingReopeningRow[] = ((reopeningsData ?? []) as ReopeningRawRow[]).map((r) => ({
+    id: r.id,
+    detected_at: r.detected_at,
+    event_type: r.event_type,
+    evidence_url: r.venue_observation_new?.evidence_url ?? null,
+    venue_name: r.venue_observation_new?.venue_name ?? 'Unknown venue',
+    suburb: r.venue_observation_new?.suburb ?? null,
+    address: r.venue_observation_new?.address ?? null,
+    prior_name: r.venue_observation_prior?.venue_name ?? null,
+    prior_licensee: r.venue_observation_prior?.licensee ?? null,
+    new_licensee: r.venue_observation_new?.licensee ?? null,
+  }))
 
   // 4. Jordan Score — mirrors src/lib/metrics/jordanScore.ts (keep in sync).
   const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
@@ -384,6 +446,34 @@ async function buildBriefingHtml(
         `
       }).join('')
 
+  const reopeningsRows = reopenings.length === 0
+    ? emptyRow('No reopenings detected this week.')
+    : reopenings.map((r) => {
+        const meta: string[] = []
+        if (r.suburb) meta.push(escapeHtml(r.suburb))
+        if (r.event_type) meta.push(escapeHtml(r.event_type.replace(/_/g, ' ')))
+        const metaHtml = meta.length
+          ? `<div style="font-family:${FONT};font-size:12px;line-height:16px;color:${INK_FAINT};margin-top:2px;">${meta.join(' &middot; ')}</div>`
+          : ''
+        const licenseeDelta = (r.prior_licensee && r.new_licensee && r.prior_licensee !== r.new_licensee)
+          ? `<div style="font-family:${FONT};font-size:12px;line-height:16px;color:${INK_MUTED};margin-top:2px;"><span style="color:${INK_FAINT};">Licensee:</span> ${escapeHtml(r.prior_licensee)} → ${escapeHtml(r.new_licensee)}</div>`
+          : ''
+        const nameDelta = (r.prior_name && r.prior_name !== r.venue_name)
+          ? `<div style="font-family:${FONT};font-size:12px;line-height:16px;color:${INK_MUTED};margin-top:2px;"><span style="color:${INK_FAINT};">Was:</span> ${escapeHtml(r.prior_name)}</div>`
+          : ''
+        const evidence = r.evidence_url
+          ? `<a href="${escapeHtml(r.evidence_url)}" style="color:${ACCENT};text-decoration:underline;font-size:11px;margin-left:6px;">source</a>`
+          : ''
+        return `
+          <tr><td style="padding:10px 16px;border-bottom:1px solid ${HAIRLINE};">
+            <div style="font-family:${FONT};font-size:13px;line-height:20px;color:${INK};font-weight:500;word-wrap:break-word;">${escapeHtml(r.venue_name)}${evidence}</div>
+            ${metaHtml}
+            ${licenseeDelta}
+            ${nameDelta}
+          </td></tr>
+        `
+      }).join('')
+
   const candidatesRows = candidates.length === 0
     ? emptyRow('No new candidates today.')
     : candidates.map((c) => {
@@ -505,6 +595,10 @@ async function buildBriefingHtml(
           <!-- Follow-ups -->
           ${sectionHeader(ACCENT_SOFT, ACCENT, '📋', 'Follow-ups Due Today', tasks.length)}
           ${tasksRows}
+
+          <!-- Reopened this week -->
+          ${sectionHeader('#e8fbf0', '#047857', '📡', 'Reopened This Week', reopenings.length)}
+          ${reopeningsRows}
 
           <!-- Candidates -->
           ${sectionHeader(WARM_SOFT, WARM_TEXT, '🔍', 'New Candidates', candidates.length)}

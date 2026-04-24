@@ -23,6 +23,7 @@ export interface Deal {
     id: string
     full_name: string
     email: string | null
+    signal_reopening?: unknown | null
   } | null
   venue?: {
     id: string
@@ -51,7 +52,7 @@ export function useDeals() {
         .from('deals')
         .select(`
           *,
-          contact:contacts(id, full_name, email),
+          contact:contacts(id, full_name, email, signal_reopening),
           venue:venues(id, name, venue_type),
           stage:pipeline_stages(id, name, position, is_closed, color)
         `)
