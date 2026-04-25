@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
+import { useForm, type FieldErrors } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -59,13 +60,16 @@ export function ContactNewPage() {
     let venueId: string | undefined
 
     if (venueMode === 'new' && values.new_venue) {
+      const coverCount = values.new_venue.cover_count
+      const validCoverCount =
+        typeof coverCount === 'number' && !Number.isNaN(coverCount) ? coverCount : undefined
       const venue = await createVenue.mutateAsync({
         org_id: user.org_id,
         name: values.new_venue.name,
         venue_type: values.new_venue.venue_type,
         address: values.new_venue.address,
         website: values.new_venue.website || undefined,
-        cover_count: values.new_venue.cover_count ?? undefined,
+        cover_count: validCoverCount,
       })
       venueId = venue.id
     } else if (venueMode === 'existing' && values.venue_id) {
@@ -87,6 +91,18 @@ export function ContactNewPage() {
     navigate(`/contacts/${contact.id}`)
   }
 
+  function onInvalid(formErrors: FieldErrors<ContactFormValues>) {
+    console.error('[ContactNew] form validation failed:', formErrors)
+    const firstError = Object.entries(formErrors)[0]
+    if (firstError) {
+      const [field, err] = firstError
+      const message = (err as { message?: string })?.message ?? 'Invalid value'
+      toast.error('Cannot save — check the form', {
+        description: `${field}: ${message}`,
+      })
+    }
+  }
+
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-2xl">
       <button
@@ -105,7 +121,13 @@ export function ContactNewPage() {
         </p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-6">
+        {Object.keys(errors).length > 0 && (
+          <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            Please fix the highlighted fields before saving. ({Object.keys(errors).length} issue
+            {Object.keys(errors).length === 1 ? '' : 's'})
+          </div>
+        )}
         {/* Name */}
         <Card>
           <CardHeader className="pb-3">
@@ -346,9 +368,15 @@ export function ContactNewPage() {
                     <Input
                       type="number"
                       min={1}
-                      {...register('new_venue.cover_count')}
+                      {...register('new_venue.cover_count', { valueAsNumber: true })}
                       placeholder="120"
+                      className={cn(errors.new_venue?.cover_count && 'border-destructive')}
                     />
+                    {errors.new_venue?.cover_count && (
+                      <p className="text-xs text-destructive">
+                        {errors.new_venue.cover_count.message}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
