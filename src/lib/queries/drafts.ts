@@ -47,6 +47,28 @@ export function useDrafts() {
   })
 }
 
+/**
+ * Count of drafts awaiting review (pending or edited).
+ * Drives the nav badge so Jordan can see the queue from anywhere.
+ */
+export function useDraftQueueCount() {
+  return useQuery({
+    queryKey: ['drafts', 'queue-count'],
+    queryFn: async (): Promise<number> => {
+      const { count, error } = await supabase
+        .from('email_drafts')
+        .select('id', { count: 'exact', head: true })
+        .in('status', ['pending', 'edited'])
+
+      if (error) throw error
+      return count ?? 0
+    },
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+  })
+}
+
 export function useDraft(id: string) {
   return useQuery({
     queryKey: ['draft', id],

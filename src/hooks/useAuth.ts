@@ -14,6 +14,7 @@ export interface AppUser {
   voice_rules: string | null
   icp_config: Record<string, unknown>
   email_notifications: { morning_briefing: boolean; briefing_time_hour: number }
+  default_commission_pct: number | null
 }
 
 interface AuthState {
@@ -65,7 +66,7 @@ function redirectToLogin() {
 async function fetchUserProfile(userId: string): Promise<AppUser | null> {
   const { data, error } = await supabase
     .from('users')
-    .select('id, org_id, full_name, email, role, calendly_url, email_signature, voice_rules, icp_config, email_notifications')
+    .select('id, org_id, full_name, email, role, calendly_url, email_signature, voice_rules, icp_config, email_notifications, default_commission_pct')
     .eq('id', userId)
     .maybeSingle()
 
@@ -83,6 +84,7 @@ async function fetchUserProfile(userId: string): Promise<AppUser | null> {
     voice_rules: d.voice_rules as string | null,
     icp_config: ((d.icp_config ?? {}) as Record<string, unknown>),
     email_notifications: ((d.email_notifications ?? { morning_briefing: true, briefing_time_hour: 7 }) as { morning_briefing: boolean; briefing_time_hour: number }),
+    default_commission_pct: d.default_commission_pct == null ? null : Number(d.default_commission_pct),
   }
 }
 

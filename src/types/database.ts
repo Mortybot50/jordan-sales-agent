@@ -1394,6 +1394,7 @@ export type Database = {
           calendly_token_encrypted: string | null
           calendly_url: string | null
           created_at: string | null
+          default_commission_pct: number | null
           email: string | null
           email_notifications: Json
           email_signature: string | null
@@ -1408,6 +1409,7 @@ export type Database = {
           calendly_token_encrypted?: string | null
           calendly_url?: string | null
           created_at?: string | null
+          default_commission_pct?: number | null
           email?: string | null
           email_notifications?: Json
           email_signature?: string | null
@@ -1422,6 +1424,7 @@ export type Database = {
           calendly_token_encrypted?: string | null
           calendly_url?: string | null
           created_at?: string | null
+          default_commission_pct?: number | null
           email?: string | null
           email_notifications?: Json
           email_signature?: string | null

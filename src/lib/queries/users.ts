@@ -12,6 +12,7 @@ export function useUpdateUserProfile() {
       calendly_url?: string
       email_signature?: string
       voice_rules?: string | null
+      default_commission_pct?: number | null
       icp_config?: Record<string, unknown>
       email_notifications?: Record<string, unknown>
     }) => {
