@@ -4,7 +4,8 @@ import {
   SkeletonBlock,
   EmptyState,
 } from '@/components/primitives'
-import { TrendingUp } from 'lucide-react'
+import { ArrowUpRight, TrendingUp } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { usePipelineHealth } from '@/lib/queries/dashboard'
 
 export function PipelineHealth() {
@@ -14,24 +15,32 @@ export function PipelineHealth() {
   const totalValue = stages?.reduce((sum, s) => sum + s.value, 0) ?? 0
 
   return (
-    <section className="rounded-[6px] border border-hairline bg-surface-1 overflow-hidden">
-      <header className="px-4 py-3 border-b border-hairline flex items-end justify-between gap-3">
-        <div>
-          <h2 className="text-[13px] font-semibold text-ink">Pipeline Health</h2>
+    <section className="rounded-[6px] border border-hairline bg-surface-1 overflow-hidden transition-colors hover:border-[color:var(--jordan-accent-mint)]/40">
+      <Link
+        to="/pipeline?view=health"
+        aria-label="Open pipeline · health view"
+        title="Open pipeline · health view"
+        className="group flex items-end justify-between gap-3 px-4 py-3 border-b border-hairline hover:bg-surface-2/50 transition-colors"
+      >
+        <div className="min-w-0">
+          <h2 className="text-[13px] font-semibold text-ink uppercase tracking-[var(--jordan-tracking-label)]">Pipeline Health</h2>
           <p className="text-[11px] text-ink-faint mt-0.5">Active deals by stage</p>
         </div>
-        {!isLoading && !error && totalCount > 0 && (
-          <div className="text-right">
-            <div className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
-              Total
+        <div className="flex items-center gap-2 shrink-0">
+          {!isLoading && !error && totalCount > 0 && (
+            <div className="text-right">
+              <div className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
+                Total
+              </div>
+              <div className="text-[13px] font-semibold text-ink">
+                <MetricNumber value={totalValue} format="currency" />{' '}
+                <span className="text-ink-faint font-normal">· {totalCount}</span>
+              </div>
             </div>
-            <div className="text-[13px] font-semibold text-ink">
-              <MetricNumber value={totalValue} format="currency" />{' '}
-              <span className="text-ink-faint font-normal">· {totalCount}</span>
-            </div>
-          </div>
-        )}
-      </header>
+          )}
+          <ArrowUpRight className="size-3.5 text-ink-faint group-hover:text-[color:var(--jordan-accent-mint)] transition-colors" />
+        </div>
+      </Link>
       <div className="p-4">
         {isLoading && <SkeletonBlock height={24} />}
         {error && (
@@ -70,13 +79,16 @@ export function PipelineHealth() {
             </div>
 
             {/* Legend rows */}
-            <div className="space-y-1.5">
+            <div className="space-y-0.5">
               {stages.map((stage) => {
                 const pct = totalCount > 0 ? Math.round((stage.count / totalCount) * 100) : 0
                 return (
-                  <div
-                    key={stage.stage_name}
-                    className="grid items-center gap-3 text-[12px]"
+                  <Link
+                    key={stage.stage_id}
+                    to={`/pipeline?stage=${encodeURIComponent(stage.stage_id)}`}
+                    aria-label={`Filter pipeline to ${stage.stage_name}`}
+                    title={`Filter pipeline to ${stage.stage_name}`}
+                    className="grid items-center gap-3 text-[12px] rounded-[4px] -mx-1 px-1 py-1 hover:bg-surface-2 focus:outline-none focus-visible:bg-surface-2 transition-colors"
                     style={{ gridTemplateColumns: '10px 1fr auto auto 48px' }}
                   >
                     <span
@@ -91,7 +103,7 @@ export function PipelineHealth() {
                       className="text-ink-muted"
                     />
                     <span className="jordan-tnum text-right text-ink-faint">{pct}%</span>
-                  </div>
+                  </Link>
                 )
               })}
             </div>

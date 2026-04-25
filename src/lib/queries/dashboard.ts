@@ -158,6 +158,7 @@ export function useWarmLeads() {
 }
 
 export interface PipelineStageCount {
+  stage_id: string
   stage_name: string
   count: number
   value: number
@@ -484,6 +485,7 @@ export function usePipelineHealth() {
       return stages.map((s) => {
         const stageDeals = (deals ?? []).filter((d) => d.stage_id === s.id)
         return {
+          stage_id: s.id,
           stage_name: s.name,
           count: stageDeals.length,
           value: stageDeals.reduce((sum, d) => sum + (Number(d.contract_value) || 0), 0),

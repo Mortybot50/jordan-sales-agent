@@ -98,11 +98,24 @@ export function DataTable<T>({
       )}
       {...rest}
     >
+      {/*
+        Horizontal-scroll wrapper. iOS Safari needs both
+        -webkit-overflow-scrolling: touch and touch-action: pan-x pan-y
+        to honour a horizontal swipe inside a vertically-scrollable
+        page (Bug 1: warm-leads stuck swipe on iPhone).
+      */}
+      <div
+        className="overflow-x-auto overflow-y-hidden"
+        style={{
+          WebkitOverflowScrolling: 'touch',
+          touchAction: 'pan-x pan-y',
+        }}
+      >
       {/* Sticky header */}
       <div
         role="row"
         className="sticky top-0 z-[1] grid items-center gap-3 border-b border-hairline bg-surface-2 px-3"
-        style={{ gridTemplateColumns: gridCols, height: rowHeight }}
+        style={{ gridTemplateColumns: gridCols, height: rowHeight, minWidth: 'max-content' }}
       >
         {columns.map((col) => {
           const dir: SortDirection = sort?.columnId === col.id ? sort.direction : null
@@ -133,7 +146,7 @@ export function DataTable<T>({
       </div>
 
       {/* Body */}
-      <div role="rowgroup" aria-label={ariaLabel} aria-busy={loading}>
+      <div role="rowgroup" aria-label={ariaLabel} aria-busy={loading} style={{ minWidth: 'max-content' }}>
         {error ? (
           <div className="p-3">
             <ErrorAlert error={error} onRetry={onRetry ?? undefined} title="Couldn't load" />
@@ -165,7 +178,7 @@ export function DataTable<T>({
                   'last:border-b-0',
                   onRowClick && 'cursor-pointer hover:bg-surface-3 focus-within:bg-surface-3',
                 )}
-                style={{ gridTemplateColumns: gridCols, minHeight: rowHeight }}
+                style={{ gridTemplateColumns: gridCols, minHeight: rowHeight, minWidth: 'max-content' }}
               >
                 {columns.map((col) => {
                   const alignCls =
@@ -192,6 +205,7 @@ export function DataTable<T>({
             )
           })
         )}
+      </div>
       </div>
     </div>
   )

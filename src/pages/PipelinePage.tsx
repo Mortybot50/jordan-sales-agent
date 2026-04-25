@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { KanbanBoard } from '@/components/pipeline/KanbanBoard'
 import { DealListView } from '@/components/pipeline/DealListView'
 import { DarkMetricCard, PageHeader, SkeletonBlock } from '@/components/primitives'
 import { usePipelineHeroMetrics } from '@/lib/queries/dashboard'
-import { LayoutGrid, List } from 'lucide-react'
+import { useStages } from '@/lib/queries/stages'
+import { useMeetingsThisWeekDealIds } from '@/lib/queries/activities'
+import { LayoutGrid, List, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 function useIsDesktop() {
@@ -87,6 +90,37 @@ function PipelineHeroBar() {
 export function PipelinePage() {
   const isDesktop = useIsDesktop()
   const [view, setView] = useState<ViewMode | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const stageParam = searchParams.get('stage')
+  const filterParam = searchParams.get('filter')
+  const periodParam = searchParams.get('period')
+
+  const meetingsFilterActive =
+    filterParam === 'meetings' && periodParam === 'this_week'
+
+  const { data: stages } = useStages()
+  const { data: meetingIds } = useMeetingsThisWeekDealIds(meetingsFilterActive)
+
+  const stageName = useMemo(() => {
+    if (!stageParam) return null
+    return stages?.find((s) => s.id === stageParam)?.name ?? null
+  }, [stages, stageParam])
+
+  const filterActive = !!stageParam || meetingsFilterActive
+
+  function clearFilters() {
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev)
+        p.delete('stage')
+        p.delete('filter')
+        p.delete('period')
+        return p
+      },
+      { replace: true },
+    )
+  }
 
   const effectiveView = view ?? (isDesktop ? 'kanban' : 'list')
 
@@ -128,12 +162,48 @@ export function PipelinePage() {
         />
       </div>
 
+      {filterActive && (
+        <div className="px-4 sm:px-6 pt-3 shrink-0">
+          <div className="flex items-center justify-between gap-3 rounded-[6px] border border-hairline bg-surface-2 px-3 py-2 text-[12px] text-ink">
+            <span className="truncate">
+              <span className="uppercase tracking-[var(--jordan-tracking-label)] text-[10px] text-ink-faint mr-2">
+                Filter
+              </span>
+              {meetingsFilterActive
+                ? 'Deals with a qualified meeting this week'
+                : stageName
+                  ? `Stage · ${stageName}`
+                  : 'Custom filter'}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-[12px]"
+              onClick={clearFilters}
+            >
+              <X className="w-3.5 h-3.5 mr-1" />
+              Clear
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="pt-4 shrink-0">
         <PipelineHeroBar />
       </div>
 
       <div className="flex-1 overflow-auto pt-3">
-        {effectiveView === 'kanban' ? <KanbanBoard /> : <DealListView />}
+        {effectiveView === 'kanban' ? (
+          <KanbanBoard
+            stageFilter={stageParam}
+            dealIdAllowlist={meetingsFilterActive ? meetingIds?.dealIds ?? null : null}
+            contactIdAllowlist={
+              meetingsFilterActive ? meetingIds?.contactIds ?? null : null
+            }
+          />
+        ) : (
+          <DealListView />
+        )}
       </div>
     </div>
   )
