@@ -22,29 +22,25 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
-import { useUpdateDeal, useDeleteDeal } from '@/lib/queries/deals'
+import { CapsLabel, MetricNumber } from '@/components/primitives'
+import {
+  useUpdateDeal,
+  useDeleteDeal,
+  useUpdateDealStage,
+  useMarkInstallConfirmed,
+  useMarkInstalled,
+} from '@/lib/queries/deals'
 import { useContactActivities } from '@/lib/queries/activities'
 import { useStages } from '@/lib/queries/stages'
 import { dealFormSchema, type DealFormValues } from '@/lib/schemas/deal'
-import { formatCurrency, formatDate, formatRelative, activityTypeLabel } from '@/lib/utils'
+import { formatCurrency, formatDate, formatRelative, activityTypeLabel, cn } from '@/lib/utils'
+import { format, addMonths, formatDistanceToNowStrict } from 'date-fns'
 import type { Deal } from '@/lib/queries/deals'
 import type { ActivityType } from '@/lib/queries/activities'
 import {
-  Trash2,
-  Mail,
-  MailOpen,
-  MousePointerClick,
-  Reply,
-  Phone,
-  CalendarCheck,
-  CheckSquare,
-  ArrowRight,
-  AlertCircle,
-  UserMinus,
-  PlusCircle,
-  StickyNote,
-  Calendar,
-  Activity,
+  Trash2, Mail, MailOpen, MousePointerClick, Reply, Phone, CalendarCheck,
+  CheckSquare, ArrowRight, AlertCircle, UserMinus, PlusCircle, StickyNote,
+  Calendar, Activity, Pause, Play, Wrench, CheckCircle2,
 } from 'lucide-react'
 
 interface DealDrawerProps {
@@ -73,22 +69,37 @@ function ActivityIcon({ type }: { type: ActivityType }) {
   }
 }
 
+function isCurrentMonth(iso: string | null): boolean {
+  if (!iso) return false
+  const d = new Date(iso)
+  const now = new Date()
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
+}
+
+function nextMonthLabel(): string {
+  return format(addMonths(new Date(), 1), 'MMMM')
+}
+
 export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [installScheduledFor, setInstallScheduledFor] = useState<string>(
+    deal.install_scheduled_for ?? '',
+  )
   const { data: stages } = useStages()
   const { data: activities } = useContactActivities(deal.contact_id ?? '')
   const updateDeal = useUpdateDeal()
   const deleteDeal = useDeleteDeal()
+  const updateStage = useUpdateDealStage()
+  const markConfirmed = useMarkInstallConfirmed()
+  const markInstalled = useMarkInstalled()
 
   const form = useForm<DealFormValues>({
     resolver: zodResolver(dealFormSchema),
     defaultValues: {
       title: deal.title ?? '',
       stage_id: deal.stage_id ?? '',
-      contract_value: deal.contract_value ?? 800,
-      follow_up_due: deal.follow_up_due
-        ? deal.follow_up_due.split('T')[0]
-        : '',
+      contract_value: deal.contract_value ?? undefined,
+      follow_up_due: deal.follow_up_due ? deal.follow_up_due.split('T')[0] : '',
       notes: deal.notes ?? '',
     },
   })
@@ -115,7 +126,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
       org_id: deal.org_id,
       title: values.title,
       stage_id: values.stage_id,
-      contract_value: values.contract_value,
+      contract_value: values.contract_value ?? null,
       follow_up_due: values.follow_up_due || null,
       notes: values.notes || null,
       from_stage: oldStageName,
@@ -130,10 +141,35 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
     onClose()
   }
 
-  // Filter activities to this deal
-  const dealActivities = (activities ?? []).filter(
-    (a) => a.deal_id === deal.id
-  )
+  async function moveToStageByName(stageName: string) {
+    const target = stages?.find((s) => s.name === stageName)
+    if (!target) {
+      toast.error(`Stage "${stageName}" not found`)
+      return
+    }
+    await updateStage.mutateAsync({ dealId: deal.id, stageId: target.id })
+  }
+
+  async function handleMarkConfirmed() {
+    await markConfirmed.mutateAsync({
+      dealId: deal.id,
+      scheduledFor: installScheduledFor || undefined,
+    })
+  }
+
+  async function handleMarkInstalled() {
+    await markInstalled.mutateAsync(deal.id)
+  }
+
+  const dealActivities = (activities ?? []).filter((a) => a.deal_id === deal.id)
+  const acv = deal.acv != null ? Number(deal.acv) : null
+  const tcv = deal.tcv != null ? Number(deal.tcv) : null
+  const commission = deal.commission_amount != null ? Number(deal.commission_amount) : null
+  const stageName = deal.stage?.name ?? ''
+  const isHeld = stageName === 'Hold for Next Month'
+  const isClosedWon = /won/i.test(stageName) && !/lost/i.test(stageName)
+  const contributesToGate = !!deal.close_won_at && isCurrentMonth(deal.close_won_at) && !isHeld
+  const isLost = /lost/i.test(stageName)
 
   return (
     <>
@@ -147,18 +183,191 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
               {deal.title ?? 'Untitled deal'}
             </SheetTitle>
             <div className="flex items-center gap-2 flex-wrap text-sm text-muted-foreground">
-              {deal.contact?.full_name && (
-                <span>{deal.contact.full_name}</span>
-              )}
+              {deal.contact?.full_name && <span>{deal.contact.full_name}</span>}
               {deal.venue?.name && (
                 <>
                   <span>·</span>
                   <span>{deal.venue.name}</span>
                 </>
               )}
+              {deal.product?.label && (
+                <>
+                  <span>·</span>
+                  <span className="text-ink-muted font-medium">{deal.product.label}</span>
+                </>
+              )}
             </div>
           </SheetHeader>
 
+          {/* ── Financial panel ─────────────────────────────── */}
+          {(acv != null || tcv != null || commission != null) && (
+            <div className="mb-5 rounded-[10px] border border-hairline bg-surface-2 p-3 space-y-2">
+              <CapsLabel>Financial</CapsLabel>
+              <div className="grid grid-cols-4 gap-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">ACV</p>
+                  <MetricNumber value={acv} format="currency" minimumFractionDigits={0} maximumFractionDigits={0} className="text-[16px] font-semibold text-ink" />
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">TCV</p>
+                  <MetricNumber value={tcv} format="currency" minimumFractionDigits={0} maximumFractionDigits={0} className="text-[16px] font-semibold text-ink" />
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">Commission</p>
+                  <MetricNumber value={commission} format="currency" minimumFractionDigits={0} maximumFractionDigits={0} className="text-[16px] font-semibold text-ink" />
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">Term</p>
+                  <p className="text-[16px] font-semibold text-ink jordan-tnum">
+                    {deal.term_months ?? '—'} mo
+                  </p>
+                </div>
+              </div>
+              {contributesToGate && acv != null && (
+                <div className="mt-2 inline-flex items-center gap-1.5 rounded-[6px] bg-[color:var(--jordan-accent-mint-soft)] text-[color:var(--jordan-success-text)] px-2 py-1 text-[11px] font-medium">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Close Won this month — contributes {formatCurrency(acv)} to monthly gate
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Install Lifecycle panel ─────────────────────── */}
+          {isClosedWon && (
+            <div className="mb-5 rounded-[10px] border border-hairline bg-surface-2 p-3 space-y-3">
+              <CapsLabel>Install Lifecycle</CapsLabel>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">Status</p>
+                  <p className="font-medium text-ink">
+                    {deal.install_completed_at
+                      ? '✅ Installed'
+                      : deal.install_confirmed_at
+                        ? '🛠 Pending Install'
+                        : '⏳ Awaiting confirmation'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">Scheduled for</p>
+                  <p className="text-ink">
+                    {deal.install_scheduled_for
+                      ? format(new Date(deal.install_scheduled_for), 'd MMM')
+                      : '—'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">Confirmed</p>
+                  <p className="text-ink">
+                    {deal.install_confirmed_at
+                      ? `${format(new Date(deal.install_confirmed_at), 'd MMM')} (${formatDistanceToNowStrict(new Date(deal.install_confirmed_at))} ago)`
+                      : '—'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">Installed</p>
+                  <p className="text-ink">
+                    {deal.install_completed_at
+                      ? format(new Date(deal.install_completed_at), 'd MMM')
+                      : '—'}
+                  </p>
+                </div>
+              </div>
+
+              {!deal.install_completed_at && (
+                <>
+                  {!deal.install_confirmed_at && (
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1 space-y-1">
+                        <Label>Schedule install for</Label>
+                        <Input
+                          type="date"
+                          value={installScheduledFor}
+                          onChange={(e) => setInstallScheduledFor(e.target.value)}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={handleMarkConfirmed}
+                        disabled={markConfirmed.isPending}
+                      >
+                        <Wrench className="w-3.5 h-3.5 mr-1" />
+                        Mark install confirmed
+                      </Button>
+                    </div>
+                  )}
+
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleMarkInstalled}
+                    disabled={markInstalled.isPending}
+                    className="w-full"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                    Mark installed
+                  </Button>
+                </>
+              )}
+
+              {deal.install_completed_at && commission != null && (
+                <div className="rounded-[6px] bg-[color:var(--jordan-accent-mint-soft)] border border-[color:var(--jordan-accent-mint)]/30 px-3 py-2 text-[12px] text-[color:var(--jordan-success-text)] font-medium">
+                  Commission earned: {formatCurrency(commission)} · {format(new Date(deal.install_completed_at), 'd MMM yyyy')}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Hold-for-next-month CTAs ─────────────────────── */}
+          {isHeld && (
+            <div className="mb-5 rounded-[10px] border border-[color:var(--jordan-accent-mint)]/30 bg-[color:var(--jordan-accent-mint-soft)] p-3 space-y-2">
+              <CapsLabel className="text-[color:var(--jordan-success-text)]">
+                Held for {nextMonthLabel()}
+              </CapsLabel>
+              <p className="text-[12px] text-ink-muted">
+                This deal won't count toward this month's gate. Move when ready.
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => moveToStageByName('Negotiation')}
+                  disabled={updateStage.isPending}
+                  className="flex-1"
+                >
+                  <Play className="w-3.5 h-3.5 mr-1" />
+                  Back to Negotiation
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => moveToStageByName('Closed Won')}
+                  disabled={updateStage.isPending}
+                  className="flex-1"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                  Move to Close Won
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {!isHeld && !isClosedWon && !isLost && (
+            <div className="mb-3">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => moveToStageByName('Hold for Next Month')}
+                disabled={updateStage.isPending}
+                className="text-[12px]"
+              >
+                <Pause className="w-3.5 h-3.5 mr-1" />
+                Hold for next month
+              </Button>
+            </div>
+          )}
+
+          {/* ── Edit form ────────────────────────────────────── */}
           <form onSubmit={form.handleSubmit(handleSave, onInvalid)} className="space-y-4">
             {Object.keys(form.formState.errors).length > 0 && (
               <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
@@ -167,11 +376,12 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
             )}
             <div className="space-y-1">
               <Label>Title</Label>
-              <Input {...form.register('title')} />
+              <Input
+                {...form.register('title')}
+                className={cn(form.formState.errors.title && 'border-destructive')}
+              />
               {form.formState.errors.title && (
-                <p className="text-xs text-destructive">
-                  {form.formState.errors.title.message}
-                </p>
+                <p className="text-xs text-destructive">{form.formState.errors.title.message}</p>
               )}
             </div>
 
@@ -196,11 +406,13 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label>Contract value (AUD)</Label>
+                <Label>Legacy contract value</Label>
                 <Input
                   type="number"
                   min={0}
-                  {...form.register('contract_value', { valueAsNumber: true })}
+                  {...form.register('contract_value', {
+                    setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                  })}
                 />
               </div>
               <div className="space-y-1">
@@ -241,20 +453,20 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
           {/* Meta info */}
           <div className="grid grid-cols-2 gap-3 text-sm mb-5">
             <div>
-              <p className="text-xs text-muted-foreground">Current value</p>
-              <p className="font-semibold">{formatCurrency(deal.contract_value)}</p>
-            </div>
-            <div>
               <p className="text-xs text-muted-foreground">Days in stage</p>
               <p className="font-semibold">{deal.days_in_stage ?? 0}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Last touch</p>
+              <p>{formatRelative(deal.last_touch_at)}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Follow-up</p>
               <p>{formatDate(deal.follow_up_due)}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Last touch</p>
-              <p>{formatRelative(deal.last_touch_at)}</p>
+              <p className="text-xs text-muted-foreground">Close Won</p>
+              <p>{deal.close_won_at ? format(new Date(deal.close_won_at), 'd MMM yyyy') : '—'}</p>
             </div>
           </div>
 
