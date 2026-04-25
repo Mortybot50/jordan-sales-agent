@@ -20,7 +20,7 @@ LeadFlow is Jordan's whole-of-day surface — not a CRM module bolted on, but th
 
 - Pricing model + Monthly Gate (`feature/pricing-model-and-gate`) — sellable product catalogue (`/catalogue`) for Purezza / Culligan / Zip HydroTap; deals now carry ACV/TCV/commission computed by trigger from `weekly_price × 52 × term/12 × pct`; `monthly_gates` table + daily forfeit cron at 00:30 AEST; dashboard hero gate card + Pipeline ACV/TCV/Held bar + Pending Installs + Earned This Year cards; install lifecycle on the deal drawer. Default commission 7%, ex-GST throughout.
 
-Current prod bundle: `index-BVoiUAVx.js` on `https://jordan-sales-agent.vercel.app`.
+Current prod bundle: `index-FfsK5snX.js` on `https://jordan-sales-agent.vercel.app`.
 
 ## Hard constraints
 

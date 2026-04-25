@@ -1,8 +1,8 @@
 # Pricing Model + Monthly Gate — Ship Summary
 
 **Shipped:** 26/04/2026 (AEST)
-**Branch:** `feature/pricing-model-and-gate`
-**Prod bundle:** `index-BVoiUAVx.js` (probes verified: `GATE HIT`, `Pipeline ACV`, `Held for Next Month`, `Mark install confirmed`)
+**PR:** [#14](https://github.com/Mortybot50/jordan-sales-agent/pull/14) — squash-merged to `main` as `a9bc04d`
+**Prod bundle:** `index-FfsK5snX.js` (probes verified on prod: `GATE HIT`, `Pipeline ACV`, `Held for Next Month`, `Mark install confirmed`)
 
 ## What it does
 
