@@ -39,10 +39,15 @@ export function DealCard({ deal, onClick }: DealCardProps) {
   const acv = deal.acv != null ? Number(deal.acv) : null
   const tcv = deal.tcv != null ? Number(deal.tcv) : null
   const commission = deal.commission_amount != null ? Number(deal.commission_amount) : null
-  const headline = acv ?? deal.contract_value
+  const finalValue = deal.final_value != null ? Number(deal.final_value) : null
+  const headline = finalValue ?? acv ?? deal.contract_value
   const stageName = deal.stage?.name ?? ''
   const isHeld = stageName === 'Hold for Next Month'
   const contributesToGate = !isHeld && isCurrentMonth(deal.close_won_at)
+  const isClosedStage = !!deal.stage?.is_closed
+  const isWon = deal.outcome === 'won'
+  const isLost = deal.outcome === 'lost'
+  const needsOutcomeTag = isClosedStage && !deal.outcome
 
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
@@ -57,15 +62,51 @@ export function DealCard({ deal, onClick }: DealCardProps) {
           }
         }}
         className={cn(
-          'group select-none cursor-pointer rounded-[6px] border border-hairline bg-surface-1',
+          'group select-none cursor-pointer rounded-[6px] border bg-surface-1',
           'px-3 py-2 transition-all duration-150',
-          'hover:border-brand hover:shadow-[var(--jordan-shadow-hover)]',
+          'hover:shadow-[var(--jordan-shadow-hover)]',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
+          isWon
+            ? 'border-[color:var(--jordan-accent-mint)]/50 hover:border-[color:var(--jordan-accent-mint)]'
+            : isLost
+              ? 'border-hairline opacity-70 hover:border-[color:var(--jordan-danger)]/40'
+              : needsOutcomeTag
+                ? 'border-[color:var(--jordan-warm)]/60 hover:border-[color:var(--jordan-warm)]'
+                : 'border-hairline hover:border-brand',
         )}
         {...listeners}
       >
         <div className="space-y-1.5">
           <div className="flex items-center gap-1 flex-wrap">
+            {isWon && (
+              <span
+                className="inline-flex items-center gap-1 rounded-[3px] bg-[color:var(--jordan-accent-mint-soft)] text-[color:var(--jordan-success-text)] px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-[var(--jordan-tracking-label)]"
+                title={
+                  deal.closed_at
+                    ? `Won ${new Date(deal.closed_at).toLocaleDateString('en-AU')}`
+                    : 'Won'
+                }
+              >
+                <span aria-hidden>✓</span> Won
+              </span>
+            )}
+            {isLost && (
+              <span
+                className="inline-flex items-center rounded-[3px] bg-surface-3 text-ink-faint px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-[var(--jordan-tracking-label)]"
+                title={deal.lost_reason ?? 'Lost'}
+              >
+                Lost
+              </span>
+            )}
+            {needsOutcomeTag && (
+              <span
+                className="inline-flex items-center gap-1 rounded-[3px] bg-[color:var(--jordan-warm-soft,transparent)] border border-[color:var(--jordan-warm)]/40 text-[color:var(--jordan-warm-text)] px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-[var(--jordan-tracking-label)]"
+                title="Open the deal drawer to mark as Won or Lost"
+              >
+                <span className="size-1.5 rounded-full bg-[color:var(--jordan-warm)]" aria-hidden />
+                Mark outcome
+              </span>
+            )}
             {recentlyReopened && (
               <span
                 className="inline-flex items-center rounded-[3px] bg-[color:var(--jordan-accent-mint-soft)] text-[color:var(--jordan-success-text)] px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-[var(--jordan-tracking-label)]"
@@ -83,7 +124,12 @@ export function DealCard({ deal, onClick }: DealCardProps) {
               </span>
             )}
           </div>
-          <p className="text-[13px] leading-[18px] font-medium text-ink line-clamp-2">
+          <p
+            className={cn(
+              'text-[13px] leading-[18px] font-medium text-ink line-clamp-2',
+              isLost && 'line-through text-ink-muted',
+            )}
+          >
             {deal.title ?? 'Untitled deal'}
           </p>
 

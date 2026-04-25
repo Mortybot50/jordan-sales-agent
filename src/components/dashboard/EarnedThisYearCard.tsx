@@ -18,7 +18,7 @@ export function EarnedThisYearCard() {
           Earned · {year}
         </CapsLabel>
         <p className="text-[12px] text-ink-muted mt-0.5">
-          Commission on installs completed this year
+          Commission on deals closed won this year
         </p>
       </div>
       <div className="mt-3">

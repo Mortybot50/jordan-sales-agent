@@ -287,6 +287,7 @@ export type Database = {
           contract_months: number | null
           contract_value: number | null
           created_at: string | null
+          final_value: number | null
           follow_up_due: string | null
           id: string
           install_completed_at: string | null
@@ -296,6 +297,7 @@ export type Database = {
           lost_reason: string | null
           notes: string | null
           org_id: string
+          outcome: string | null
           owner_user_id: string | null
           product_id: string | null
           stage_id: string | null
@@ -316,6 +318,7 @@ export type Database = {
           contract_months?: number | null
           contract_value?: number | null
           created_at?: string | null
+          final_value?: number | null
           follow_up_due?: string | null
           id?: string
           install_completed_at?: string | null
@@ -325,6 +328,7 @@ export type Database = {
           lost_reason?: string | null
           notes?: string | null
           org_id: string
+          outcome?: string | null
           owner_user_id?: string | null
           product_id?: string | null
           stage_id?: string | null
@@ -345,6 +349,7 @@ export type Database = {
           contract_months?: number | null
           contract_value?: number | null
           created_at?: string | null
+          final_value?: number | null
           follow_up_due?: string | null
           id?: string
           install_completed_at?: string | null
@@ -354,6 +359,7 @@ export type Database = {
           lost_reason?: string | null
           notes?: string | null
           org_id?: string
+          outcome?: string | null
           owner_user_id?: string | null
           product_id?: string | null
           stage_id?: string | null
