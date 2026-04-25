@@ -278,55 +278,91 @@ export type Database = {
       }
       deals: {
         Row: {
+          acv: number | null
+          close_won_at: string | null
           closed_at: string | null
+          commission_amount: number | null
+          commission_pct: number | null
           contact_id: string | null
           contract_months: number | null
           contract_value: number | null
           created_at: string | null
           follow_up_due: string | null
           id: string
+          install_completed_at: string | null
+          install_confirmed_at: string | null
+          install_scheduled_for: string | null
           last_touch_at: string | null
           lost_reason: string | null
           notes: string | null
           org_id: string
+          owner_user_id: string | null
+          product_id: string | null
           stage_id: string | null
+          tcv: number | null
+          term_months: number | null
           title: string | null
           updated_at: string | null
           venue_id: string | null
+          weekly_price_override: number | null
         }
         Insert: {
+          acv?: number | null
+          close_won_at?: string | null
           closed_at?: string | null
+          commission_amount?: number | null
+          commission_pct?: number | null
           contact_id?: string | null
           contract_months?: number | null
           contract_value?: number | null
           created_at?: string | null
           follow_up_due?: string | null
           id?: string
+          install_completed_at?: string | null
+          install_confirmed_at?: string | null
+          install_scheduled_for?: string | null
           last_touch_at?: string | null
           lost_reason?: string | null
           notes?: string | null
           org_id: string
+          owner_user_id?: string | null
+          product_id?: string | null
           stage_id?: string | null
+          tcv?: number | null
+          term_months?: number | null
           title?: string | null
           updated_at?: string | null
           venue_id?: string | null
+          weekly_price_override?: number | null
         }
         Update: {
+          acv?: number | null
+          close_won_at?: string | null
           closed_at?: string | null
+          commission_amount?: number | null
+          commission_pct?: number | null
           contact_id?: string | null
           contract_months?: number | null
           contract_value?: number | null
           created_at?: string | null
           follow_up_due?: string | null
           id?: string
+          install_completed_at?: string | null
+          install_confirmed_at?: string | null
+          install_scheduled_for?: string | null
           last_touch_at?: string | null
           lost_reason?: string | null
           notes?: string | null
           org_id?: string
+          owner_user_id?: string | null
+          product_id?: string | null
           stage_id?: string | null
+          tcv?: number | null
+          term_months?: number | null
           title?: string | null
           updated_at?: string | null
           venue_id?: string | null
+          weekly_price_override?: number | null
         }
         Relationships: [
           {
@@ -341,6 +377,13 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deals_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
           {
@@ -716,6 +759,65 @@ export type Database = {
           },
         ]
       }
+      monthly_gates: {
+        Row: {
+          achieved_acv: number
+          created_at: string
+          forfeited_at: string | null
+          hit_gate: boolean
+          id: string
+          locked_at: string | null
+          month: string
+          notes: string | null
+          org_id: string
+          prior_month_commission_amount: number | null
+          prior_month_commission_status: string | null
+          target_acv: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          achieved_acv?: number
+          created_at?: string
+          forfeited_at?: string | null
+          hit_gate?: boolean
+          id?: string
+          locked_at?: string | null
+          month: string
+          notes?: string | null
+          org_id: string
+          prior_month_commission_amount?: number | null
+          prior_month_commission_status?: string | null
+          target_acv?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          achieved_acv?: number
+          created_at?: string
+          forfeited_at?: string | null
+          hit_gate?: boolean
+          id?: string
+          locked_at?: string | null
+          month?: string
+          notes?: string | null
+          org_id?: string
+          prior_month_commission_amount?: number | null
+          prior_month_commission_status?: string | null
+          target_acv?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monthly_gates_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orgs: {
         Row: {
           created_at: string | null
@@ -774,6 +876,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      products: {
+        Row: {
+          active: boolean
+          brand: string
+          category: string
+          created_at: string
+          default_commission_pct: number
+          default_term_months: number
+          id: string
+          label: string
+          notes: string | null
+          sku: string
+          updated_at: string
+          water_types: string[]
+          weekly_price_aud: number
+        }
+        Insert: {
+          active?: boolean
+          brand: string
+          category: string
+          created_at?: string
+          default_commission_pct?: number
+          default_term_months: number
+          id?: string
+          label: string
+          notes?: string | null
+          sku: string
+          updated_at?: string
+          water_types?: string[]
+          weekly_price_aud: number
+        }
+        Update: {
+          active?: boolean
+          brand?: string
+          category?: string
+          created_at?: string
+          default_commission_pct?: number
+          default_term_months?: number
+          id?: string
+          label?: string
+          notes?: string | null
+          sku?: string
+          updated_at?: string
+          water_types?: string[]
+          weekly_price_aud?: number
+        }
+        Relationships: []
       }
       reopening_events: {
         Row: {
@@ -1507,6 +1657,11 @@ export type Database = {
       auth_org_id: { Args: never; Returns: string }
       compute_lead_score: { Args: { p_contact_id: string }; Returns: number }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      recompute_monthly_gate: {
+        Args: { p_month: string; p_org_id: string; p_user_id: string }
+        Returns: undefined
+      }
+      run_monthly_gate_forfeits: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

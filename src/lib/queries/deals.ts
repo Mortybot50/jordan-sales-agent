@@ -19,6 +19,19 @@ export interface Deal {
   notes: string | null
   created_at: string | null
   updated_at: string | null
+  // Pricing model fields (added 2026-04-25)
+  product_id: string | null
+  owner_user_id: string | null
+  weekly_price_override: number | null
+  term_months: number | null
+  acv: number | null
+  tcv: number | null
+  commission_pct: number | null
+  commission_amount: number | null
+  close_won_at: string | null
+  install_scheduled_for: string | null
+  install_confirmed_at: string | null
+  install_completed_at: string | null
   contact?: {
     id: string
     full_name: string
@@ -37,6 +50,13 @@ export interface Deal {
     is_closed: boolean | null
     color: string | null
   } | null
+  product?: {
+    id: string
+    sku: string
+    label: string
+    brand: string
+    weekly_price_aud: number
+  } | null
   lead_score?: {
     score: number
     tier: 'hot' | 'warm' | 'cold'
@@ -54,7 +74,8 @@ export function useDeals() {
           *,
           contact:contacts(id, full_name, email, signal_reopening),
           venue:venues(id, name, venue_type),
-          stage:pipeline_stages(id, name, position, is_closed, color)
+          stage:pipeline_stages(id, name, position, is_closed, color),
+          product:products(id, sku, label, brand, weekly_price_aud)
         `)
         .order('updated_at', { ascending: false })
 
@@ -97,7 +118,8 @@ export function useContactDeals(contactId: string) {
         .from('deals')
         .select(`
           *,
-          stage:pipeline_stages(id, name, position, is_closed, color)
+          stage:pipeline_stages(id, name, position, is_closed, color),
+          product:products(id, sku, label, brand, weekly_price_aud)
         `)
         .eq('contact_id', contactId)
         .order('created_at', { ascending: false })
@@ -121,6 +143,12 @@ export interface CreateDealInput {
   contract_value?: number
   follow_up_due?: string
   notes?: string
+  // Pricing model
+  product_id?: string
+  owner_user_id?: string
+  weekly_price_override?: number
+  term_months?: number
+  commission_pct?: number
 }
 
 export function useCreateDeal() {
@@ -135,9 +163,14 @@ export function useCreateDeal() {
           contact_id: input.contact_id ?? null,
           venue_id: input.venue_id ?? null,
           stage_id: input.stage_id,
-          contract_value: input.contract_value ?? 800,
+          contract_value: input.contract_value ?? null,
           follow_up_due: input.follow_up_due ?? null,
           notes: input.notes ?? null,
+          product_id: input.product_id ?? null,
+          owner_user_id: input.owner_user_id ?? null,
+          weekly_price_override: input.weekly_price_override ?? null,
+          term_months: input.term_months ?? null,
+          commission_pct: input.commission_pct ?? null,
         })
         .select()
         .single()
@@ -177,7 +210,15 @@ export function useUpdateDeal() {
       from_stage?: string
       to_stage?: string
     } & Partial<Deal>) => {
-      const { stage: _stage, contact: _contact, venue: _venue, lead_score: _ls, days_in_stage: _days, ...dbUpdates } = updates
+      const {
+        stage: _stage,
+        contact: _contact,
+        venue: _venue,
+        lead_score: _ls,
+        days_in_stage: _days,
+        product: _product,
+        ...dbUpdates
+      } = updates
       const { data, error } = await supabase
         .from('deals')
         .update({ ...dbUpdates, updated_at: new Date().toISOString() })
@@ -241,7 +282,60 @@ export function useUpdateDealStage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["deals"] })
       qc.invalidateQueries({ queryKey: ["briefing"] })
+      qc.invalidateQueries({ queryKey: ['monthly-gate'] })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
       toast.success("Deal stage updated")
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+}
+
+/**
+ * Mark install confirmed: stamps install_confirmed_at + optional scheduled date.
+ */
+export function useMarkInstallConfirmed() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ dealId, scheduledFor }: { dealId: string; scheduledFor?: string }) => {
+      const { error } = await supabase
+        .from('deals')
+        .update({
+          install_confirmed_at: new Date().toISOString(),
+          install_scheduled_for: scheduledFor ?? null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', dealId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['deals'] })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
+      toast.success('Install confirmed')
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+}
+
+/**
+ * Mark installed: stamps install_completed_at = now() — this is the moment commission is "earned".
+ */
+export function useMarkInstalled() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (dealId: string) => {
+      const { error } = await supabase
+        .from('deals')
+        .update({
+          install_completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', dealId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['deals'] })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
+      toast.success('Marked as installed — commission earned')
     },
     onError: (err: Error) => toast.error(err.message),
   })

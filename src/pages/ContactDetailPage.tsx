@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useForm, type FieldErrors } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -47,14 +47,14 @@ import {
 
 import { useContact, useUpdateContact } from '@/lib/queries/contacts'
 import { useContactDeals, useCreateDeal } from '@/lib/queries/deals'
+import { PackageDealForm } from '@/components/pipeline/PackageDealForm'
+import type { PackageDealValues } from '@/lib/schemas/deal'
 import {
   useContactActivities,
   useCreateActivity,
 } from '@/lib/queries/activities'
-import { useStages } from '@/lib/queries/stages'
 import { useGenerateDraft } from '@/lib/queries/drafts'
 import { useAuth } from '@/hooks/useAuth'
-import { dealFormSchema, type DealFormValues } from '@/lib/schemas/deal'
 import {
   activityFormSchema,
   type ActivityFormValues,
@@ -65,7 +65,6 @@ import {
   formatRelative,
   roleLabel,
   venueTypeLabel,
-  cn,
 } from '@/lib/utils'
 import type { DraftType } from '@/lib/queries/drafts'
 
@@ -85,7 +84,6 @@ export function ContactDetailPage() {
   const { data: contact, isLoading, error, refetch } = useContact(id ?? '')
   const { data: deals } = useContactDeals(id ?? '')
   const { data: activities } = useContactActivities(id ?? '')
-  const { data: stages } = useStages()
 
   const updateContact = useUpdateContact(id ?? '')
   const createDeal = useCreateDeal()
@@ -98,10 +96,6 @@ export function ContactDetailPage() {
   const [draftType, setDraftType] = useState<DraftType>('cold_outreach')
   const [draftHint, setDraftHint] = useState('')
 
-  const dealForm = useForm<DealFormValues>({
-    resolver: zodResolver(dealFormSchema),
-    defaultValues: { contract_value: 800 },
-  })
   const activityForm = useForm<ActivityFormValues>({
     resolver: zodResolver(activityFormSchema),
     defaultValues: { occurred_at: new Date().toISOString().split('T')[0] },
@@ -130,18 +124,7 @@ export function ContactDetailPage() {
     setEditingField(null)
   }
 
-  // Pre-fill deal title + stage when dialog opens (don't clobber user edits)
-  useEffect(() => {
-    if (!dealDialogOpen || !contact) return
-    if (!dealForm.getValues('title')) {
-      dealForm.setValue('title', `${contact.full_name} × Purezza`)
-    }
-    if (!dealForm.getValues('stage_id') && stages && stages.length > 0) {
-      dealForm.setValue('stage_id', stages[0].id)
-    }
-  }, [dealDialogOpen, contact, stages, dealForm])
-
-  async function submitDeal(values: DealFormValues) {
+  async function submitPackageDeal(values: PackageDealValues) {
     if (!user || !contact) return
     const deal = await createDeal.mutateAsync({
       org_id: user.org_id,
@@ -149,28 +132,19 @@ export function ContactDetailPage() {
       contact_id: contact.id,
       venue_id: contact.venue_id ?? undefined,
       stage_id: values.stage_id,
-      contract_value: values.contract_value,
+      product_id: values.product_id,
+      owner_user_id: user.id,
+      term_months: values.term_months,
+      commission_pct: values.commission_pct,
+      weekly_price_override: values.weekly_price,
       follow_up_due: values.follow_up_due,
       notes: values.notes,
     })
-    dealForm.reset({ contract_value: 800 })
     setDealDialogOpen(false)
     if (deal?.id) {
       navigate(`/pipeline?deal=${deal.id}`)
     } else {
       navigate('/pipeline')
-    }
-  }
-
-  function onDealInvalid(errors: FieldErrors<DealFormValues>) {
-    console.error('[ContactDetail.submitDeal] validation failed:', errors)
-    const first = Object.entries(errors)[0]
-    if (first) {
-      const [field, err] = first
-      const message = (err as { message?: string })?.message ?? 'Invalid value'
-      toast.error('Cannot add deal — check the form', {
-        description: `${field}: ${message}`,
-      })
     }
   }
 
@@ -759,86 +733,22 @@ export function ContactDetailPage() {
       </div>
 
       {/* ── Dialogs (kept) ────────────────────────────────────── */}
-      {/* Add Deal */}
+      {/* Add Deal — package picker with live ACV/TCV/commission readouts */}
       <Dialog open={dealDialogOpen} onOpenChange={setDealDialogOpen}>
-        <DialogContent className="max-w-md" aria-describedby={undefined}>
+        <DialogContent className="max-w-xl" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Add to pipeline</DialogTitle>
           </DialogHeader>
-          <form
-            onSubmit={dealForm.handleSubmit(submitDeal, onDealInvalid)}
-            className="space-y-3 mt-2"
-          >
-            {Object.keys(dealForm.formState.errors).length > 0 && (
-              <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-                Please fix the highlighted fields before saving.
-              </div>
-            )}
-            <div className="space-y-1">
-              <Label>Deal title *</Label>
-              <Input
-                {...dealForm.register('title')}
-                placeholder="e.g. Purezza × The Espy"
-                className={cn(dealForm.formState.errors.title && 'border-destructive')}
-              />
-              {dealForm.formState.errors.title && (
-                <p className="text-xs text-destructive">
-                  {dealForm.formState.errors.title.message}
-                </p>
-              )}
-            </div>
-            <div className="space-y-1">
-              <Label>Stage *</Label>
-              <Select
-                value={dealForm.watch('stage_id') ?? ''}
-                onValueChange={(v) => dealForm.setValue('stage_id', v)}
-              >
-                <SelectTrigger
-                  className={cn(dealForm.formState.errors.stage_id && 'border-destructive')}
-                >
-                  <SelectValue placeholder="Select a stage" />
-                </SelectTrigger>
-                <SelectContent>
-                  {stages?.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {dealForm.formState.errors.stage_id && (
-                <p className="text-xs text-destructive">
-                  {dealForm.formState.errors.stage_id.message}
-                </p>
-              )}
-            </div>
-            <div className="space-y-1">
-              <Label>Contract value (AUD)</Label>
-              <Input
-                type="number"
-                min={0}
-                {...dealForm.register('contract_value', { valueAsNumber: true })}
-                placeholder="800"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Follow-up due</Label>
-              <Input type="date" {...dealForm.register('follow_up_due')} />
-            </div>
-            <div className="flex gap-2 pt-1">
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1"
-                onClick={() => setDealDialogOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" className="flex-1" disabled={createDeal.isPending}>
-                {createDeal.isPending ? 'Adding…' : 'Add deal'}
-              </Button>
-            </div>
-          </form>
+          {dealDialogOpen && contact && (
+            <PackageDealForm
+              key={contact.id}
+              defaultTitleSeed={contact.full_name}
+              onSubmit={submitPackageDeal}
+              onCancel={() => setDealDialogOpen(false)}
+              submitting={createDeal.isPending}
+              submitLabel="Add deal"
+            />
+          )}
         </DialogContent>
       </Dialog>
 
