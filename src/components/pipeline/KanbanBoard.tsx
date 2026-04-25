@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import {
   DndContext,
   type DragEndEvent,
@@ -37,7 +37,8 @@ import { DealCard } from './DealCard'
 import { DealDrawer } from './DealDrawer'
 import { MetricNumber, ErrorAlert } from '@/components/primitives'
 import { Plus } from 'lucide-react'
-import { useForm } from 'react-hook-form'
+import { useForm, type FieldErrors } from 'react-hook-form'
+import { toast } from 'sonner'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { dealFormSchema, type DealFormValues } from '@/lib/schemas/deal'
 
@@ -50,12 +51,15 @@ export interface KanbanBoardProps {
    */
   dealIdAllowlist?: Set<string> | null
   contactIdAllowlist?: Set<string> | null
+  /** Auto-open DealDrawer for this deal id (deep-link from /pipeline?deal=<id>). */
+  focusDealId?: string | null
 }
 
 export function KanbanBoard({
   stageFilter = null,
   dealIdAllowlist = null,
   contactIdAllowlist = null,
+  focusDealId = null,
 }: KanbanBoardProps = {}) {
   const { user } = useAuth()
   const { data: stages } = useStages()
@@ -172,6 +176,31 @@ export function KanbanBoard({
     setQuickAddStageId(null)
     form.reset({ contract_value: 800 })
   }
+
+  function onQuickAddInvalid(errors: FieldErrors<DealFormValues>) {
+    console.error('[KanbanBoard.handleQuickAdd] validation failed:', errors)
+    const first = Object.entries(errors)[0]
+    if (first) {
+      const [field, err] = first
+      const message = (err as { message?: string })?.message ?? 'Invalid value'
+      toast.error('Cannot add deal — check the form', {
+        description: `${field}: ${message}`,
+      })
+    }
+  }
+
+  // Auto-open DealDrawer when ?deal=<id> deep-link is provided.
+  // Track which id we've already auto-opened to avoid re-opening after close.
+  const autoOpenedDealRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!focusDealId || !deals) return
+    if (autoOpenedDealRef.current === focusDealId) return
+    const target = deals.find((d) => d.id === focusDealId)
+    if (target) {
+      autoOpenedDealRef.current = focusDealId
+      setSelectedDeal(target)
+    }
+  }, [focusDealId, deals])
 
   if (isLoading) {
     return (
@@ -331,9 +360,14 @@ export function KanbanBoard({
             </DialogTitle>
           </DialogHeader>
           <form
-            onSubmit={form.handleSubmit(handleQuickAdd)}
+            onSubmit={form.handleSubmit(handleQuickAdd, onQuickAddInvalid)}
             className="space-y-3 mt-2"
           >
+            {Object.keys(form.formState.errors).length > 0 && (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                Please fix the highlighted fields before saving.
+              </div>
+            )}
             <div className="space-y-1">
               <Label>Title *</Label>
               <Input

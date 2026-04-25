@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, type FieldErrors } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { toast } from 'sonner'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -92,6 +93,18 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
     },
   })
 
+  function onInvalid(errors: FieldErrors<DealFormValues>) {
+    console.error('[DealDrawer.handleSave] validation failed:', errors)
+    const first = Object.entries(errors)[0]
+    if (first) {
+      const [field, err] = first
+      const message = (err as { message?: string })?.message ?? 'Invalid value'
+      toast.error('Cannot save deal — check the form', {
+        description: `${field}: ${message}`,
+      })
+    }
+  }
+
   async function handleSave(values: DealFormValues) {
     const oldStageName = deal.stage?.name
     const newStage = stages?.find((s) => s.id === values.stage_id)
@@ -146,7 +159,12 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
             </div>
           </SheetHeader>
 
-          <form onSubmit={form.handleSubmit(handleSave)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(handleSave, onInvalid)} className="space-y-4">
+            {Object.keys(form.formState.errors).length > 0 && (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                Please fix the highlighted fields before saving.
+              </div>
+            )}
             <div className="space-y-1">
               <Label>Title</Label>
               <Input {...form.register('title')} />

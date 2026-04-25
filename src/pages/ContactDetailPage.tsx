@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
+import { useForm, type FieldErrors } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { toast } from 'sonner'
 import {
   ArrowLeft,
   Briefcase,
@@ -129,9 +130,20 @@ export function ContactDetailPage() {
     setEditingField(null)
   }
 
+  // Pre-fill deal title + stage when dialog opens (don't clobber user edits)
+  useEffect(() => {
+    if (!dealDialogOpen || !contact) return
+    if (!dealForm.getValues('title')) {
+      dealForm.setValue('title', `${contact.full_name} × Purezza`)
+    }
+    if (!dealForm.getValues('stage_id') && stages && stages.length > 0) {
+      dealForm.setValue('stage_id', stages[0].id)
+    }
+  }, [dealDialogOpen, contact, stages, dealForm])
+
   async function submitDeal(values: DealFormValues) {
     if (!user || !contact) return
-    await createDeal.mutateAsync({
+    const deal = await createDeal.mutateAsync({
       org_id: user.org_id,
       title: values.title,
       contact_id: contact.id,
@@ -141,8 +153,25 @@ export function ContactDetailPage() {
       follow_up_due: values.follow_up_due,
       notes: values.notes,
     })
-    setDealDialogOpen(false)
     dealForm.reset({ contract_value: 800 })
+    setDealDialogOpen(false)
+    if (deal?.id) {
+      navigate(`/pipeline?deal=${deal.id}`)
+    } else {
+      navigate('/pipeline')
+    }
+  }
+
+  function onDealInvalid(errors: FieldErrors<DealFormValues>) {
+    console.error('[ContactDetail.submitDeal] validation failed:', errors)
+    const first = Object.entries(errors)[0]
+    if (first) {
+      const [field, err] = first
+      const message = (err as { message?: string })?.message ?? 'Invalid value'
+      toast.error('Cannot add deal — check the form', {
+        description: `${field}: ${message}`,
+      })
+    }
   }
 
   async function submitActivity(values: ActivityFormValues) {
@@ -159,6 +188,18 @@ export function ContactDetailPage() {
     })
     setActivityDialogOpen(false)
     activityForm.reset()
+  }
+
+  function onActivityInvalid(errors: FieldErrors<ActivityFormValues>) {
+    console.error('[ContactDetail.submitActivity] validation failed:', errors)
+    const first = Object.entries(errors)[0]
+    if (first) {
+      const [field, err] = first
+      const message = (err as { message?: string })?.message ?? 'Invalid value'
+      toast.error('Cannot log activity — check the form', {
+        description: `${field}: ${message}`,
+      })
+    }
   }
 
   if (isLoading) {
@@ -724,12 +765,21 @@ export function ContactDetailPage() {
           <DialogHeader>
             <DialogTitle>Add to pipeline</DialogTitle>
           </DialogHeader>
-          <form onSubmit={dealForm.handleSubmit(submitDeal)} className="space-y-3 mt-2">
+          <form
+            onSubmit={dealForm.handleSubmit(submitDeal, onDealInvalid)}
+            className="space-y-3 mt-2"
+          >
+            {Object.keys(dealForm.formState.errors).length > 0 && (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                Please fix the highlighted fields before saving.
+              </div>
+            )}
             <div className="space-y-1">
               <Label>Deal title *</Label>
               <Input
                 {...dealForm.register('title')}
                 placeholder="e.g. Purezza × The Espy"
+                className={cn(dealForm.formState.errors.title && 'border-destructive')}
               />
               {dealForm.formState.errors.title && (
                 <p className="text-xs text-destructive">
@@ -756,6 +806,11 @@ export function ContactDetailPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {dealForm.formState.errors.stage_id && (
+                <p className="text-xs text-destructive">
+                  {dealForm.formState.errors.stage_id.message}
+                </p>
+              )}
             </div>
             <div className="space-y-1">
               <Label>Contract value (AUD)</Label>
@@ -870,9 +925,14 @@ export function ContactDetailPage() {
             <DialogTitle>Log activity</DialogTitle>
           </DialogHeader>
           <form
-            onSubmit={activityForm.handleSubmit(submitActivity)}
+            onSubmit={activityForm.handleSubmit(submitActivity, onActivityInvalid)}
             className="space-y-3 mt-2"
           >
+            {Object.keys(activityForm.formState.errors).length > 0 && (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                Please fix the highlighted fields before saving.
+              </div>
+            )}
             <div className="space-y-1">
               <Label>Type *</Label>
               <Select

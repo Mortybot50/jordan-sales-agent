@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
+import { useForm, type FieldErrors } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -63,8 +63,20 @@ function ProfileTab() {
     })
   }
 
+  function onInvalid(errors: FieldErrors<ProfileFormValues>) {
+    console.error('[Settings.ProfileTab] validation failed:', errors)
+    const first = Object.entries(errors)[0]
+    if (first) {
+      const [field, err] = first
+      const message = (err as { message?: string })?.message ?? 'Invalid value'
+      toast.error('Cannot save profile — check the form', {
+        description: `${field}: ${message}`,
+      })
+    }
+  }
+
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 max-w-lg">
+    <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4 max-w-lg">
       <div className="space-y-1">
         <Label htmlFor="full_name">Full name *</Label>
         <Input
@@ -531,8 +543,20 @@ function IcpTab() {
     })
   }
 
+  function onInvalid(errors: FieldErrors<IcpFormValues>) {
+    console.error('[Settings.IcpTab] validation failed:', errors)
+    const first = Object.entries(errors)[0]
+    if (first) {
+      const [field, err] = first
+      const message = (err as { message?: string })?.message ?? 'Invalid value'
+      toast.error('Cannot save ICP — check the form', {
+        description: `${field}: ${message}`,
+      })
+    }
+  }
+
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5 max-w-lg">
+    <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-5 max-w-lg">
       <p className="text-xs text-muted-foreground -mt-1">
         Hospitality ICP: cover count, suburb, licence type, kitchen style,
         service style, spend tier. Melbourne hospitality cycle is typically
