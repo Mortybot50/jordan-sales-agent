@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Upload, UserPlus, Users } from 'lucide-react'
+import { Mic, Upload, UserPlus, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ContactVoiceNoteDialog } from '@/components/voice/ContactVoiceNoteDialog'
 import {
   DataTable,
   type ColumnDef,
@@ -30,6 +31,7 @@ export function ContactsPage() {
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [selection, setSelection] = useState<SelectionState>({})
   const [page, setPage] = useState(0)
+  const [voiceOpen, setVoiceOpen] = useState(false)
 
   // Derive facet options from the current data.
   const { venueTypeOptions, suburbOptions } = useMemo(() => {
@@ -232,6 +234,15 @@ export function ContactsPage() {
               variant="outline"
               size="sm"
               className="h-8"
+              onClick={() => setVoiceOpen(true)}
+            >
+              <Mic className="w-4 h-4 mr-1.5" />
+              Voice note
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
               onClick={() => navigate('/contacts/import')}
             >
               <Upload className="w-4 h-4 mr-1.5" />
@@ -335,6 +346,8 @@ export function ContactsPage() {
           </div>
         </div>
       )}
+
+      <ContactVoiceNoteDialog open={voiceOpen} onOpenChange={setVoiceOpen} />
     </div>
   )
 }
