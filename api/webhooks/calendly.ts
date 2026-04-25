@@ -118,7 +118,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       // Advance deal stage to "Meeting Booked" if currently in New/Contacted/Replied
       if (deal?.id) {
-        const stageName = ((deal.stage as { name: string } | null)?.name ?? '').toLowerCase()
+        // Supabase typegen returns FK relations as arrays; runtime is a single object for to-one relations
+        const stageRel = (Array.isArray(deal.stage) ? deal.stage[0] : deal.stage) as { name: string } | null | undefined
+        const stageName = (stageRel?.name ?? '').toLowerCase()
         const shouldAdvance = ADVANCE_FROM_STAGE_NAMES.some((s) => stageName.includes(s))
 
         if (shouldAdvance) {
