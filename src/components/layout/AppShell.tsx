@@ -18,6 +18,7 @@ import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { CapsLabel, LivePill, MeterRail } from '@/components/primitives'
 import { useJordanAnchorMetrics } from '@/lib/queries/dashboard'
+import { useDraftQueueCount } from '@/lib/queries/drafts'
 import {
   JORDAN_MEETINGS_WEEKLY_TARGET_MIN,
   JORDAN_MEETINGS_WEEKLY_TARGET_MAX,
@@ -58,6 +59,28 @@ const NAV_SECTIONS: { id: string; label: string; items: NavItem[] }[] = [
   },
 ]
 
+function DraftQueueBadge() {
+  const { data: count } = useDraftQueueCount()
+  if (!count || count <= 0) return null
+  // Mint for a healthy queue, amber once it backs up — no new colours,
+  // both are existing Dark Anchor accents.
+  const tone = count >= 6 ? 'amber' : 'mint'
+  return (
+    <span
+      data-testid="draft-queue-count"
+      className={cn(
+        'ml-auto inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full text-[10px] font-semibold tracking-[0.08em] tabular-nums jordan-tnum',
+        tone === 'mint'
+          ? 'bg-[color:var(--jordan-accent-mint-soft)] text-[color:var(--jordan-success-text)]'
+          : 'bg-[color:var(--jordan-warm-soft)] text-[color:var(--jordan-warm-text)]',
+      )}
+      aria-label={`${count} draft${count === 1 ? '' : 's'} awaiting review`}
+    >
+      {count > 99 ? '99+' : count}
+    </span>
+  )
+}
+
 function NavItems({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <nav className="flex-1 overflow-y-auto px-3 pb-3 space-y-5">
@@ -83,6 +106,7 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
               >
                 <Icon className="size-4 shrink-0" />
                 <span>{label}</span>
+                {to === '/drafts' && <DraftQueueBadge />}
               </NavLink>
             ))}
           </div>

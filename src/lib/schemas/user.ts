@@ -4,6 +4,12 @@ export const profileFormSchema = z.object({
   full_name: z.string().min(1, 'Name is required'),
   calendly_url: z.string().url('Enter a valid Calendly URL').optional().or(z.literal('')),
   email_signature: z.string().optional(),
+  default_commission_pct: z
+    .number()
+    .min(0, 'Must be 0 or greater')
+    .max(100, 'Must be 100 or less')
+    .nullable()
+    .optional(),
 })
 
 export const icpFormSchema = z.object({

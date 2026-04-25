@@ -16,6 +16,7 @@ import { CapsLabel, MetricNumber } from '@/components/primitives'
 import { useProducts, brandLabel, type Product } from '@/lib/queries/products'
 import { useStages } from '@/lib/queries/stages'
 import { packageDealSchema, type PackageDealValues } from '@/lib/schemas/deal'
+import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 
 const TERMS = [12, 24, 36, 48, 60] as const
@@ -48,13 +49,15 @@ export function PackageDealForm({
 }: PackageDealFormProps) {
   const { data: products } = useProducts()
   const { data: stages } = useStages()
+  const { user } = useAuth()
 
   const form = useForm<PackageDealValues>({
     resolver: zodResolver(packageDealSchema),
     defaultValues: {
       brand: initialBrand ?? 'purezza',
       term_months: 48,
-      commission_pct: 7,
+      // Falls back to 7% if Jordan hasn't set a personal default yet.
+      commission_pct: user?.default_commission_pct ?? 7,
       weekly_price: 0,
       title: '',
       product_id: '',

@@ -49,6 +49,7 @@ function ProfileTab() {
       full_name: user?.full_name ?? '',
       calendly_url: user?.calendly_url ?? '',
       email_signature: user?.email_signature ?? '',
+      default_commission_pct: user?.default_commission_pct ?? null,
     },
   })
 
@@ -59,6 +60,10 @@ function ProfileTab() {
       full_name: values.full_name,
       calendly_url: values.calendly_url || undefined,
       email_signature: values.email_signature || undefined,
+      default_commission_pct:
+        values.default_commission_pct == null || Number.isNaN(values.default_commission_pct)
+          ? null
+          : values.default_commission_pct,
       email_notifications: { morning_briefing: briefingEnabled, briefing_time_hour: briefingHour },
     })
   }
@@ -111,6 +116,39 @@ function ProfileTab() {
           placeholder="Jordan Smith&#10;Sales Manager · Purezza&#10;jordan@purezza.com.au"
           {...form.register('email_signature')}
         />
+      </div>
+
+      <div className="space-y-1">
+        <Label htmlFor="default_commission_pct">Default commission %</Label>
+        <div className="relative max-w-[160px]">
+          <Input
+            id="default_commission_pct"
+            type="number"
+            step="0.01"
+            min={0}
+            max={100}
+            placeholder="7.50"
+            className={cn(
+              'pr-7',
+              form.formState.errors.default_commission_pct && 'border-destructive',
+            )}
+            {...form.register('default_commission_pct', {
+              setValueAs: (v) => (v === '' || v == null ? null : Number(v)),
+            })}
+          />
+          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+            %
+          </span>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Pre-fills new deals when no package is selected. Picking a package still uses
+          its catalogue rate.
+        </p>
+        {form.formState.errors.default_commission_pct && (
+          <p className="text-xs text-destructive">
+            {form.formState.errors.default_commission_pct.message}
+          </p>
+        )}
       </div>
 
       <Separator />
