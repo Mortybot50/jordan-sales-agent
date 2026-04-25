@@ -35,6 +35,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import { DealCard } from './DealCard'
 import { DealDrawer } from './DealDrawer'
+import { MarkOutcomeDialog } from './MarkOutcomeDialog'
 import { MetricNumber, ErrorAlert } from '@/components/primitives'
 import { Plus } from 'lucide-react'
 import { useForm, type FieldErrors } from 'react-hook-form'
@@ -72,6 +73,11 @@ export function KanbanBoard({
   const [activeDeal, setActiveDeal] = useState<Deal | null>(null)
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null)
   const [quickAddStageId, setQuickAddStageId] = useState<string | null>(null)
+  const [outcomeIntent, setOutcomeIntent] = useState<{
+    deal: Deal
+    initialOutcome: 'won' | 'lost'
+    pendingStageId: string | null
+  } | null>(null)
 
   const allDeals = localDeals ?? deals ?? []
   const displayDeals = useMemo(() => {
@@ -135,6 +141,21 @@ export function KanbanBoard({
 
     const fromStage = stages?.find((s) => s.id === movedDeal.stage_id)
     const toStage = stages?.find((s) => s.id === targetStageId)
+    const toName = toStage?.name ?? ''
+    const isWonTarget = /won/i.test(toName) && !/lost/i.test(toName)
+    const isLostTarget = /lost/i.test(toName)
+
+    // Drop onto a Closed Won/Lost column: defer the stage move and open the
+    // outcome dialog so Jordan confirms final value + close date. The mutation
+    // commits the stage_id atomically with the outcome.
+    if (isWonTarget || isLostTarget) {
+      setOutcomeIntent({
+        deal: movedDeal,
+        initialOutcome: isWonTarget ? 'won' : 'lost',
+        pendingStageId: targetStageId,
+      })
+      return
+    }
 
     // Optimistic update
     const snapshot = localDeals ?? deals ?? []
@@ -347,6 +368,15 @@ export function KanbanBoard({
           onClose={() => setSelectedDeal(null)}
         />
       )}
+
+      {/* Mark Won / Lost — opened by drag-onto-closed or drawer button */}
+      <MarkOutcomeDialog
+        deal={outcomeIntent?.deal ?? null}
+        initialOutcome={outcomeIntent?.initialOutcome ?? 'won'}
+        pendingStageId={outcomeIntent?.pendingStageId ?? null}
+        open={!!outcomeIntent}
+        onClose={() => setOutcomeIntent(null)}
+      />
 
       {/* Quick-add dialog */}
       <Dialog

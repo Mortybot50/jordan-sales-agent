@@ -40,8 +40,9 @@ import type { ActivityType } from '@/lib/queries/activities'
 import {
   Trash2, Mail, MailOpen, MousePointerClick, Reply, Phone, CalendarCheck,
   CheckSquare, ArrowRight, AlertCircle, UserMinus, PlusCircle, StickyNote,
-  Calendar, Activity, Pause, Play, Wrench, CheckCircle2,
+  Calendar, Activity, Pause, Play, Wrench, CheckCircle2, XCircle, AlertTriangle,
 } from 'lucide-react'
+import { MarkOutcomeDialog } from './MarkOutcomeDialog'
 
 interface DealDrawerProps {
   deal: Deal
@@ -82,6 +83,7 @@ function nextMonthLabel(): string {
 
 export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [outcomeIntent, setOutcomeIntent] = useState<'won' | 'lost' | null>(null)
   const [installScheduledFor, setInstallScheduledFor] = useState<string>(
     deal.install_scheduled_for ?? '',
   )
@@ -170,6 +172,8 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
   const isClosedWon = /won/i.test(stageName) && !/lost/i.test(stageName)
   const contributesToGate = !!deal.close_won_at && isCurrentMonth(deal.close_won_at) && !isHeld
   const isLost = /lost/i.test(stageName)
+  const isClosedStage = !!deal.stage?.is_closed
+  const needsOutcomeTag = isClosedStage && !deal.outcome
 
   return (
     <>
@@ -229,6 +233,81 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
                   Close Won this month — contributes {formatCurrency(acv)} to monthly gate
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ── Outcome (Won / Lost) panel ─────────────────────── */}
+          {deal.outcome === 'won' && (
+            <div className="mb-5 rounded-[10px] border border-[color:var(--jordan-accent-mint)]/40 bg-[color:var(--jordan-accent-mint-soft)] p-3 flex items-start justify-between gap-3">
+              <div>
+                <CapsLabel className="text-[color:var(--jordan-success-text)]">Closed Won</CapsLabel>
+                <p className="text-[12px] text-ink-muted mt-0.5">
+                  {deal.final_value != null
+                    ? `Final value ${formatCurrency(Number(deal.final_value))}`
+                    : 'Final value not captured'}
+                  {deal.closed_at ? ` · ${format(new Date(deal.closed_at), 'd MMM yyyy')}` : ''}
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setOutcomeIntent('won')}
+              >
+                Edit
+              </Button>
+            </div>
+          )}
+          {deal.outcome === 'lost' && (
+            <div className="mb-5 rounded-[10px] border border-[color:var(--jordan-danger)]/40 bg-[color:var(--jordan-danger-soft)] p-3 flex items-start justify-between gap-3">
+              <div>
+                <CapsLabel className="text-[color:var(--jordan-danger-text)]">Closed Lost</CapsLabel>
+                <p className="text-[12px] text-ink-muted mt-0.5">
+                  {deal.lost_reason ? deal.lost_reason : 'No reason captured'}
+                  {deal.closed_at ? ` · ${format(new Date(deal.closed_at), 'd MMM yyyy')}` : ''}
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setOutcomeIntent('lost')}
+              >
+                Edit
+              </Button>
+            </div>
+          )}
+          {needsOutcomeTag && (
+            <div className="mb-5 rounded-[10px] border border-[color:var(--jordan-warm)]/50 bg-[color:var(--jordan-warm-soft,transparent)] p-3 space-y-2">
+              <div className="flex items-center gap-1.5 text-[color:var(--jordan-warm-text)] text-[12px] font-semibold uppercase tracking-[var(--jordan-tracking-label)]">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                Outcome not set
+              </div>
+              <p className="text-[12px] text-ink-muted">
+                This deal sits in a closed stage but hasn't been marked Won or Lost.
+                Tag it so the dashboard reflects accurate commission + gate progress.
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setOutcomeIntent('won')}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                  Mark as Won
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setOutcomeIntent('lost')}
+                >
+                  <XCircle className="w-3.5 h-3.5 mr-1" />
+                  Mark as Lost
+                </Button>
+              </div>
             </div>
           )}
 
@@ -506,6 +585,14 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Mark Won / Lost — opened from outcome banner or "needs outcome" CTA */}
+      <MarkOutcomeDialog
+        deal={outcomeIntent ? deal : null}
+        initialOutcome={outcomeIntent ?? 'won'}
+        open={!!outcomeIntent}
+        onClose={() => setOutcomeIntent(null)}
+      />
 
       {/* Delete confirm */}
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>

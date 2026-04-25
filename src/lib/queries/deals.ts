@@ -32,6 +32,9 @@ export interface Deal {
   install_scheduled_for: string | null
   install_confirmed_at: string | null
   install_completed_at: string | null
+  // Close Won outcome (added 2026-04-26)
+  outcome: 'won' | 'lost' | null
+  final_value: number | null
   contact?: {
     id: string
     full_name: string
@@ -103,9 +106,10 @@ export function useDeals() {
 
       return deals.map((d) => ({
         ...d,
+        outcome: (d.outcome as Deal['outcome']) ?? null,
         lead_score: scoreMap[d.id] ?? null,
         days_in_stage: d.updated_at ? differenceInDays(new Date(), parseISO(d.updated_at)) : 0,
-      }))
+      })) as Deal[]
     },
   })
 }
@@ -127,8 +131,9 @@ export function useContactDeals(contactId: string) {
       if (error) throw error
       return (data ?? []).map((d) => ({
         ...d,
+        outcome: (d.outcome as Deal['outcome']) ?? null,
         days_in_stage: d.updated_at ? differenceInDays(new Date(), parseISO(d.updated_at)) : 0,
-      }))
+      })) as Deal[]
     },
     enabled: !!contactId,
   })
@@ -287,6 +292,77 @@ export function useUpdateDealStage() {
       toast.success("Deal stage updated")
     },
     onError: (err: Error) => toast.error(err.message),
+  })
+}
+
+/**
+ * Mark a deal as Won or Lost. Stamps outcome + final_value + closed_at, and
+ * for won deals also seeds close_won_at to the chosen close date so the monthly
+ * gate trigger picks the right month.
+ */
+export function useMarkDealOutcome() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      dealId,
+      orgId,
+      outcome,
+      finalValue,
+      closeDate,
+      lostReason,
+      stageId,
+    }: {
+      dealId: string
+      orgId: string
+      outcome: 'won' | 'lost'
+      finalValue: number | null
+      closeDate: string                      // ISO date (yyyy-MM-dd)
+      lostReason?: string | null
+      stageId?: string                       // optional stage_id to set in same write
+    }) => {
+      const closeIso = new Date(`${closeDate}T12:00:00`).toISOString()
+      const updates = {
+        outcome,
+        final_value: finalValue,
+        closed_at: closeIso,
+        updated_at: new Date().toISOString(),
+        close_won_at: outcome === 'won' ? closeIso : null,
+        ...(outcome === 'lost' ? { lost_reason: lostReason ?? null } : {}),
+        ...(stageId ? { stage_id: stageId } : {}),
+      }
+
+      const { data, error } = await supabase
+        .from('deals')
+        .update(updates)
+        .eq('id', dealId)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      // Activity row for the timeline
+      await supabase.from('activities').insert({
+        org_id: orgId,
+        deal_id: dealId,
+        activity_type: 'stage_change',
+        subject: outcome === 'won' ? 'Marked Won' : 'Marked Lost',
+        body:
+          outcome === 'won'
+            ? `Final value ${finalValue != null ? `$${finalValue.toFixed(2)}` : '—'}`
+            : `Lost${lostReason ? ` — ${lostReason}` : ''}`,
+      })
+
+      return data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['deals'] })
+      qc.invalidateQueries({ queryKey: ['activities'] })
+      qc.invalidateQueries({ queryKey: ['monthly-gate'] })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+    onError: (err: Error) => {
+      toast.error(`Failed to update outcome: ${err.message}`)
+    },
   })
 }
 

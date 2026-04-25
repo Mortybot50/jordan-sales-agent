@@ -135,7 +135,8 @@ export function usePipelineFinancials() {
       const { data: dealRows, error } = await supabase
         .from('deals')
         .select(`
-          id, title, acv, tcv, commission_amount, close_won_at,
+          id, title, acv, tcv, commission_amount, commission_pct,
+          close_won_at, closed_at, outcome, final_value,
           install_scheduled_for, install_confirmed_at, install_completed_at,
           stage:pipeline_stages(id, name, is_closed),
           contact:contacts(id, full_name),
@@ -159,7 +160,11 @@ export function usePipelineFinancials() {
         acv: number | string | null
         tcv: number | string | null
         commission_amount: number | string | null
+        commission_pct: number | string | null
         close_won_at: string | null
+        closed_at: string | null
+        outcome: 'won' | 'lost' | null
+        final_value: number | string | null
         install_scheduled_for: string | null
         install_confirmed_at: string | null
         install_completed_at: string | null
@@ -171,10 +176,12 @@ export function usePipelineFinancials() {
         const acv = r.acv != null ? Number(r.acv) : 0
         const tcv = r.tcv != null ? Number(r.tcv) : 0
         const commission = r.commission_amount != null ? Number(r.commission_amount) : 0
+        const finalValue = r.final_value != null ? Number(r.final_value) : null
+        const commissionPct = r.commission_pct != null ? Number(r.commission_pct) : null
         const stageName = r.stage?.name ?? ''
         const isClosed = !!r.stage?.is_closed
         const isHeld = stageName === 'Hold for Next Month'
-        const isLost = /lost/i.test(stageName)
+        const isLost = r.outcome === 'lost' || /lost/i.test(stageName)
 
         if (isHeld) {
           heldForNextMonthAcv += acv
@@ -203,9 +210,18 @@ export function usePipelineFinancials() {
           })
         }
 
-        // Earned this year: install_completed_at present and within current year
-        if (r.install_completed_at && r.install_completed_at >= yearStart) {
-          earnedThisYearCommission += commission
+        // Earned this year: deals explicitly marked Won this calendar year.
+        // Prefer final_value × commission_pct (captured at close); fall back to
+        // the auto-computed commission_amount if pct missing.
+        if (r.outcome === 'won') {
+          const closedISO = r.closed_at ?? r.close_won_at
+          if (closedISO && closedISO >= yearStart) {
+            const wonCommission =
+              finalValue != null && commissionPct != null
+                ? (finalValue * commissionPct) / 100
+                : commission
+            earnedThisYearCommission += wonCommission
+          }
         }
       }
 
