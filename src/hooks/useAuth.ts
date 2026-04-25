@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
 import type { Session } from '@supabase/supabase-js'
 
@@ -19,6 +20,46 @@ interface AuthState {
   session: Session | null
   user: AppUser | null
   loading: boolean
+}
+
+const SESSION_RESTORE_TIMEOUT_MS = 5_000
+
+/** Derive the Supabase project ref from VITE_SUPABASE_URL.
+ *  Supabase v2 SDK persists the session under `sb-<projectRef>-auth-token`.
+ */
+function projectRefFromUrl(url: string | undefined): string | null {
+  if (!url) return null
+  try {
+    const host = new URL(url).host
+    return host.split('.')[0] || null
+  } catch {
+    return null
+  }
+}
+
+function clearStaleSupabaseAuthStorage() {
+  const ref = projectRefFromUrl(import.meta.env.VITE_SUPABASE_URL)
+  // Clear the canonical key, plus any other sb-*-auth-token keys lingering
+  // from previous projects/refs (defensive).
+  try {
+    if (ref) {
+      localStorage.removeItem(`sb-${ref}-auth-token`)
+    }
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i)
+      if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+        localStorage.removeItem(key)
+      }
+    }
+  } catch (err) {
+    console.error('[useAuth] localStorage clear failed:', err)
+  }
+}
+
+function redirectToLogin() {
+  if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+    window.location.replace('/login')
+  }
 }
 
 async function fetchUserProfile(userId: string): Promise<AppUser | null> {
@@ -53,23 +94,59 @@ export function useAuth(): AuthState {
   useEffect(() => {
     let mounted = true
 
-    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
-      if (!mounted) return
-      try {
-        setSession(s)
-        if (s?.user) {
-          const profile = await fetchUserProfile(s.user.id)
-          if (mounted) setUser(profile)
-        }
-      } catch (err) {
-        console.error('[useAuth] Failed to load session profile:', err)
-      } finally {
-        if (mounted) setLoading(false)
-      }
-    }).catch((err) => {
-      console.error('[useAuth] getSession failed:', err)
-      if (mounted) setLoading(false)
+    // Race getSession() against a 5s timeout. iOS Safari PWA cold-start has
+    // been observed to hang here when the persisted session token is stale
+    // or corrupted. Without the timeout, the app sits forever on "Loading…".
+    const sessionPromise = supabase.auth.getSession()
+    const timeoutPromise = new Promise<{ timedOut: true }>((resolve) => {
+      setTimeout(() => resolve({ timedOut: true }), SESSION_RESTORE_TIMEOUT_MS)
     })
+
+    Promise.race([sessionPromise, timeoutPromise])
+      .then(async (result) => {
+        if (!mounted) return
+
+        if ('timedOut' in result) {
+          console.error(
+            '[useAuth] getSession timed out after',
+            SESSION_RESTORE_TIMEOUT_MS,
+            'ms — clearing persisted session and redirecting to /login',
+          )
+          clearStaleSupabaseAuthStorage()
+          setSession(null)
+          setUser(null)
+          setLoading(false)
+          toast.error('Session expired, please log in')
+          redirectToLogin()
+          return
+        }
+
+        const { data: { session: s } } = result
+        try {
+          setSession(s)
+          if (s?.user) {
+            const profile = await fetchUserProfile(s.user.id)
+            if (mounted) setUser(profile)
+          }
+        } catch (err) {
+          console.error('[useAuth] Failed to load session profile:', err)
+        } finally {
+          if (mounted) setLoading(false)
+        }
+      })
+      .catch((err) => {
+        console.error(
+          '[useAuth] getSession failed — clearing persisted session and redirecting to /login:',
+          err,
+        )
+        if (!mounted) return
+        clearStaleSupabaseAuthStorage()
+        setSession(null)
+        setUser(null)
+        setLoading(false)
+        toast.error('Session expired, please log in')
+        redirectToLogin()
+      })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, s) => {
       if (!mounted) return
