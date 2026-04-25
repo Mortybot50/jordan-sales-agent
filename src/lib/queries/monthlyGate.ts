@@ -110,6 +110,8 @@ export interface PipelineFinancials {
   heldForNextMonthAcv: number
   heldForNextMonthCount: number
   earnedThisYearCommission: number
+  forecastedCommission: number
+  forecastedCommissionCount: number
   pendingInstalls: PendingInstall[]
 }
 
@@ -152,6 +154,8 @@ export function usePipelineFinancials() {
       let heldForNextMonthAcv = 0
       let heldForNextMonthCount = 0
       let earnedThisYearCommission = 0
+      let forecastedCommission = 0
+      let forecastedCommissionCount = 0
       const pendingInstalls: PendingInstall[] = []
 
       for (const r of rows as Array<{
@@ -210,17 +214,24 @@ export function usePipelineFinancials() {
           })
         }
 
-        // Earned this year: deals explicitly marked Won this calendar year.
-        // Prefer final_value × commission_pct (captured at close); fall back to
-        // the auto-computed commission_amount if pct missing.
+        // Earned this year: commission is "earned" only when the unit is
+        // installed (per Jordan: "Commission only counts when it's installed.").
+        // Won deals awaiting install are forecasted, not earned. Prefer
+        // final_value × commission_pct (captured at close); fall back to the
+        // auto-computed commission_amount if pct missing.
         if (r.outcome === 'won') {
-          const closedISO = r.closed_at ?? r.close_won_at
-          if (closedISO && closedISO >= yearStart) {
-            const wonCommission =
-              finalValue != null && commissionPct != null
-                ? (finalValue * commissionPct) / 100
-                : commission
-            earnedThisYearCommission += wonCommission
+          const wonCommission =
+            finalValue != null && commissionPct != null
+              ? (finalValue * commissionPct) / 100
+              : commission
+
+          if (r.install_completed_at) {
+            if (r.install_completed_at >= yearStart) {
+              earnedThisYearCommission += wonCommission
+            }
+          } else {
+            forecastedCommission += wonCommission
+            forecastedCommissionCount += 1
           }
         }
       }
@@ -233,6 +244,8 @@ export function usePipelineFinancials() {
         heldForNextMonthAcv,
         heldForNextMonthCount,
         earnedThisYearCommission,
+        forecastedCommission,
+        forecastedCommissionCount,
         pendingInstalls,
       }
     },

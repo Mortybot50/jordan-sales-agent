@@ -48,6 +48,7 @@ export function DealCard({ deal, onClick }: DealCardProps) {
   const isWon = deal.outcome === 'won'
   const isLost = deal.outcome === 'lost'
   const needsOutcomeTag = isClosedStage && !deal.outcome
+  const wonAwaitingInstall = isWon && !deal.install_completed_at
 
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
@@ -78,12 +79,24 @@ export function DealCard({ deal, onClick }: DealCardProps) {
       >
         <div className="space-y-1.5">
           <div className="flex items-center gap-1 flex-wrap">
-            {isWon && (
+            {isWon && wonAwaitingInstall && (
+              <span
+                className="inline-flex items-center gap-1 rounded-[3px] bg-[color:var(--jordan-warm-soft,transparent)] border border-[color:var(--jordan-warm)]/40 text-[color:var(--jordan-warm-text)] px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-[var(--jordan-tracking-label)]"
+                title={
+                  deal.closed_at
+                    ? `Won ${new Date(deal.closed_at).toLocaleDateString('en-AU')} · awaiting install`
+                    : 'Won · awaiting install'
+                }
+              >
+                <span aria-hidden>⏳</span> Awaiting install
+              </span>
+            )}
+            {isWon && !wonAwaitingInstall && (
               <span
                 className="inline-flex items-center gap-1 rounded-[3px] bg-[color:var(--jordan-accent-mint-soft)] text-[color:var(--jordan-success-text)] px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-[var(--jordan-tracking-label)]"
                 title={
-                  deal.closed_at
-                    ? `Won ${new Date(deal.closed_at).toLocaleDateString('en-AU')}`
+                  deal.install_completed_at
+                    ? `Won · installed ${new Date(deal.install_completed_at).toLocaleDateString('en-AU')}`
                     : 'Won'
                 }
               >

@@ -41,6 +41,7 @@ import {
   Trash2, Mail, MailOpen, MousePointerClick, Reply, Phone, CalendarCheck,
   CheckSquare, ArrowRight, AlertCircle, UserMinus, PlusCircle, StickyNote,
   Calendar, Activity, Pause, Play, Wrench, CheckCircle2, XCircle, AlertTriangle,
+  Clock,
 } from 'lucide-react'
 import { MarkOutcomeDialog } from './MarkOutcomeDialog'
 
@@ -238,24 +239,39 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
 
           {/* ── Outcome (Won / Lost) panel ─────────────────────── */}
           {deal.outcome === 'won' && (
-            <div className="mb-5 rounded-[10px] border border-[color:var(--jordan-accent-mint)]/40 bg-[color:var(--jordan-accent-mint-soft)] p-3 flex items-start justify-between gap-3">
-              <div>
-                <CapsLabel className="text-[color:var(--jordan-success-text)]">Closed Won</CapsLabel>
-                <p className="text-[12px] text-ink-muted mt-0.5">
-                  {deal.final_value != null
-                    ? `Final value ${formatCurrency(Number(deal.final_value))}`
-                    : 'Final value not captured'}
-                  {deal.closed_at ? ` · ${format(new Date(deal.closed_at), 'd MMM yyyy')}` : ''}
-                </p>
+            <div className="mb-5 rounded-[10px] border border-[color:var(--jordan-accent-mint)]/40 bg-[color:var(--jordan-accent-mint-soft)] p-3 space-y-2">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <CapsLabel className="text-[color:var(--jordan-success-text)]">
+                    <span className="inline-flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Closed Won
+                    </span>
+                  </CapsLabel>
+                  <p className="text-[12px] text-ink-muted mt-0.5">
+                    {deal.final_value != null
+                      ? `Final value ${formatCurrency(Number(deal.final_value))}`
+                      : 'Final value not captured'}
+                    {deal.closed_at ? ` · ${format(new Date(deal.closed_at), 'd MMM yyyy')}` : ''}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setOutcomeIntent('won')}
+                >
+                  Edit
+                </Button>
               </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setOutcomeIntent('won')}
-              >
-                Edit
-              </Button>
+              {!deal.install_completed_at && (
+                <div className="flex items-start gap-1.5 rounded-[6px] border border-[color:var(--jordan-warm)]/40 bg-[color:var(--jordan-warm-soft,transparent)] px-2 py-1.5 text-[11px] text-[color:var(--jordan-warm-text)]">
+                  <Clock className="w-3.5 h-3.5 mt-px shrink-0" />
+                  <span>
+                    Commission earned on install. Mark Installed when the unit's in venue.
+                  </span>
+                </div>
+              )}
             </div>
           )}
           {deal.outcome === 'lost' && (
@@ -312,7 +328,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
           )}
 
           {/* ── Install Lifecycle panel ─────────────────────── */}
-          {isClosedWon && (
+          {(isClosedWon || deal.outcome === 'won') && (
             <div className="mb-5 rounded-[10px] border border-hairline bg-surface-2 p-3 space-y-3">
               <CapsLabel>Install Lifecycle</CapsLabel>
               <div className="grid grid-cols-2 gap-3 text-sm">
@@ -385,7 +401,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
                     className="w-full"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                    Mark installed
+                    Mark Installed
                   </Button>
                 </>
               )}
