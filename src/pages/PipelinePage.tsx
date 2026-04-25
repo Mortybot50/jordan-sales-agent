@@ -95,6 +95,7 @@ export function PipelinePage() {
   const stageParam = searchParams.get('stage')
   const filterParam = searchParams.get('filter')
   const periodParam = searchParams.get('period')
+  const dealParam = searchParams.get('deal')
 
   const meetingsFilterActive =
     filterParam === 'meetings' && periodParam === 'this_week'
@@ -200,6 +201,7 @@ export function PipelinePage() {
             contactIdAllowlist={
               meetingsFilterActive ? meetingIds?.contactIds ?? null : null
             }
+            focusDealId={dealParam}
           />
         ) : (
           <DealListView />
