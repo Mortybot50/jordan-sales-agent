@@ -206,9 +206,13 @@ export type Database = {
           created_at: string | null
           email: string | null
           full_name: string
+          geocoded_at: string | null
           id: string
           is_primary: boolean | null
+          last_visited_at: string | null
+          lat: number | null
           linkedin_url: string | null
+          lng: number | null
           notes: string | null
           org_id: string
           phone: string | null
@@ -221,9 +225,13 @@ export type Database = {
           created_at?: string | null
           email?: string | null
           full_name: string
+          geocoded_at?: string | null
           id?: string
           is_primary?: boolean | null
+          last_visited_at?: string | null
+          lat?: number | null
           linkedin_url?: string | null
+          lng?: number | null
           notes?: string | null
           org_id: string
           phone?: string | null
@@ -236,9 +244,13 @@ export type Database = {
           created_at?: string | null
           email?: string | null
           full_name?: string
+          geocoded_at?: string | null
           id?: string
           is_primary?: boolean | null
+          last_visited_at?: string | null
+          lat?: number | null
           linkedin_url?: string | null
+          lng?: number | null
           notes?: string | null
           org_id?: string
           phone?: string | null
@@ -482,6 +494,76 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      field_visits: {
+        Row: {
+          contact_id: string | null
+          created_at: string
+          id: string
+          lat: number | null
+          lng: number | null
+          notes: string | null
+          org_id: string
+          outcome: string
+          user_id: string
+          venue_observation_id: string | null
+          visited_at: string
+          voice_audio_path: string | null
+          voice_transcript: string | null
+        }
+        Insert: {
+          contact_id?: string | null
+          created_at?: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          notes?: string | null
+          org_id: string
+          outcome: string
+          user_id: string
+          venue_observation_id?: string | null
+          visited_at?: string
+          voice_audio_path?: string | null
+          voice_transcript?: string | null
+        }
+        Update: {
+          contact_id?: string | null
+          created_at?: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          notes?: string | null
+          org_id?: string
+          outcome?: string
+          user_id?: string
+          venue_observation_id?: string | null
+          visited_at?: string
+          voice_audio_path?: string | null
+          voice_transcript?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "field_visits_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_visits_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_visits_venue_observation_id_fkey"
+            columns: ["venue_observation_id"]
+            isOneToOne: false
+            referencedRelation: "venue_observations"
             referencedColumns: ["id"]
           },
         ]
@@ -1211,10 +1293,13 @@ export type Database = {
           created_at: string | null
           evidence_url: string | null
           external_id: string | null
+          geocoded_at: string | null
           id: string
+          lat: number | null
           licence_number: string | null
           licence_type: string | null
           licensee: string | null
+          lng: number | null
           observed_at: string
           org_id: string
           raw: Json | null
@@ -1228,10 +1313,13 @@ export type Database = {
           created_at?: string | null
           evidence_url?: string | null
           external_id?: string | null
+          geocoded_at?: string | null
           id?: string
+          lat?: number | null
           licence_number?: string | null
           licence_type?: string | null
           licensee?: string | null
+          lng?: number | null
           observed_at?: string
           org_id: string
           raw?: Json | null
@@ -1245,10 +1333,13 @@ export type Database = {
           created_at?: string | null
           evidence_url?: string | null
           external_id?: string | null
+          geocoded_at?: string | null
           id?: string
+          lat?: number | null
           licence_number?: string | null
           licence_type?: string | null
           licensee?: string | null
+          lng?: number | null
           observed_at?: string
           org_id?: string
           raw?: Json | null

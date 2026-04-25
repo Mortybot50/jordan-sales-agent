@@ -11,6 +11,7 @@ import { ContactNewPage } from '@/pages/ContactNewPage'
 import { ContactImportPage } from '@/pages/ContactImportPage'
 import { DraftsPage } from '@/pages/DraftsPage'
 import { ReopeningRadarPage } from '@/pages/ReopeningRadarPage'
+import { FieldPage } from '@/pages/FieldPage'
 import { BriefingPage } from '@/pages/BriefingPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { SuppressionListPage } from '@/pages/SuppressionListPage'
@@ -53,6 +54,7 @@ export default function App() {
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="pipeline" element={<PipelinePage />} />
           <Route path="reopening-radar" element={<ReopeningRadarPage />} />
+          <Route path="field" element={<FieldPage />} />
           <Route path="contacts" element={<ContactsPage />} />
           <Route path="contacts/new" element={<ContactNewPage />} />
           <Route path="contacts/import" element={<ContactImportPage />} />
