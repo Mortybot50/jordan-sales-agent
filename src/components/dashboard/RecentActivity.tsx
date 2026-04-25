@@ -6,8 +6,19 @@ import {
   getActivityMeta,
 } from '@/components/primitives'
 import { Activity } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { formatRelative } from '@/lib/utils'
 import { useRecentActivities } from '@/lib/queries/activities'
+
+/** Resolve the click target for an activity row. Returns null for no-op. */
+function activityHref(a: {
+  contact_id: string | null
+  deal_id: string | null
+}): string | null {
+  if (a.contact_id) return `/contacts/${a.contact_id}`
+  if (a.deal_id) return `/pipeline?deal=${encodeURIComponent(a.deal_id)}`
+  return null
+}
 
 export function RecentActivity() {
   const { data: activities, isLoading, error, refetch } = useRecentActivities(10)
@@ -51,11 +62,9 @@ export function RecentActivity() {
             />
             {activities.map((activity) => {
               const meta = getActivityMeta(activity.activity_type)
-              return (
-                <li
-                  key={activity.id}
-                  className="relative flex gap-3 pb-3 last:pb-0"
-                >
+              const href = activityHref(activity)
+              const inner = (
+                <>
                   <div className="relative z-[1] mt-0.5 shrink-0">
                     <ActivityIcon type={activity.activity_type} size="sm" />
                   </div>
@@ -77,6 +86,22 @@ export function RecentActivity() {
                       <p className="mt-0.5 truncate text-[13px] text-ink">{activity.subject}</p>
                     )}
                   </div>
+                </>
+              )
+              return (
+                <li key={activity.id} className="relative pb-3 last:pb-0">
+                  {href ? (
+                    <Link
+                      to={href}
+                      aria-label={`Open ${activity.contact?.full_name ?? meta.label}`}
+                      title={activity.subject ?? meta.label}
+                      className="flex gap-3 -mx-2 px-2 py-1 rounded-[4px] hover:bg-surface-2 focus:outline-none focus-visible:bg-surface-2 transition-colors"
+                    >
+                      {inner}
+                    </Link>
+                  ) : (
+                    <div className="flex gap-3">{inner}</div>
+                  )}
                 </li>
               )
             })}

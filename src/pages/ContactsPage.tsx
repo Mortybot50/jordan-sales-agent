@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Mic, Upload, UserPlus, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ContactVoiceNoteDialog } from '@/components/voice/ContactVoiceNoteDialog'
@@ -24,6 +24,7 @@ const PAGE_SIZE = 50
 
 export function ContactsPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { data: contacts, isLoading, error, refetch } = useContacts()
 
   const [search, setSearch] = useState('')
@@ -32,6 +33,28 @@ export function ContactsPage() {
   const [selection, setSelection] = useState<SelectionState>({})
   const [page, setPage] = useState(0)
   const [voiceOpen, setVoiceOpen] = useState(false)
+
+  /*
+    Deep-link from Dashboard "Warm Leads" → ?segment=warm.
+    Maps to the existing tier facet (hot/warm/cold) and clears the
+    search-param afterwards so the URL stays clean.
+  */
+  useEffect(() => {
+    const segment = searchParams.get('segment')
+    if (!segment) return
+    if (segment === 'warm' || segment === 'hot' || segment === 'cold') {
+      setSelection((s) => ({ ...s, tier: [segment] }))
+      setPage(0)
+    }
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev)
+        p.delete('segment')
+        return p
+      },
+      { replace: true },
+    )
+  }, [searchParams, setSearchParams])
 
   // Derive facet options from the current data.
   const { venueTypeOptions, suburbOptions } = useMemo(() => {

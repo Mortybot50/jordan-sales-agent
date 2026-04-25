@@ -41,7 +41,22 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { dealFormSchema, type DealFormValues } from '@/lib/schemas/deal'
 
-export function KanbanBoard() {
+export interface KanbanBoardProps {
+  /** Filter kanban to a single stage column (deep-link from Pipeline Health). */
+  stageFilter?: string | null
+  /**
+   * Restrict deals to a set of ids (deep-link from "Qualified meetings ·
+   * this week" KPI). Match is OR-applied with `contactIdAllowlist`.
+   */
+  dealIdAllowlist?: Set<string> | null
+  contactIdAllowlist?: Set<string> | null
+}
+
+export function KanbanBoard({
+  stageFilter = null,
+  dealIdAllowlist = null,
+  contactIdAllowlist = null,
+}: KanbanBoardProps = {}) {
   const { user } = useAuth()
   const { data: stages } = useStages()
   const { data: deals, isLoading, error } = useDeals()
@@ -54,7 +69,24 @@ export function KanbanBoard() {
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null)
   const [quickAddStageId, setQuickAddStageId] = useState<string | null>(null)
 
-  const displayDeals = localDeals ?? deals ?? []
+  const allDeals = localDeals ?? deals ?? []
+  const displayDeals = useMemo(() => {
+    let rows = allDeals
+    if (dealIdAllowlist || contactIdAllowlist) {
+      rows = rows.filter(
+        (d) =>
+          (dealIdAllowlist && dealIdAllowlist.has(d.id)) ||
+          (contactIdAllowlist && d.contact_id && contactIdAllowlist.has(d.contact_id)),
+      )
+    }
+    return rows
+  }, [allDeals, dealIdAllowlist, contactIdAllowlist])
+
+  const visibleStages = useMemo(() => {
+    if (!stages) return []
+    if (!stageFilter) return stages
+    return stages.filter((s) => s.id === stageFilter)
+  }, [stages, stageFilter])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -188,7 +220,7 @@ export function KanbanBoard() {
         onDragEnd={handleDragEnd}
       >
         <div className="flex gap-3 overflow-x-auto pb-4 px-4 sm:px-6 h-full min-h-0">
-          {(stages ?? []).map((stage) => {
+          {visibleStages.map((stage) => {
             const stageDeals = dealsByStage[stage.id] ?? []
             const totalValue = stageDeals.reduce(
               (sum, d) => sum + (d.contract_value ?? 0),

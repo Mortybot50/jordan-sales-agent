@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { startOfWeek, endOfWeek } from 'date-fns'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import type { Json } from '@/types/database'
@@ -114,6 +115,43 @@ export function useCreateActivity() {
     onError: (err: Error) => {
       toast.error(`Failed to log activity: ${err.message}`)
     },
+  })
+}
+
+/**
+ * Deep-link target for the Dashboard "Qualified meetings · this week"
+ * KPI. Returns the set of deal-ids (and a fallback contact-id set) that
+ * have a meeting_note / meeting_booked activity in the current Mon-Sun
+ * week. Used by PipelinePage to filter the kanban when the
+ * `?filter=meetings&period=this_week` param is present.
+ */
+export function useMeetingsThisWeekDealIds(enabled = true) {
+  return useQuery({
+    queryKey: ['activities', 'meetings-this-week'],
+    queryFn: async (): Promise<{
+      dealIds: Set<string>
+      contactIds: Set<string>
+    }> => {
+      const now = new Date()
+      const weekStart = startOfWeek(now, { weekStartsOn: 1 }).toISOString()
+      const weekEnd = endOfWeek(now, { weekStartsOn: 1 }).toISOString()
+      const { data, error } = await supabase
+        .from('activities')
+        .select('deal_id, contact_id')
+        .in('activity_type', ['meeting_note', 'meeting_booked'])
+        .gte('occurred_at', weekStart)
+        .lte('occurred_at', weekEnd)
+      if (error) throw error
+      const dealIds = new Set<string>()
+      const contactIds = new Set<string>()
+      for (const a of data ?? []) {
+        if (a.deal_id) dealIds.add(a.deal_id)
+        if (a.contact_id) contactIds.add(a.contact_id)
+      }
+      return { dealIds, contactIds }
+    },
+    enabled,
+    staleTime: 60_000,
   })
 }
 
