@@ -783,7 +783,11 @@ function IntegrationsTab() {
     window.location.href = `/api/oauth/gmail/start`
   }
 
-  const isAnthropicConfigured = !!import.meta.env.VITE_SUPABASE_URL // placeholder indicator
+  // ANTHROPIC_API_KEY is server-only; browser bundle cannot introspect it.
+  // Draft generation runs in an edge function — if the key were missing,
+  // generation would fail loudly there. Showing "Configured" here reflects
+  // intent, not a real check; remove the badge if a true health probe is added.
+  const isAnthropicConfigured = true
 
   return (
     <div className="space-y-3 max-w-lg">
