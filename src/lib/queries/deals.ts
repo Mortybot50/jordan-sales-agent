@@ -37,6 +37,9 @@ export interface Deal {
   final_value: number | null
   // Snooze (added 2026-04-26)
   snoozed_until: string | null
+  // Next step (added 2026-04-26 — Quick Wins Batch 2)
+  next_step_note: string | null
+  next_step_due_at: string | null
   contact?: {
     id: string
     full_name: string
@@ -77,6 +80,17 @@ export interface Deal {
    * "RETURNED FROM SNOOZE" pill on DealCard. Pure view logic, no DB write.
    */
   recently_returned?: boolean
+  /**
+   * Days since the deal had any meaningful touch — max of `updated_at` and the
+   * latest activity `occurred_at` for this deal. Pure view-derived; not a DB
+   * column. Drives the aging pill on DealCard ("14d quiet", "30d+ quiet").
+   */
+  days_since_last_activity?: number
+  /**
+   * The actual ISO timestamp used for the aging calculation, exposed so the
+   * tooltip can show "Last touched: <date>".
+   */
+  last_activity_at?: string | null
 }
 
 export interface UseDealsOptions {
@@ -135,6 +149,29 @@ export function useDeals(options: UseDealsOptions = {}) {
         }
       }
 
+      // Pull the latest activity timestamp per deal so we can derive
+      // days_since_last_activity client-side. We only care about the most
+      // recent occurred_at — Supabase doesn't do GROUP BY directly so we
+      // fold the rows ourselves. Cheap because activities are paged and we
+      // only request (deal_id, occurred_at) columns.
+      const lastActivityMap: Record<string, string> = {}
+      if (dealIds.length > 0) {
+        const { data: acts } = await supabase
+          .from('activities')
+          .select('deal_id, occurred_at')
+          .in('deal_id', dealIds)
+          .not('occurred_at', 'is', null)
+          .order('occurred_at', { ascending: false })
+
+        if (acts) {
+          for (const a of acts) {
+            if (a.deal_id && !lastActivityMap[a.deal_id] && a.occurred_at) {
+              lastActivityMap[a.deal_id] = a.occurred_at
+            }
+          }
+        }
+      }
+
       const nowMs = Date.now()
       const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
 
@@ -146,6 +183,22 @@ export function useDeals(options: UseDealsOptions = {}) {
           snoozedAtMs <= nowMs &&
           snoozedAtMs > nowMs - SEVEN_DAYS_MS
 
+        // Aging — use latest of updated_at vs last activity occurred_at.
+        const updatedAtMs = d.updated_at ? new Date(d.updated_at).getTime() : null
+        const lastActMs = lastActivityMap[d.id]
+          ? new Date(lastActivityMap[d.id]).getTime()
+          : null
+        const lastTouchMs =
+          updatedAtMs != null && lastActMs != null
+            ? Math.max(updatedAtMs, lastActMs)
+            : (updatedAtMs ?? lastActMs)
+        const daysSinceLastActivity =
+          lastTouchMs != null
+            ? Math.floor((nowMs - lastTouchMs) / (1000 * 60 * 60 * 24))
+            : 0
+        const lastActivityAt =
+          lastTouchMs != null ? new Date(lastTouchMs).toISOString() : null
+
         return {
           ...d,
           outcome: (d.outcome as Deal['outcome']) ?? null,
@@ -153,6 +206,8 @@ export function useDeals(options: UseDealsOptions = {}) {
           days_in_stage: d.updated_at ? differenceInDays(new Date(), parseISO(d.updated_at)) : 0,
           is_snoozed: isSnoozed,
           recently_returned: recentlyReturned,
+          days_since_last_activity: daysSinceLastActivity,
+          last_activity_at: lastActivityAt,
         }
       }) as Deal[]
     },
@@ -269,6 +324,8 @@ export function useUpdateDeal() {
         product: _product,
         is_snoozed: _isSnoozed,
         recently_returned: _recentlyReturned,
+        days_since_last_activity: _dsla,
+        last_activity_at: _laa,
         ...dbUpdates
       } = updates
       const { data, error } = await supabase
@@ -516,5 +573,38 @@ export function useSnoozeDeal() {
       }
     },
     onError: (err: Error) => toast.error(`Failed to update snooze: ${err.message}`),
+  })
+}
+
+/**
+ * Set or clear the next-step note + optional reminder date on a deal.
+ * Pass `note = null` and `dueAt = null` to clear both. Either can be set
+ * independently — a note without a date is valid (and vice versa).
+ */
+export function useUpdateDealNextStep(dealId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ note, dueAt }: { note: string | null; dueAt: string | null }) => {
+      const { error } = await supabase
+        .from('deals')
+        .update({
+          next_step_note: note,
+          next_step_due_at: dueAt,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', dealId)
+      if (error) throw error
+      return { note, dueAt }
+    },
+    onSuccess: ({ note, dueAt }) => {
+      qc.invalidateQueries({ queryKey: ['deals'] })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
+      if (!note && !dueAt) {
+        toast.success('Next step cleared')
+      } else {
+        toast.success('Next step saved')
+      }
+    },
+    onError: (err: Error) => toast.error(`Failed to save next step: ${err.message}`),
   })
 }

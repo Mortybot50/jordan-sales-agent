@@ -30,6 +30,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs'
 
 import {
   ActivityIcon,
@@ -95,6 +100,69 @@ export function ContactDetailPage() {
   const [draftDialogOpen, setDraftDialogOpen] = useState(false)
   const [draftType, setDraftType] = useState<DraftType>('cold_outreach')
   const [draftHint, setDraftHint] = useState('')
+
+  type ActivityFilter = 'all' | 'email' | 'call' | 'note' | 'meeting'
+  const [activityFilter, setActivityFilter] = useState<ActivityFilter>('all')
+
+  // Maps DB activity_type values to UI tab buckets. Email covers all
+  // outbound/inbound + status (sent/opened/clicked/reply/bounce/unsubscribe).
+  function activityBucket(t: string): ActivityFilter {
+    if (
+      t === 'email_sent' ||
+      t === 'email_opened' ||
+      t === 'email_clicked' ||
+      t === 'reply_received' ||
+      t === 'email_inbound' ||
+      t === 'email_outbound' ||
+      t === 'email_manual' ||
+      t === 'bounce' ||
+      t === 'unsubscribe'
+    )
+      return 'email'
+    if (t === 'call_note') return 'call'
+    if (t === 'note' || t === 'voice_note') return 'note'
+    if (t === 'meeting_note' || t === 'meeting_booked') return 'meeting'
+    return 'all'
+  }
+
+  const activityCounts = (activities ?? []).reduce(
+    (acc, a) => {
+      const b = activityBucket(a.activity_type)
+      if (b !== 'all') acc[b] = (acc[b] ?? 0) + 1
+      return acc
+    },
+    { email: 0, call: 0, note: 0, meeting: 0 } as Record<Exclude<ActivityFilter, 'all'>, number>,
+  )
+
+  const filteredActivities =
+    activityFilter === 'all'
+      ? activities ?? []
+      : (activities ?? []).filter(
+          (a) => activityBucket(a.activity_type) === activityFilter,
+        )
+
+  const filterEmptyMessage: Record<ActivityFilter, { title: string; body: string }> = {
+    all: {
+      title: 'No activity yet',
+      body: 'Log a call, meeting or note to start building the timeline.',
+    },
+    email: {
+      title: 'No emails on this contact yet',
+      body: 'Send an outbound email or wait for inbound — they\'ll show up here.',
+    },
+    call: {
+      title: 'No call notes yet',
+      body: 'Log one from this contact or the deal drawer after a call.',
+    },
+    note: {
+      title: 'No notes yet',
+      body: 'Add a freeform note or voice note about this contact.',
+    },
+    meeting: {
+      title: 'No meetings yet',
+      body: 'Log a meeting note or booked meeting once one is on the books.',
+    },
+  }
 
   const activityForm = useForm<ActivityFormValues>({
     resolver: zodResolver(activityFormSchema),
@@ -584,11 +652,45 @@ export function ContactDetailPage() {
             </Button>
           </header>
 
+          {/* Filter tabs */}
+          {activities && activities.length > 0 && (
+            <div className="border-b border-hairline px-3 py-1.5">
+              <Tabs
+                value={activityFilter}
+                onValueChange={(v) => setActivityFilter(v as ActivityFilter)}
+              >
+                <TabsList variant="line" className="h-7">
+                  <TabsTrigger value="all" className="text-[11px] px-2">
+                    All
+                  </TabsTrigger>
+                  <TabsTrigger value="email" className="text-[11px] px-2">
+                    Email ({activityCounts.email})
+                  </TabsTrigger>
+                  <TabsTrigger value="call" className="text-[11px] px-2">
+                    Call ({activityCounts.call})
+                  </TabsTrigger>
+                  <TabsTrigger value="note" className="text-[11px] px-2">
+                    Note ({activityCounts.note})
+                  </TabsTrigger>
+                  <TabsTrigger value="meeting" className="text-[11px] px-2">
+                    Meeting ({activityCounts.meeting})
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          )}
+
           {(!activities || activities.length === 0) ? (
             <EmptyState
               compact
-              title="No activity yet"
-              body="Log a call, meeting or note to start building the timeline."
+              title={filterEmptyMessage.all.title}
+              body={filterEmptyMessage.all.body}
+            />
+          ) : filteredActivities.length === 0 ? (
+            <EmptyState
+              compact
+              title={filterEmptyMessage[activityFilter].title}
+              body={filterEmptyMessage[activityFilter].body}
             />
           ) : (
             <ol className="relative px-3 py-3">
@@ -597,7 +699,7 @@ export function ContactDetailPage() {
                 aria-hidden
                 className="absolute left-[22px] top-3 bottom-3 w-px bg-hairline"
               />
-              {activities.map((a) => {
+              {filteredActivities.map((a) => {
                 const meta = getActivityMeta(a.activity_type)
                 return (
                   <li key={a.id} className="relative flex gap-3 py-2">
@@ -661,7 +763,7 @@ export function ContactDetailPage() {
                 onClick={() => setDealDialogOpen(true)}
               >
                 <Plus className="w-3.5 h-3.5 mr-1" />
-                Add
+                New deal
               </Button>
             </header>
 

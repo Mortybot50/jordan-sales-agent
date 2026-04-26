@@ -8,8 +8,17 @@ import { usePipelineHeroMetrics } from '@/lib/queries/dashboard'
 import { useStages } from '@/lib/queries/stages'
 import { useMeetingsThisWeekDealIds } from '@/lib/queries/activities'
 import { useSnoozedDealsCount } from '@/lib/queries/deals'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { LayoutGrid, List, Moon, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+export type PipelineSort = 'default' | 'stalest'
 
 function useIsDesktop() {
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 1024)
@@ -92,6 +101,7 @@ export function PipelinePage() {
   const isDesktop = useIsDesktop()
   const [view, setView] = useState<ViewMode | null>(null)
   const [showSnoozed, setShowSnoozed] = useState(false)
+  const [sortBy, setSortBy] = useState<PipelineSort>('default')
   const { data: snoozedCount = 0 } = useSnoozedDealsCount()
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -137,6 +147,15 @@ export function PipelinePage() {
           description="Drag deals between stages · click to expand"
           actions={
             <div className="flex items-center gap-2">
+              <Select value={sortBy} onValueChange={(v) => setSortBy(v as PipelineSort)}>
+                <SelectTrigger className="h-7 px-2 text-[12px] w-[148px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Sort: Default</SelectItem>
+                  <SelectItem value="stalest">Sort: Stalest first</SelectItem>
+                </SelectContent>
+              </Select>
               {snoozedCount > 0 && (
                 <Button
                   variant={showSnoozed ? 'default' : 'outline'}
@@ -224,9 +243,10 @@ export function PipelinePage() {
             }
             focusDealId={dealParam}
             includeSnoozed={showSnoozed}
+            sortBy={sortBy}
           />
         ) : (
-          <DealListView includeSnoozed={showSnoozed} />
+          <DealListView includeSnoozed={showSnoozed} sortBy={sortBy} />
         )}
       </div>
     </div>

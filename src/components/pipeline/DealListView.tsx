@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   DataTable,
   type ColumnDef,
@@ -15,7 +15,7 @@ import { formatDate } from '@/lib/utils'
 import { scoreToTier } from '@/lib/queries/contacts'
 import { DealDrawer } from './DealDrawer'
 
-type SortField = 'title' | 'venue' | 'value' | 'days' | 'followup' | 'score'
+type SortField = 'title' | 'venue' | 'value' | 'days' | 'followup' | 'score' | 'stalest'
 type SortDir = 'asc' | 'desc'
 
 type SelectionState = Record<string, string[]>
@@ -23,14 +23,29 @@ type SelectionState = Record<string, string[]>
 export interface DealListViewProps {
   /** When true, include currently-snoozed deals (otherwise hidden by default). */
   includeSnoozed?: boolean
+  /** External sort hint from the page-level Pipeline sort dropdown. */
+  sortBy?: 'default' | 'stalest'
 }
 
-export function DealListView({ includeSnoozed = false }: DealListViewProps = {}) {
+export function DealListView({ includeSnoozed = false, sortBy = 'default' }: DealListViewProps = {}) {
   const { data: deals, isLoading, error, refetch } = useDeals({ includeSnoozed })
   const { data: stages } = useStages()
 
-  const [sortField, setSortField] = useState<SortField>('value')
+  const [sortField, setSortField] = useState<SortField>(sortBy === 'stalest' ? 'stalest' : 'value')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
+
+  // Reflect external sort changes from the Pipeline-level dropdown.
+  // Only react when sortBy actually flips between modes.
+  useEffect(() => {
+    if (sortBy === 'stalest') {
+      setSortField('stalest')
+      setSortDir('desc')
+    } else if (sortField === 'stalest') {
+      setSortField('value')
+      setSortDir('desc')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortBy])
   const [selection, setSelection] = useState<SelectionState>({})
   const [search, setSearch] = useState('')
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null)
@@ -115,6 +130,11 @@ export function DealListView({ includeSnoozed = false }: DealListViewProps = {})
           break
         case 'score':
           cmp = (a.lead_score?.score ?? -1) - (b.lead_score?.score ?? -1)
+          break
+        case 'stalest':
+          cmp =
+            (a.days_since_last_activity ?? 0) -
+            (b.days_since_last_activity ?? 0)
           break
       }
       return sortDir === 'asc' ? cmp : -cmp

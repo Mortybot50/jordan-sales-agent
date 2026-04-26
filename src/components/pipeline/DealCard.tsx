@@ -36,6 +36,8 @@ export function DealCard({ deal, onClick }: DealCardProps) {
   const days = deal.days_in_stage ?? 0
   const stale = days >= 14
   const recentlyReopened = Boolean(deal.contact?.signal_reopening)
+  const daysQuiet = deal.days_since_last_activity ?? 0
+  const lastTouchedIso = deal.last_activity_at ?? deal.updated_at ?? null
   const acv = deal.acv != null ? Number(deal.acv) : null
   const tcv = deal.tcv != null ? Number(deal.tcv) : null
   const commission = deal.commission_amount != null ? Number(deal.commission_amount) : null
@@ -52,6 +54,49 @@ export function DealCard({ deal, onClick }: DealCardProps) {
   const isSnoozed = !!deal.is_snoozed
   const recentlyReturned = !!deal.recently_returned
   const snoozedUntilDate = deal.snoozed_until ? new Date(deal.snoozed_until) : null
+
+  // Aging visibility — closed/won/lost/snoozed/held deals don't show aging.
+  // Held-for-next-month is also irrelevant to aging.
+  const showAging =
+    !isWon && !isLost && !isSnoozed && !isHeld && !isClosedStage
+  const agingTone: 'severe' | 'warn' | 'whisper' | 'none' = !showAging
+    ? 'none'
+    : daysQuiet >= 30
+      ? 'severe'
+      : daysQuiet >= 14
+        ? 'warn'
+        : daysQuiet >= 8
+          ? 'whisper'
+          : 'none'
+
+  // Next-step pill computation.
+  const nextStepDueIso = deal.next_step_due_at ?? null
+  const nextStepDue = nextStepDueIso ? new Date(nextStepDueIso) : null
+  const nextStepNote = deal.next_step_note ?? null
+  const startOfToday = (() => {
+    const d = new Date()
+    d.setHours(0, 0, 0, 0)
+    return d
+  })()
+  const startOfTomorrow = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000)
+  const threeDaysOut = new Date(startOfToday.getTime() + 4 * 24 * 60 * 60 * 1000)
+  let nextStepKind: 'overdue' | 'today' | 'soon' | 'future' | null = null
+  let nextStepLabel = ''
+  if (nextStepDue) {
+    if (nextStepDue.getTime() < startOfToday.getTime()) {
+      nextStepKind = 'overdue'
+      nextStepLabel = 'OVERDUE'
+    } else if (nextStepDue.getTime() < startOfTomorrow.getTime()) {
+      nextStepKind = 'today'
+      nextStepLabel = 'TODAY'
+    } else if (nextStepDue.getTime() < threeDaysOut.getTime()) {
+      nextStepKind = 'soon'
+      nextStepLabel = format(nextStepDue, 'EEE')
+    } else {
+      nextStepKind = 'future'
+      nextStepLabel = format(nextStepDue, 'd MMM')
+    }
+  }
 
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
@@ -160,6 +205,75 @@ export function DealCard({ deal, onClick }: DealCardProps) {
                 Held for {format(addMonths(new Date(), 1), 'MMM')}
               </span>
             )}
+            {/* Next-step due pill */}
+            {nextStepKind === 'overdue' && (
+              <span
+                className="inline-flex items-center gap-1 rounded-[3px] bg-[color:var(--jordan-warm-soft,transparent)] border border-[color:var(--jordan-warm)]/40 text-[color:var(--jordan-warm-text)] px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-[var(--jordan-tracking-label)]"
+                title={`Next step was due ${nextStepDue ? nextStepDue.toLocaleDateString('en-AU') : ''}`}
+              >
+                <span aria-hidden>⏰</span> {nextStepLabel}
+              </span>
+            )}
+            {nextStepKind === 'today' && (
+              <span
+                className="inline-flex items-center gap-1 rounded-[3px] bg-[color:var(--jordan-accent-mint-soft)] text-[color:var(--jordan-success-text)] px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-[var(--jordan-tracking-label)]"
+                title="Next step due today"
+              >
+                <span aria-hidden>📌</span> {nextStepLabel}
+              </span>
+            )}
+            {nextStepKind === 'soon' && (
+              <span
+                className="inline-flex items-center gap-1 rounded-[3px] bg-[color:var(--jordan-accent-mint-soft)] text-[color:var(--jordan-success-text)] px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-[var(--jordan-tracking-label)]"
+                title={`Next step due ${nextStepDue ? nextStepDue.toLocaleDateString('en-AU') : ''}`}
+              >
+                <span aria-hidden>📌</span> {nextStepLabel}
+              </span>
+            )}
+            {nextStepKind === 'future' && (
+              <span
+                className="inline-flex items-center gap-1 rounded-[3px] bg-surface-3 text-ink-muted px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-[var(--jordan-tracking-label)]"
+                title={`Next step due ${nextStepDue ? nextStepDue.toLocaleDateString('en-AU') : ''}`}
+              >
+                <span aria-hidden>📌</span> {nextStepLabel}
+              </span>
+            )}
+            {/* Aging pill — only shown when deal is open and quiet for ≥14 days */}
+            {agingTone === 'warn' && (
+              <span
+                className="inline-flex items-center gap-1 rounded-[3px] bg-[color:var(--jordan-warm-soft,transparent)] border border-[color:var(--jordan-warm)]/40 text-[color:var(--jordan-warm-text)] px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-[var(--jordan-tracking-label)]"
+                title={
+                  lastTouchedIso
+                    ? `Last touched: ${new Date(lastTouchedIso).toLocaleDateString('en-AU')} (${daysQuiet} days ago)`
+                    : `Quiet for ${daysQuiet} days`
+                }
+              >
+                <span aria-hidden>🕐</span> {daysQuiet}d quiet
+              </span>
+            )}
+            {agingTone === 'severe' && (
+              <span
+                className="inline-flex items-center gap-1 rounded-[3px] bg-[color:var(--jordan-danger-soft)] border border-[color:var(--jordan-danger)]/40 text-[color:var(--jordan-danger-text)] px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-[var(--jordan-tracking-label)]"
+                title={
+                  lastTouchedIso
+                    ? `Last touched: ${new Date(lastTouchedIso).toLocaleDateString('en-AU')} (${daysQuiet} days ago)`
+                    : `Quiet for ${daysQuiet} days`
+                }
+              >
+                <span aria-hidden>🚨</span> 30d+ quiet
+              </span>
+            )}
+            {agingTone === 'whisper' && (
+              <span
+                className="inline-flex size-1.5 rounded-full bg-ink-faint shrink-0"
+                title={
+                  lastTouchedIso
+                    ? `Last touched: ${new Date(lastTouchedIso).toLocaleDateString('en-AU')} (${daysQuiet} days ago)`
+                    : `Quiet for ${daysQuiet} days`
+                }
+                aria-label={`Quiet for ${daysQuiet} days`}
+              />
+            )}
           </div>
           <p
             className={cn(
@@ -169,6 +283,15 @@ export function DealCard({ deal, onClick }: DealCardProps) {
           >
             {deal.title ?? 'Untitled deal'}
           </p>
+
+          {nextStepNote && (
+            <p
+              className="truncate italic text-[11px] text-ink-muted"
+              title={nextStepNote}
+            >
+              {nextStepNote.length > 50 ? `${nextStepNote.slice(0, 50)}…` : nextStepNote}
+            </p>
+          )}
 
           {(deal.contact?.full_name || deal.venue?.name) && (
             <p className="truncate text-[11px] text-ink-faint">
