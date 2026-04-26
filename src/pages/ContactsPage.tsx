@@ -12,8 +12,14 @@ import {
   ScoreBadge,
   StatusPill,
 } from '@/components/primitives'
-import { useContacts, scoreToTier, type Contact } from '@/lib/queries/contacts'
-import { roleLabel, venueTypeLabel } from '@/lib/utils'
+import {
+  useContacts,
+  useDistinctContactTags,
+  scoreToTier,
+  type Contact,
+} from '@/lib/queries/contacts'
+import { roleLabel, venueTypeLabel, cn } from '@/lib/utils'
+import { ContactBulkActionsToolbar } from '@/components/contacts/ContactBulkActionsToolbar'
 
 type SortField = 'name' | 'venue' | 'score' | 'suburb'
 type SortDir = 'asc' | 'desc'
@@ -33,6 +39,13 @@ export function ContactsPage() {
   const [selection, setSelection] = useState<SelectionState>({})
   const [page, setPage] = useState(0)
   const [voiceOpen, setVoiceOpen] = useState(false)
+
+  // Bulk-action selection — page-local; clears when paginating, filtering,
+  // or sorting (the underlying row set changes, selection IDs no longer line
+  // up with what's on screen). Cross-page select-all intentionally absent.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [activeTag, setActiveTag] = useState<string | null>(null)
+  const { data: distinctTags } = useDistinctContactTags()
 
   /*
     Deep-link from Dashboard "Warm Leads" → ?segment=warm.
@@ -126,6 +139,10 @@ export function ContactsPage() {
       rows = rows.filter((c) => c.venue?.suburb && suburbs.includes(c.venue.suburb))
     }
 
+    if (activeTag) {
+      rows = rows.filter((c) => (c.tags ?? []).includes(activeTag))
+    }
+
     rows = [...rows].sort((a, b) => {
       let cmp = 0
       switch (sortField) {
@@ -146,10 +163,47 @@ export function ContactsPage() {
     })
 
     return rows
-  }, [contacts, search, selection, sortField, sortDir])
+  }, [contacts, search, selection, sortField, sortDir, activeTag])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+
+  // Page-local selection — never carries across pages, filters, sorts.
+  function clearSelection() {
+    setSelectedIds(new Set())
+  }
+
+  const visibleIds = paginated.map((r) => r.id)
+  const allOnPageSelected =
+    visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id))
+  const someOnPageSelected =
+    !allOnPageSelected && visibleIds.some((id) => selectedIds.has(id))
+
+  function togglePageAll() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (allOnPageSelected) {
+        for (const id of visibleIds) next.delete(id)
+      } else {
+        for (const id of visibleIds) next.add(id)
+      }
+      return next
+    })
+  }
+
+  function toggleRow(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const selectedContacts = useMemo(
+    () => (contacts ?? []).filter((c) => selectedIds.has(c.id)),
+    [contacts, selectedIds],
+  )
 
   function toggleSort(field: string) {
     const f = field as SortField
@@ -160,16 +214,52 @@ export function ContactsPage() {
       setSortDir('asc')
     }
     setPage(0)
+    clearSelection()
   }
 
   const columns: ColumnDef<Contact>[] = [
+    {
+      id: '__select',
+      ariaLabel: 'Select rows',
+      width: '36px',
+      header: (
+        <input
+          type="checkbox"
+          aria-label={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
+          checked={allOnPageSelected}
+          ref={(el) => {
+            if (el) el.indeterminate = someOnPageSelected
+          }}
+          onClick={(e) => e.stopPropagation()}
+          onChange={togglePageAll}
+          className="h-3.5 w-3.5 cursor-pointer accent-[var(--jordan-accent)]"
+        />
+      ),
+      cell: (row) => (
+        <input
+          type="checkbox"
+          aria-label={`Select ${row.full_name}`}
+          checked={selectedIds.has(row.id)}
+          onClick={(e) => e.stopPropagation()}
+          onChange={() => toggleRow(row.id)}
+          className="h-3.5 w-3.5 cursor-pointer accent-[var(--jordan-accent)]"
+        />
+      ),
+    },
     {
       id: 'name',
       header: 'Name',
       sortable: true,
       width: 'minmax(180px, 1.6fr)',
       cell: (row) => (
-        <span className="truncate font-medium text-ink">{row.full_name}</span>
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate font-medium text-ink">{row.full_name}</span>
+          {row.do_not_contact && (
+            <StatusPill tone="danger" uppercase className="shrink-0 h-[16px] px-1 text-[10px]">
+              DNC
+            </StatusPill>
+          )}
+        </span>
       ),
     },
     {
@@ -284,6 +374,7 @@ export function ContactsPage() {
         onSearchChange={(v) => {
           setSearch(v)
           setPage(0)
+          clearSelection()
         }}
         searchPlaceholder="Search name, email, venue, suburb…"
         facets={facets}
@@ -291,11 +382,14 @@ export function ContactsPage() {
         onSelectionChange={(facetId, values) => {
           setSelection((s) => ({ ...s, [facetId]: values }))
           setPage(0)
+          clearSelection()
         }}
         onClear={() => {
           setSelection({})
           setSearch('')
           setPage(0)
+          setActiveTag(null)
+          clearSelection()
         }}
         summary={
           <span>
@@ -303,6 +397,55 @@ export function ContactsPage() {
           </span>
         }
       />
+
+      {/* Tag filter strip — payoff for the bulk-tag action. Click a pill to
+          isolate the cohort; click again (or any active pill) to clear. */}
+      {distinctTags && distinctTags.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
+            Tags
+          </span>
+          {distinctTags.map(({ tag, count: tc }) => {
+            const active = activeTag === tag
+            return (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => {
+                  setActiveTag(active ? null : tag)
+                  setPage(0)
+                  clearSelection()
+                }}
+                className={cn(
+                  'rounded-[var(--jordan-radius-sm)] border px-2 py-0.5 text-[11px] transition-colors',
+                  active
+                    ? 'border-[color:color-mix(in_oklab,var(--jordan-accent)_40%,transparent)] bg-[var(--jordan-accent-soft)] text-[var(--jordan-accent-hover)]'
+                    : 'border-hairline bg-surface-2 text-ink-muted hover:bg-surface-3 hover:text-ink',
+                )}
+              >
+                {tag}
+                <span className="ml-1 text-ink-faint">{tc}</span>
+              </button>
+            )
+          })}
+          {activeTag && (
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTag(null)
+                setPage(0)
+              }}
+              className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint hover:text-ink"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+
+      {selectedIds.size > 0 && (
+        <ContactBulkActionsToolbar selected={selectedContacts} onClear={clearSelection} />
+      )}
 
       <DataTable
         ariaLabel="Contacts"
@@ -353,7 +496,10 @@ export function ContactsPage() {
               size="sm"
               className="h-8"
               disabled={page === 0}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              onClick={() => {
+                setPage((p) => Math.max(0, p - 1))
+                clearSelection()
+              }}
             >
               Previous
             </Button>
@@ -362,7 +508,10 @@ export function ContactsPage() {
               size="sm"
               className="h-8"
               disabled={page >= totalPages - 1}
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              onClick={() => {
+                setPage((p) => Math.min(totalPages - 1, p + 1))
+                clearSelection()
+              }}
             >
               Next
             </Button>

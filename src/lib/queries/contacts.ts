@@ -13,6 +13,7 @@ export interface Contact {
   linkedin_url: string | null
   is_primary: boolean | null
   notes: string | null
+  do_not_contact: boolean
   created_at: string | null
   updated_at: string | null
   venue?: {
@@ -28,6 +29,7 @@ export interface Contact {
     score: number
     tier: 'hot' | 'warm' | 'cold'
   } | null
+  tags?: string[]
 }
 
 export function scoreToTier(score: number | null | undefined): 'hot' | 'warm' | 'cold' {
@@ -91,10 +93,26 @@ export function useContacts() {
         }
       }
 
+      // Tags — fetch all and group by contact_id
+      const tagMap: Record<string, string[]> = {}
+      if (contactIds.length > 0) {
+        const { data: tagRows } = await supabase
+          .from('contact_tags')
+          .select('contact_id, tag')
+          .in('contact_id', contactIds)
+        if (tagRows) {
+          for (const t of tagRows) {
+            const arr = tagMap[t.contact_id] ?? (tagMap[t.contact_id] = [])
+            arr.push(t.tag)
+          }
+        }
+      }
+
       return (data ?? []).map((c) => ({
         ...c,
         lead_score: scoreMap[c.id] ?? null,
-      }))
+        tags: tagMap[c.id] ?? [],
+      })) as Contact[]
     },
   })
 }
@@ -163,11 +181,121 @@ export function useCreateContact() {
   })
 }
 
+/* ── Bulk actions ──────────────────────────────────────────────── */
+
+/**
+ * Tag-name validation — lowercase, 1-30 chars, alphanumeric + dashes.
+ * Mirrors the contact_tags_tag_format CHECK constraint in the database.
+ */
+export function isValidTag(tag: string): boolean {
+  return /^[a-z0-9][a-z0-9-]{0,29}$/.test(tag)
+}
+
+export function useBulkDeleteContacts() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (ids.length === 0) return 0
+      const { error } = await supabase.from('contacts').delete().in('id', ids)
+      if (error) throw error
+      return ids.length
+    },
+    onSuccess: (count) => {
+      qc.invalidateQueries({ queryKey: ['contacts'] })
+      toast.success(`Deleted ${count} contact${count === 1 ? '' : 's'}.`)
+    },
+    onError: (err: Error) => toast.error(`Bulk delete failed: ${err.message}`),
+  })
+}
+
+export function useBulkSetDnc() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ ids, value }: { ids: string[]; value: boolean }) => {
+      if (ids.length === 0) return 0
+      const { error } = await supabase
+        .from('contacts')
+        .update({ do_not_contact: value, updated_at: new Date().toISOString() })
+        .in('id', ids)
+      if (error) throw error
+      return ids.length
+    },
+    onSuccess: (count, vars) => {
+      qc.invalidateQueries({ queryKey: ['contacts'] })
+      toast.success(
+        vars.value
+          ? `Marked ${count} as DNC.`
+          : `Cleared DNC on ${count} contact${count === 1 ? '' : 's'}.`,
+      )
+    },
+    onError: (err: Error) => toast.error(`Bulk DNC failed: ${err.message}`),
+  })
+}
+
+interface BulkTagInput {
+  org_id: string
+  ids: string[]
+  tag: string
+}
+
+export function useBulkTagContacts() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: BulkTagInput) => {
+      const tag = input.tag.trim().toLowerCase()
+      if (!isValidTag(tag)) {
+        throw new Error('Tag must be lowercase, 1-30 chars, letters/numbers/dashes only.')
+      }
+      if (input.ids.length === 0) return { tag, count: 0 }
+      const rows = input.ids.map((contact_id) => ({
+        org_id: input.org_id,
+        contact_id,
+        tag,
+      }))
+      // ON CONFLICT DO NOTHING via upsert + ignoreDuplicates.
+      const { error } = await supabase
+        .from('contact_tags')
+        .upsert(rows, { onConflict: 'org_id,contact_id,tag', ignoreDuplicates: true })
+      if (error) throw error
+      return { tag, count: input.ids.length }
+    },
+    onSuccess: ({ tag, count }) => {
+      qc.invalidateQueries({ queryKey: ['contacts'] })
+      qc.invalidateQueries({ queryKey: ['contact-tags', 'distinct'] })
+      toast.success(`Tagged ${count} contact${count === 1 ? '' : 's'} as ${tag}.`)
+    },
+    onError: (err: Error) => toast.error(`Tagging failed: ${err.message}`),
+  })
+}
+
+/**
+ * Distinct tags currently in use for the user's org.
+ * Used to render the tag-pill filter strip + tag suggestions.
+ */
+export function useDistinctContactTags() {
+  return useQuery({
+    queryKey: ['contact-tags', 'distinct'],
+    queryFn: async (): Promise<Array<{ tag: string; count: number }>> => {
+      const { data, error } = await supabase
+        .from('contact_tags')
+        .select('tag')
+      if (error) throw error
+      const counts = new Map<string, number>()
+      for (const r of data ?? []) {
+        counts.set(r.tag, (counts.get(r.tag) ?? 0) + 1)
+      }
+      return [...counts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([tag, count]) => ({ tag, count }))
+    },
+  })
+}
+
 export function useUpdateContact(id: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (updates: Partial<Omit<Contact, 'id' | 'org_id' | 'created_at'>>) => {
-      const { venue: _venue, lead_score: _ls, ...dbUpdates } = updates
+      const { venue: _venue, lead_score: _ls, tags: _tags, ...dbUpdates } = updates
       const { data, error } = await supabase
         .from('contacts')
         .update({ ...dbUpdates, updated_at: new Date().toISOString() })
