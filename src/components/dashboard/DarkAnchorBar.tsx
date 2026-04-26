@@ -128,7 +128,7 @@ export function DarkAnchorBar({ data, loading }: DarkAnchorBarProps) {
       </Link>
 
       <Link
-        to="/drafts?tab=replies"
+        to="/drafts"
         className={KPI_LINK_CLS}
         aria-label="Reply rate · open drafts"
         title={replyTooltip}

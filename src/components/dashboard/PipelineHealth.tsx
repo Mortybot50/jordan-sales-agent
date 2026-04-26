@@ -17,9 +17,9 @@ export function PipelineHealth() {
   return (
     <section className="rounded-[6px] border border-hairline bg-surface-1 overflow-hidden transition-colors hover:border-[color:var(--jordan-accent-mint)]/40">
       <Link
-        to="/pipeline?view=health"
-        aria-label="Open pipeline · health view"
-        title="Open pipeline · health view"
+        to="/pipeline"
+        aria-label="Open pipeline"
+        title="Open pipeline"
         className="group flex items-end justify-between gap-3 px-4 py-3 border-b border-hairline hover:bg-surface-2/50 transition-colors"
       >
         <div className="min-w-0">
