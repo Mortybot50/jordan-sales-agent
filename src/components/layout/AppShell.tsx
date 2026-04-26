@@ -13,6 +13,7 @@ import {
   Radar,
   MapPin,
   Package,
+  Upload,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -49,6 +50,7 @@ const NAV_SECTIONS: { id: string; label: string; items: NavItem[] }[] = [
     label: 'Leads',
     items: [
       { to: '/contacts', label: 'Contacts', icon: Users },
+      { to: '/import/contacts', label: 'Import CSV', icon: Upload },
       { to: '/drafts', label: 'Draft Queue', icon: Mail },
     ],
   },

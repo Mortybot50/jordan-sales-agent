@@ -253,6 +253,7 @@ export type Database = {
           lat: number | null
           linkedin_url: string | null
           lng: number | null
+          metadata: Json | null
           notes: string | null
           org_id: string
           phone: string | null
@@ -273,6 +274,7 @@ export type Database = {
           lat?: number | null
           linkedin_url?: string | null
           lng?: number | null
+          metadata?: Json | null
           notes?: string | null
           org_id: string
           phone?: string | null
@@ -293,6 +295,7 @@ export type Database = {
           lat?: number | null
           linkedin_url?: string | null
           lng?: number | null
+          metadata?: Json | null
           notes?: string | null
           org_id?: string
           phone?: string | null

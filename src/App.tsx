@@ -9,6 +9,7 @@ import { ContactsPage } from '@/pages/ContactsPage'
 import { ContactDetailPage } from '@/pages/ContactDetailPage'
 import { ContactNewPage } from '@/pages/ContactNewPage'
 import { ContactImportPage } from '@/pages/ContactImportPage'
+import { SalesforceCsvImportPage } from '@/pages/SalesforceCsvImportPage'
 import { DraftsPage } from '@/pages/DraftsPage'
 import { ReopeningRadarPage } from '@/pages/ReopeningRadarPage'
 import { CataloguePage } from '@/pages/CataloguePage'
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="contacts" element={<ContactsPage />} />
           <Route path="contacts/new" element={<ContactNewPage />} />
           <Route path="contacts/import" element={<ContactImportPage />} />
+          <Route path="import/contacts" element={<SalesforceCsvImportPage />} />
           <Route path="contacts/:id" element={<ContactDetailPage />} />
           <Route path="drafts" element={<DraftsPage />} />
           <Route path="briefing" element={<BriefingPage />} />

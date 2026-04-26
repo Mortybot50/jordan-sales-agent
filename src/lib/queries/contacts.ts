@@ -13,6 +13,7 @@ export interface Contact {
   linkedin_url: string | null
   is_primary: boolean | null
   notes: string | null
+  metadata: Record<string, unknown> | null | undefined
   do_not_contact: boolean
   created_at: string | null
   updated_at: string | null
@@ -298,7 +299,8 @@ export function useUpdateContact(id: string) {
       const { venue: _venue, lead_score: _ls, tags: _tags, ...dbUpdates } = updates
       const { data, error } = await supabase
         .from('contacts')
-        .update({ ...dbUpdates, updated_at: new Date().toISOString() })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .update({ ...dbUpdates, updated_at: new Date().toISOString() } as any)
         .eq('id', id)
         .select()
         .single()
