@@ -10,7 +10,14 @@ import {
 import { DraftQueueRow } from '@/components/drafts/DraftQueueRow'
 import { DraftPreviewPane } from '@/components/drafts/DraftPreviewPane'
 import { LearningBanner } from '@/components/drafts/LearningBanner'
-import { useDrafts, useApproveDraft } from '@/lib/queries/drafts'
+import {
+  hasUnresolvedPlaceholder,
+  TIMES_PLACEHOLDER,
+  useApproveDraft,
+  useDrafts,
+} from '@/lib/queries/drafts'
+import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 
 /**
  * Drafts Queue — keyboard-first review pane.
@@ -60,14 +67,48 @@ export function DraftsPage() {
   const [editSignal, setEditSignal] = useState(0)
   const [rejectSignal, setRejectSignal] = useState(0)
 
-  // Queue ordering: non-skipped first, skipped at end.
+  // Filter chip — when on, queue collapses to proposed-meeting drafts only.
+  const onlyDiary = searchParams.get('diary') === '1'
+  const setOnlyDiary = useCallback(
+    (next: boolean) => {
+      setSearchParams(
+        (prev) => {
+          const p = new URLSearchParams(prev)
+          if (next) p.set('diary', '1')
+          else p.delete('diary')
+          return p
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
+
+  // Queue ordering:
+  //  1. Filter to proposed-meeting only when the chip is on.
+  //  2. Within each skipped/non-skipped bucket, proposed-meeting drafts
+  //     float to the top so Jordan sees diary-needed work first.
+  //  3. Skipped drafts always trail at the end.
   const queue = useMemo(() => {
     if (!drafts) return []
-    return [
-      ...drafts.filter((d) => !skippedIds.has(d.id)),
-      ...drafts.filter((d) => skippedIds.has(d.id)),
-    ]
-  }, [drafts, skippedIds])
+    const source = onlyDiary
+      ? drafts.filter((d) => d.draft_kind === 'proposed_meeting')
+      : drafts
+    const sortKey = (d: { draft_kind: string }) =>
+      d.draft_kind === 'proposed_meeting' ? 0 : 1
+    const nonSkipped = source
+      .filter((d) => !skippedIds.has(d.id))
+      .sort((a, b) => sortKey(a) - sortKey(b))
+    const skipped = source
+      .filter((d) => skippedIds.has(d.id))
+      .sort((a, b) => sortKey(a) - sortKey(b))
+    return [...nonSkipped, ...skipped]
+  }, [drafts, skippedIds, onlyDiary])
+
+  const diaryCount = useMemo(
+    () => (drafts ?? []).filter((d) => d.draft_kind === 'proposed_meeting').length,
+    [drafts],
+  )
 
   // Derive a clamped active index so we never point past the end of
   // the queue (happens after approve/reject shrinks the list).
@@ -137,6 +178,12 @@ export function DraftsPage() {
         handleSkip(active.id)
       } else if (key === 'a') {
         e.preventDefault()
+        if (hasUnresolvedPlaceholder(active.body)) {
+          toast.error(
+            `Replace ${TIMES_PLACEHOLDER} with your proposed times before approving.`,
+          )
+          return
+        }
         void handleApproveWithAnim(active.id)
       } else if (key === 'r') {
         e.preventDefault()
@@ -206,6 +253,30 @@ export function DraftsPage() {
         <KbdHint label="Next">J</KbdHint>
         <KbdHint label="Prev">K</KbdHint>
       </div>
+
+      {/* Diary-needed filter chip — only renders when there's at least one
+          proposed-meeting draft, so the queue header stays clean otherwise. */}
+      {diaryCount > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 px-4 sm:px-6">
+          <button
+            type="button"
+            data-testid="diary-filter-chip"
+            data-active={onlyDiary || undefined}
+            onClick={() => setOnlyDiary(!onlyDiary)}
+            className={cn(
+              'inline-flex items-center gap-1.5 h-7 rounded-full border px-2.5 text-[11px] font-medium uppercase tracking-[var(--jordan-tracking-label)] transition-colors',
+              onlyDiary
+                ? 'border-[color:color-mix(in_oklab,var(--jordan-warm)_40%,transparent)] bg-[var(--jordan-warm-soft)] text-[var(--jordan-warm-text)]'
+                : 'border-hairline bg-surface-2 text-ink-muted hover:bg-surface-3 hover:text-ink',
+            )}
+            aria-pressed={onlyDiary}
+          >
+            <span aria-hidden>📅</span>
+            <span>Diary needed</span>
+            <span className="jordan-tnum tabular-nums opacity-80">({diaryCount})</span>
+          </button>
+        </div>
+      )}
 
       <div className="mt-4 flex-1 overflow-hidden px-4 pb-6 sm:px-6">
         <div className="grid h-full grid-cols-1 overflow-hidden rounded-[var(--jordan-radius-md)] border border-hairline bg-surface-1 lg:grid-cols-[minmax(280px,360px)_1fr]">

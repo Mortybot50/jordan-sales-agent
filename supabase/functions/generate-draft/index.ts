@@ -201,12 +201,29 @@ ${deal ? `Open deal: ${deal.title ?? 'Unnamed deal'} — Stage: ${(deal.stage as
 
 ${context_hint ? `Additional context from Jordan: ${context_hint}` : ''}
 
+## Meeting-intent classification
+Inspect the most recent inbound activity above. If the contact has expressed
+intent to meet, talk, or schedule something (signals: "meet", "call", "chat",
+"demo", "discuss", "available", "free", "your time", "hop on", "schedule",
+"book a time", "catch up", "coffee", or any explicit ask for a time slot),
+classify this draft as a proposed meeting and:
+  1. Set "draft_kind" to "proposed_meeting" in your response.
+  2. Embed the LITERAL token [YOUR_TIMES_HERE] (exactly that, including the
+     square brackets and uppercase) somewhere in the body, in a sentence that
+     reads naturally with placeholder times — e.g.
+     "Happy to jump on a quick call — does either [YOUR_TIMES_HERE] suit?"
+     Use the token exactly once. Do not invent your own placeholder format.
+     Do not propose actual times yourself.
+
+Otherwise set "draft_kind" to "standard" and write a normal draft (no token).
+
 Respond with ONLY valid JSON in this exact format (no markdown, no explanation):
-{"subject": "email subject line here", "body": "email body here with \\n for line breaks"}`
+{"subject": "email subject line here", "body": "email body here with \\n for line breaks", "draft_kind": "standard" | "proposed_meeting"}`
 
   // Call Anthropic API
   let subject = ''
   let body = ''
+  let draftKind: 'standard' | 'proposed_meeting' = 'standard'
 
   try {
     const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
@@ -238,6 +255,20 @@ Respond with ONLY valid JSON in this exact format (no markdown, no explanation):
     const parsed = JSON.parse(cleaned)
     subject = parsed.subject ?? ''
     body = parsed.body ?? ''
+
+    // Trust-but-verify: only honour proposed_meeting when the body actually
+    // contains the literal token. Likewise, if Claude embedded the token but
+    // forgot to flag it, treat as proposed_meeting. This keeps the frontend
+    // contract (token <=> kind) airtight regardless of model drift.
+    const claimedKind = parsed.draft_kind === 'proposed_meeting' ? 'proposed_meeting' : 'standard'
+    const hasToken = body.includes('[YOUR_TIMES_HERE]')
+    if (claimedKind === 'proposed_meeting' && hasToken) {
+      draftKind = 'proposed_meeting'
+    } else if (hasToken) {
+      draftKind = 'proposed_meeting'
+    } else {
+      draftKind = 'standard'
+    }
   } catch (err) {
     console.error('Draft generation failed:', err)
     return new Response(
@@ -270,6 +301,7 @@ Respond with ONLY valid JSON in this exact format (no markdown, no explanation):
       contact_id,
       deal_id: deal?.id ?? null,
       draft_type,
+      draft_kind: draftKind,
       subject,
       body,
       original_subject: subject,

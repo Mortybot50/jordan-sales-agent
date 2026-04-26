@@ -5,6 +5,19 @@ import { getSuppressionSet, isSuppressed } from '@/lib/suppression'
 
 export type DraftStatus = 'pending' | 'edited' | 'approved' | 'rejected' | 'sent' | 'draft_failed'
 export type DraftType = 'cold_outreach' | 'follow_up' | 'follow_up_soft' | 'follow_up_close' | 'reply'
+export type DraftKind = 'standard' | 'proposed_meeting'
+
+/**
+ * Literal placeholder token embedded by the AI in proposed_meeting drafts.
+ * Jordan must replace this with real diary slots before approving.
+ * Match exactly — frontend regex / Edge Function guard depends on the literal.
+ */
+export const TIMES_PLACEHOLDER = '[YOUR_TIMES_HERE]'
+
+/** True if a draft body still contains the unresolved diary placeholder. */
+export function hasUnresolvedPlaceholder(body: string | null | undefined): boolean {
+  return !!body && body.includes(TIMES_PLACEHOLDER)
+}
 
 export interface Draft {
   id: string
@@ -12,6 +25,7 @@ export interface Draft {
   contact_id: string | null
   deal_id: string | null
   draft_type: DraftType
+  draft_kind: DraftKind
   subject: string | null
   body: string | null
   context_json: Record<string, unknown> | null
@@ -34,7 +48,7 @@ export function useDrafts() {
       const { data, error } = await supabase
         .from('email_drafts')
         .select(`
-          id, org_id, contact_id, deal_id, draft_type, subject, body,
+          id, org_id, contact_id, deal_id, draft_type, draft_kind, subject, body,
           context_json, model, status, generated_at, approved_at, created_at,
           contact:contacts(id, full_name, venue:venues(name, venue_type))
         `)
@@ -50,18 +64,39 @@ export function useDrafts() {
 /**
  * Count of drafts awaiting review (pending or edited).
  * Drives the nav badge so Jordan can see the queue from anywhere.
+ *
+ * Also returns the subset that are proposed_meeting drafts — these need
+ * Jordan's diary input before they can send, so the nav badge splits the
+ * total into "X total / Y need diary" when both are non-zero.
  */
-export function useDraftQueueCount() {
-  return useQuery({
-    queryKey: ['drafts', 'queue-count'],
-    queryFn: async (): Promise<number> => {
-      const { count, error } = await supabase
-        .from('email_drafts')
-        .select('id', { count: 'exact', head: true })
-        .in('status', ['pending', 'edited'])
+export interface DraftQueueCounts {
+  total: number
+  needsDiary: number
+}
 
-      if (error) throw error
-      return count ?? 0
+export function useDraftQueueCount() {
+  return useQuery<DraftQueueCounts>({
+    queryKey: ['drafts', 'queue-count'],
+    queryFn: async (): Promise<DraftQueueCounts> => {
+      const [totalRes, diaryRes] = await Promise.all([
+        supabase
+          .from('email_drafts')
+          .select('id', { count: 'exact', head: true })
+          .in('status', ['pending', 'edited']),
+        supabase
+          .from('email_drafts')
+          .select('id', { count: 'exact', head: true })
+          .in('status', ['pending', 'edited'])
+          .eq('draft_kind', 'proposed_meeting'),
+      ])
+
+      if (totalRes.error) throw totalRes.error
+      if (diaryRes.error) throw diaryRes.error
+
+      return {
+        total: totalRes.count ?? 0,
+        needsDiary: diaryRes.count ?? 0,
+      }
     },
     staleTime: 30_000,
     refetchInterval: 60_000,
@@ -76,7 +111,7 @@ export function useDraft(id: string) {
       const { data, error } = await supabase
         .from('email_drafts')
         .select(`
-          id, org_id, contact_id, deal_id, draft_type, subject, body,
+          id, org_id, contact_id, deal_id, draft_type, draft_kind, subject, body,
           context_json, model, status, generated_at, approved_at, created_at,
           contact:contacts(id, full_name, venue:venues(name, venue_type))
         `)
@@ -102,6 +137,14 @@ export function useApproveDraft() {
         .select('subject, body, original_subject, original_body')
         .eq('id', id)
         .single()
+
+      // Hard block — proposed-meeting drafts must have real times in place
+      // before they can be approved/sent. Mirrors the editor Send guard.
+      if (current && hasUnresolvedPlaceholder(current.body)) {
+        throw new Error(
+          'Replace [YOUR_TIMES_HERE] with your proposed times before approving.',
+        )
+      }
 
       const now = new Date().toISOString()
       const subjectChanged = !!current && current.subject !== current.original_subject

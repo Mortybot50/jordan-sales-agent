@@ -22,6 +22,8 @@ import {
 import { DraftEditor } from '@/components/drafts/DraftEditor'
 import { formatRelative, venueTypeLabel } from '@/lib/utils'
 import {
+  hasUnresolvedPlaceholder,
+  TIMES_PLACEHOLDER,
   useApproveDraft,
   useRejectDraft,
   type Draft,
@@ -41,6 +43,32 @@ export interface DraftPreviewPaneProps {
   onApproved?: (id: string) => void
   onRejected?: (id: string) => void
   onSkip?: (id: string) => void
+}
+
+/**
+ * Splits a draft body around occurrences of [YOUR_TIMES_HERE] and renders
+ * the token as an amber inline pill so Jordan visually can't miss it.
+ */
+function renderBodyWithPlaceholder(body: string): React.ReactNode {
+  if (!body.includes(TIMES_PLACEHOLDER)) return body
+  const parts = body.split(TIMES_PLACEHOLDER)
+  const out: React.ReactNode[] = []
+  parts.forEach((part, i) => {
+    out.push(<React.Fragment key={`t-${i}`}>{part}</React.Fragment>)
+    if (i < parts.length - 1) {
+      out.push(
+        <span
+          key={`p-${i}`}
+          data-testid="placeholder-token"
+          className="inline-flex items-center rounded-[var(--jordan-radius-sm)] bg-[var(--jordan-warm-soft)] px-1.5 py-0.5 font-mono text-[12px] font-semibold text-[var(--jordan-warm-text)] ring-1 ring-[color:color-mix(in_oklab,var(--jordan-warm)_45%,transparent)]"
+          title="Replace with your proposed times before approving"
+        >
+          {TIMES_PLACEHOLDER}
+        </span>,
+      )
+    }
+  })
+  return out
 }
 
 export function DraftPreviewPane({
@@ -106,8 +134,16 @@ export function DraftPreviewPane({
   const coverCount = (ctxContact?.cover_count as number | null | undefined) ?? null
   const suburb = (ctxContact?.suburb as string | null | undefined) ?? null
 
+  // Hard guard for proposed-meeting drafts. Approve == Send in this app
+  // today, so the same rule applies to both: must replace the token first.
+  const placeholderPresent = hasUnresolvedPlaceholder(draft.body)
+  const approveDisabled = approveDraft.isPending || placeholderPresent
+  const approveTooltip = placeholderPresent
+    ? `Replace ${TIMES_PLACEHOLDER} with your proposed times before sending.`
+    : undefined
+
   async function handleApprove() {
-    if (!draft) return
+    if (!draft || placeholderPresent) return
     await approveDraft.mutateAsync(draft.id)
     onApproved?.(draft.id)
   }
@@ -166,6 +202,25 @@ export function DraftPreviewPane({
           </div>
         )}
 
+        {placeholderPresent && (
+          <div
+            data-testid="diary-slot-banner"
+            className="mb-4 flex items-start gap-2 rounded-[var(--jordan-radius-md)] border border-[color:color-mix(in_oklab,var(--jordan-warm)_32%,transparent)] bg-[var(--jordan-warm-soft)] px-3 py-2 text-[12px] leading-5 text-[var(--jordan-warm-text)]"
+          >
+            <span aria-hidden className="mt-0.5">📅</span>
+            <span>
+              <strong className="font-semibold uppercase tracking-[var(--jordan-tracking-label)]">
+                Diary slot needed
+              </strong>{' '}
+              — open Edit and replace{' '}
+              <code className="rounded bg-black/10 px-1 py-0.5 font-mono text-[11px]">
+                {TIMES_PLACEHOLDER}
+              </code>{' '}
+              with your proposed times before approving.
+            </span>
+          </div>
+        )}
+
         <div className="space-y-3">
           <div className="flex items-center gap-1.5 border-b border-hairline pb-2">
             <Mail className="size-3.5 shrink-0 text-ink-faint" />
@@ -174,7 +229,7 @@ export function DraftPreviewPane({
             </p>
           </div>
           <pre className="whitespace-pre-wrap break-words font-sans text-[13px] leading-6 text-ink">
-            {draft.body ?? ''}
+            {renderBodyWithPlaceholder(draft.body ?? '')}
           </pre>
         </div>
       </div>
@@ -185,7 +240,10 @@ export function DraftPreviewPane({
             size="sm"
             className="h-8 gap-1.5 bg-[var(--jordan-accent)] text-white hover:bg-[var(--jordan-accent-hover)]"
             onClick={handleApprove}
-            disabled={approveDraft.isPending}
+            disabled={approveDisabled}
+            title={approveTooltip}
+            aria-disabled={approveDisabled}
+            data-testid="approve-button"
           >
             <Check className="size-3.5" />
             Approve
