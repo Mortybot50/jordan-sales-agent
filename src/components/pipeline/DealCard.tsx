@@ -49,6 +49,9 @@ export function DealCard({ deal, onClick }: DealCardProps) {
   const isLost = deal.outcome === 'lost'
   const needsOutcomeTag = isClosedStage && !deal.outcome
   const wonAwaitingInstall = isWon && !deal.install_completed_at
+  const isSnoozed = !!deal.is_snoozed
+  const recentlyReturned = !!deal.recently_returned
+  const snoozedUntilDate = deal.snoozed_until ? new Date(deal.snoozed_until) : null
 
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
@@ -126,6 +129,27 @@ export function DealCard({ deal, onClick }: DealCardProps) {
                 title="Venue recently reopened"
               >
                 Recently reopened
+              </span>
+            )}
+            {recentlyReturned && (
+              <span
+                className="inline-flex items-center rounded-[3px] bg-[color:var(--jordan-warm-soft,transparent)] border border-[color:var(--jordan-warm)]/40 text-[color:var(--jordan-warm-text)] px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-[var(--jordan-tracking-label)]"
+                title={
+                  snoozedUntilDate
+                    ? `Auto-woke ${snoozedUntilDate.toLocaleDateString('en-AU')}`
+                    : 'Returned from snooze'
+                }
+              >
+                Returned from snooze
+              </span>
+            )}
+            {isSnoozed && snoozedUntilDate && (
+              <span
+                className="inline-flex items-center gap-1 rounded-[3px] bg-surface-3 text-ink-faint px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-[var(--jordan-tracking-label)]"
+                title={`Snoozed until ${snoozedUntilDate.toLocaleDateString('en-AU')}`}
+              >
+                <span aria-hidden>z</span>
+                {format(snoozedUntilDate, 'd MMM')}
               </span>
             )}
             {isHeld && (

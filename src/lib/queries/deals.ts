@@ -35,6 +35,8 @@ export interface Deal {
   // Close Won outcome (added 2026-04-26)
   outcome: 'won' | 'lost' | null
   final_value: number | null
+  // Snooze (added 2026-04-26)
+  snoozed_until: string | null
   contact?: {
     id: string
     full_name: string
@@ -65,13 +67,33 @@ export interface Deal {
     tier: 'hot' | 'warm' | 'cold'
   } | null
   days_in_stage?: number
+  /**
+   * True when the deal is currently snoozed (snoozed_until is in the future).
+   * View-only — derived from snoozed_until at fetch time.
+   */
+  is_snoozed?: boolean
+  /**
+   * True when the deal woke from snooze in the last 7 days. Drives the amber
+   * "RETURNED FROM SNOOZE" pill on DealCard. Pure view logic, no DB write.
+   */
+  recently_returned?: boolean
 }
 
-export function useDeals() {
+export interface UseDealsOptions {
+  /**
+   * When true, returns ALL deals including currently-snoozed ones. Default
+   * false — snoozed deals are hidden from active views (Pipeline, Briefing).
+   * Snoozed deals always reappear automatically once snoozed_until <= now().
+   */
+  includeSnoozed?: boolean
+}
+
+export function useDeals(options: UseDealsOptions = {}) {
+  const { includeSnoozed = false } = options
   return useQuery({
-    queryKey: ['deals'],
+    queryKey: ['deals', { includeSnoozed }],
     queryFn: async (): Promise<Deal[]> => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('deals')
         .select(`
           *,
@@ -81,6 +103,15 @@ export function useDeals() {
           product:products(id, sku, label, brand, weekly_price_aud)
         `)
         .order('updated_at', { ascending: false })
+
+      // Snooze filter — hide deals currently snoozed (snoozed_until in future).
+      // Past-dated snoozes auto-wake (deal reappears).
+      if (!includeSnoozed) {
+        const nowIso = new Date().toISOString()
+        query = query.or(`snoozed_until.is.null,snoozed_until.lte.${nowIso}`)
+      }
+
+      const { data, error } = await query
 
       if (error) throw error
 
@@ -104,12 +135,26 @@ export function useDeals() {
         }
       }
 
-      return deals.map((d) => ({
-        ...d,
-        outcome: (d.outcome as Deal['outcome']) ?? null,
-        lead_score: scoreMap[d.id] ?? null,
-        days_in_stage: d.updated_at ? differenceInDays(new Date(), parseISO(d.updated_at)) : 0,
-      })) as Deal[]
+      const nowMs = Date.now()
+      const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
+
+      return deals.map((d) => {
+        const snoozedAtMs = d.snoozed_until ? new Date(d.snoozed_until).getTime() : null
+        const isSnoozed = snoozedAtMs != null && snoozedAtMs > nowMs
+        const recentlyReturned =
+          snoozedAtMs != null &&
+          snoozedAtMs <= nowMs &&
+          snoozedAtMs > nowMs - SEVEN_DAYS_MS
+
+        return {
+          ...d,
+          outcome: (d.outcome as Deal['outcome']) ?? null,
+          lead_score: scoreMap[d.id] ?? null,
+          days_in_stage: d.updated_at ? differenceInDays(new Date(), parseISO(d.updated_at)) : 0,
+          is_snoozed: isSnoozed,
+          recently_returned: recentlyReturned,
+        }
+      }) as Deal[]
     },
   })
 }
@@ -222,6 +267,8 @@ export function useUpdateDeal() {
         lead_score: _ls,
         days_in_stage: _days,
         product: _product,
+        is_snoozed: _isSnoozed,
+        recently_returned: _recentlyReturned,
         ...dbUpdates
       } = updates
       const { data, error } = await supabase
@@ -414,5 +461,60 @@ export function useMarkInstalled() {
       toast.success('Marked as installed — commission earned')
     },
     onError: (err: Error) => toast.error(err.message),
+  })
+}
+
+/**
+ * Count of deals currently snoozed (snoozed_until in future). Used to power
+ * the "Show snoozed (N)" toggle on the Pipeline page.
+ */
+export function useSnoozedDealsCount() {
+  return useQuery({
+    queryKey: ['deals', 'snoozed-count'],
+    queryFn: async (): Promise<number> => {
+      const nowIso = new Date().toISOString()
+      const { count, error } = await supabase
+        .from('deals')
+        .select('id', { count: 'exact', head: true })
+        .gt('snoozed_until', nowIso)
+      if (error) throw error
+      return count ?? 0
+    },
+    staleTime: 60_000,
+  })
+}
+
+/**
+ * Snooze (or unsnooze) a deal. Pass `until = null` to unsnooze immediately.
+ * Snoozed deals are hidden from the active Pipeline + Morning Briefing until
+ * `snoozed_until` is reached, after which they auto-wake with a 7-day amber
+ * "RETURNED FROM SNOOZE" pill on DealCard (purely view-derived).
+ */
+export function useSnoozeDeal() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ dealId, until }: { dealId: string; until: Date | null }) => {
+      const { error } = await supabase
+        .from('deals')
+        .update({
+          snoozed_until: until ? until.toISOString() : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', dealId)
+      if (error) throw error
+      return { dealId, until }
+    },
+    onSuccess: ({ until }) => {
+      qc.invalidateQueries({ queryKey: ['deals'] })
+      qc.invalidateQueries({ queryKey: ['briefing'] })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
+      if (until) {
+        const label = until.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+        toast.success(`Snoozed until ${label}`)
+      } else {
+        toast.success('Unsnoozed')
+      }
+    },
+    onError: (err: Error) => toast.error(`Failed to update snooze: ${err.message}`),
   })
 }

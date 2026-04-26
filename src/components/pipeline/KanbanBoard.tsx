@@ -54,6 +54,8 @@ export interface KanbanBoardProps {
   contactIdAllowlist?: Set<string> | null
   /** Auto-open DealDrawer for this deal id (deep-link from /pipeline?deal=<id>). */
   focusDealId?: string | null
+  /** When true, include currently-snoozed deals (otherwise hidden by default). */
+  includeSnoozed?: boolean
 }
 
 export function KanbanBoard({
@@ -61,10 +63,11 @@ export function KanbanBoard({
   dealIdAllowlist = null,
   contactIdAllowlist = null,
   focusDealId = null,
+  includeSnoozed = false,
 }: KanbanBoardProps = {}) {
   const { user } = useAuth()
   const { data: stages } = useStages()
-  const { data: deals, isLoading, error } = useDeals()
+  const { data: deals, isLoading, error } = useDeals({ includeSnoozed })
   const { data: contacts } = useContacts()
   const updateDeal = useUpdateDeal()
   const createDeal = useCreateDeal()

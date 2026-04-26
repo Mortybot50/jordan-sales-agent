@@ -20,8 +20,13 @@ type SortDir = 'asc' | 'desc'
 
 type SelectionState = Record<string, string[]>
 
-export function DealListView() {
-  const { data: deals, isLoading, error, refetch } = useDeals()
+export interface DealListViewProps {
+  /** When true, include currently-snoozed deals (otherwise hidden by default). */
+  includeSnoozed?: boolean
+}
+
+export function DealListView({ includeSnoozed = false }: DealListViewProps = {}) {
+  const { data: deals, isLoading, error, refetch } = useDeals({ includeSnoozed })
   const { data: stages } = useStages()
 
   const [sortField, setSortField] = useState<SortField>('value')

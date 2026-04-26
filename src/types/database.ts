@@ -300,6 +300,7 @@ export type Database = {
           outcome: string | null
           owner_user_id: string | null
           product_id: string | null
+          snoozed_until: string | null
           stage_id: string | null
           tcv: number | null
           term_months: number | null
@@ -331,6 +332,7 @@ export type Database = {
           outcome?: string | null
           owner_user_id?: string | null
           product_id?: string | null
+          snoozed_until?: string | null
           stage_id?: string | null
           tcv?: number | null
           term_months?: number | null
@@ -362,6 +364,7 @@ export type Database = {
           outcome?: string | null
           owner_user_id?: string | null
           product_id?: string | null
+          snoozed_until?: string | null
           stage_id?: string | null
           tcv?: number | null
           term_months?: number | null
