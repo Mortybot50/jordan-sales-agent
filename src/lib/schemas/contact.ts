@@ -4,6 +4,9 @@ export const venueInlineSchema = z.object({
   name: z.string().min(1, 'Venue name is required'),
   venue_type: z.enum(['restaurant', 'cafe', 'hotel', 'event_space', 'bar', 'club', 'pub', 'qsr', 'function_centre', 'other']).optional(),
   address: z.string().optional(),
+  suburb: z.string().optional(),
+  state: z.string().optional(),
+  postcode: z.string().optional(),
   website: z.string().url('Enter a valid URL').optional().or(z.literal('')),
   cover_count: z.number().int().min(1).max(10000).optional().nullable(),
 })
