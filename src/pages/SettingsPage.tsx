@@ -42,6 +42,40 @@ function ProfileTab() {
   const updateProfile = useUpdateUserProfile()
   const [briefingEnabled, setBriefingEnabled] = useState(user?.email_notifications?.morning_briefing ?? true)
   const [briefingHour, setBriefingHour] = useState(user?.email_notifications?.briefing_time_hour ?? 7)
+  const [pausedUntil, setPausedUntil] = useState<string | null>(
+    user?.email_notifications?.morning_briefing_paused_until ?? null,
+  )
+  const [sendingTest, setSendingTest] = useState(false)
+
+  const isDev = import.meta.env.MODE === 'development'
+  const isAdmin = user?.role === 'admin'
+  const showManualTrigger = isDev || isAdmin
+
+  const isPaused = !!pausedUntil && new Date(pausedUntil) > new Date()
+  const pausedUntilLabel = pausedUntil
+    ? new Date(pausedUntil).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })
+    : null
+
+  // Compute next send time as a hint when enabled.
+  function nextSendLabel(): string {
+    const now = new Date()
+    // 7am Melbourne next occurrence — using user's chosen hour.
+    const target = new Date(now)
+    // Get current Melbourne hour to decide if today's slot is past.
+    const melbHourStr = new Intl.DateTimeFormat('en-AU', {
+      timeZone: 'Australia/Melbourne',
+      hour: 'numeric',
+      hour12: false,
+    }).format(now)
+    const melbHour = parseInt(melbHourStr, 10) % 24
+    if (melbHour >= briefingHour) {
+      target.setDate(target.getDate() + 1)
+    }
+    return target.toLocaleDateString('en-AU', {
+      weekday: 'short',
+      timeZone: 'Australia/Melbourne',
+    }) + ` ${briefingHour}am AEST`
+  }
 
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileFormSchema),
@@ -64,8 +98,66 @@ function ProfileTab() {
         values.default_commission_pct == null || Number.isNaN(values.default_commission_pct)
           ? null
           : values.default_commission_pct,
-      email_notifications: { morning_briefing: briefingEnabled, briefing_time_hour: briefingHour },
+      email_notifications: {
+        morning_briefing: briefingEnabled,
+        briefing_time_hour: briefingHour,
+        morning_briefing_paused_until: pausedUntil,
+      },
     })
+  }
+
+  async function handlePause7Days() {
+    if (!user) return
+    const until = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    setPausedUntil(until)
+    await updateProfile.mutateAsync({
+      id: user.id,
+      email_notifications: {
+        morning_briefing: briefingEnabled,
+        briefing_time_hour: briefingHour,
+        morning_briefing_paused_until: until,
+      },
+    })
+  }
+
+  async function handleResumePause() {
+    if (!user) return
+    setPausedUntil(null)
+    await updateProfile.mutateAsync({
+      id: user.id,
+      email_notifications: {
+        morning_briefing: briefingEnabled,
+        briefing_time_hour: briefingHour,
+        morning_briefing_paused_until: null,
+      },
+    })
+  }
+
+  async function handleSendTestBriefing() {
+    if (!user) return
+    setSendingTest(true)
+    try {
+      const { data, error } = await supabase.functions.invoke('send-morning-briefing', {
+        body: { mode: 'manual', user_id: user.id, force: true },
+      })
+      if (error) throw error
+      const result = data as { sent?: number; skipped_already_sent_today?: number; errors?: string[] }
+      if (result?.sent && result.sent > 0) {
+        toast.success('Test briefing sent — check your inbox')
+      } else if (result?.skipped_already_sent_today) {
+        toast.message('Already sent today', {
+          description: 'Idempotency guard fired — clear briefing_sends to re-send.',
+        })
+      } else if (result?.errors?.length) {
+        toast.error(`Send failed: ${result.errors[0]}`)
+      } else {
+        toast.message('No briefing sent', { description: JSON.stringify(result) })
+      }
+    } catch (e) {
+      toast.error(`Manual trigger failed: ${(e as Error).message}`)
+    } finally {
+      setSendingTest(false)
+    }
   }
 
   function onInvalid(errors: FieldErrors<ProfileFormValues>) {
@@ -190,7 +282,13 @@ function ProfileTab() {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-medium">Morning briefing</p>
-            <p className="text-xs text-muted-foreground">Receive your daily digest at 7am AEST</p>
+            <p className="text-xs text-muted-foreground">
+              {isPaused
+                ? `Paused until ${pausedUntilLabel}`
+                : briefingEnabled
+                  ? `Next briefing: ${nextSendLabel()}`
+                  : 'Receive your daily digest at 7am AEST'}
+            </p>
           </div>
           <button
             type="button"
@@ -217,6 +315,46 @@ function ProfileTab() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+        )}
+        {briefingEnabled && (
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            {isPaused ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={handleResumePause}
+                disabled={updateProfile.isPending}
+              >
+                Resume now
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={handlePause7Days}
+                disabled={updateProfile.isPending}
+              >
+                Pause for 7 days
+              </Button>
+            )}
+            {showManualTrigger && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={handleSendTestBriefing}
+                disabled={sendingTest}
+                title="Trigger send-morning-briefing for your account (admin/dev only)"
+              >
+                {sendingTest ? 'Sending…' : 'Send me a test briefing now'}
+              </Button>
+            )}
           </div>
         )}
       </div>
