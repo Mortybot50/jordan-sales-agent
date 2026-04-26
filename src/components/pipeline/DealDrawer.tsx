@@ -31,12 +31,13 @@ import {
   useMarkInstallConfirmed,
   useMarkInstalled,
   useSnoozeDeal,
+  useUpdateDealNextStep,
 } from '@/lib/queries/deals'
 import { useContactActivities } from '@/lib/queries/activities'
 import { useStages } from '@/lib/queries/stages'
 import { dealFormSchema, type DealFormValues } from '@/lib/schemas/deal'
 import { formatCurrency, formatDate, formatRelative, activityTypeLabel, cn } from '@/lib/utils'
-import { format, addMonths, formatDistanceToNowStrict, addDays, addWeeks, nextMonday, startOfDay } from 'date-fns'
+import { format, addMonths, formatDistanceToNowStrict, addDays, addWeeks, nextMonday, startOfDay, nextFriday } from 'date-fns'
 import type { Deal } from '@/lib/queries/deals'
 import type { ActivityType } from '@/lib/queries/activities'
 import {
@@ -92,6 +93,10 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
   )
   const [snoozeOpen, setSnoozeOpen] = useState(false)
   const [snoozeDateInput, setSnoozeDateInput] = useState<string>('')
+  const [nextStepNote, setNextStepNote] = useState<string>(deal.next_step_note ?? '')
+  const [nextStepDue, setNextStepDue] = useState<string>(
+    deal.next_step_due_at ? deal.next_step_due_at.split('T')[0] : '',
+  )
   const { data: stages } = useStages()
   const { data: activities } = useContactActivities(deal.contact_id ?? '')
   const updateDeal = useUpdateDeal()
@@ -100,6 +105,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
   const markConfirmed = useMarkInstallConfirmed()
   const markInstalled = useMarkInstalled()
   const snoozeDeal = useSnoozeDeal()
+  const updateNextStep = useUpdateDealNextStep(deal.id)
 
   const form = useForm<DealFormValues>({
     resolver: zodResolver(dealFormSchema),
@@ -167,6 +173,46 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
 
   async function handleMarkInstalled() {
     await markInstalled.mutateAsync(deal.id)
+  }
+
+  function nextStepDateFromKeyword(keyword: 'today' | 'tomorrow' | 'friday' | 'monday' | 'plus_week'): string {
+    const t = startOfDay(new Date())
+    let target: Date
+    switch (keyword) {
+      case 'today':
+        target = t
+        break
+      case 'tomorrow':
+        target = addDays(t, 1)
+        break
+      case 'friday':
+        target = nextFriday(t)
+        break
+      case 'monday':
+        target = nextMonday(t)
+        break
+      case 'plus_week':
+        target = addDays(t, 7)
+        break
+    }
+    return format(target, 'yyyy-MM-dd')
+  }
+
+  async function handleSaveNextStep() {
+    const note = nextStepNote.trim()
+    const dueIso = nextStepDue
+      ? new Date(`${nextStepDue}T09:00:00`).toISOString()
+      : null
+    await updateNextStep.mutateAsync({
+      note: note === '' ? null : note,
+      dueAt: dueIso,
+    })
+  }
+
+  async function handleClearNextStep() {
+    setNextStepNote('')
+    setNextStepDue('')
+    await updateNextStep.mutateAsync({ note: null, dueAt: null })
   }
 
   /** Build a wake date at 09:00 local time (start-of-working-day) for a given date. */
@@ -580,6 +626,87 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
               </Button>
             </div>
           )}
+
+          {/* ── Next step ──────────────────────────────────── */}
+          <div className="mb-5 rounded-[10px] border border-hairline bg-surface-2 p-3 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <CapsLabel>Next step</CapsLabel>
+              {(deal.next_step_note || deal.next_step_due_at) && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-2 text-[11px] text-ink-faint"
+                  onClick={handleClearNextStep}
+                  disabled={updateNextStep.isPending}
+                >
+                  Clear
+                </Button>
+              )}
+            </div>
+            <Textarea
+              value={nextStepNote}
+              onChange={(e) => setNextStepNote(e.target.value.slice(0, 280))}
+              placeholder="What's the very next thing? e.g. send Espy quote, call back about install date"
+              rows={2}
+              maxLength={280}
+              className="text-[13px]"
+            />
+            <div className="flex items-center justify-between gap-2 text-[11px] text-ink-faint">
+              <span>{nextStepNote.length}/280</span>
+              <span>{deal.next_step_due_at && `Currently due ${format(new Date(deal.next_step_due_at), 'EEE d MMM')}`}</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {(
+                [
+                  { label: 'Today', kw: 'today' as const },
+                  { label: 'Tomorrow', kw: 'tomorrow' as const },
+                  { label: 'Friday', kw: 'friday' as const },
+                  { label: 'Next Mon', kw: 'monday' as const },
+                  { label: '+1 week', kw: 'plus_week' as const },
+                ]
+              ).map((p) => (
+                <Button
+                  key={p.kw}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-[11px]"
+                  onClick={() => setNextStepDue(nextStepDateFromKeyword(p.kw))}
+                >
+                  {p.label}
+                </Button>
+              ))}
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => setNextStepDue('')}
+              >
+                No date
+              </Button>
+            </div>
+            <div className="flex items-end gap-2">
+              <div className="flex-1 space-y-1">
+                <Label className="text-[11px]">Due</Label>
+                <Input
+                  type="date"
+                  value={nextStepDue}
+                  onChange={(e) => setNextStepDue(e.target.value)}
+                  className="h-8 text-[13px]"
+                />
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleSaveNextStep}
+                disabled={updateNextStep.isPending}
+              >
+                {updateNextStep.isPending ? 'Saving…' : 'Save next step'}
+              </Button>
+            </div>
+          </div>
 
           {/* ── Edit form ────────────────────────────────────── */}
           <form onSubmit={form.handleSubmit(handleSave, onInvalid)} className="space-y-4">

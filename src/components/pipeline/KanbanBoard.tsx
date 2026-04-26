@@ -56,6 +56,8 @@ export interface KanbanBoardProps {
   focusDealId?: string | null
   /** When true, include currently-snoozed deals (otherwise hidden by default). */
   includeSnoozed?: boolean
+  /** Optional ordering — 'stalest' sorts each column by days_since_last_activity desc. */
+  sortBy?: 'default' | 'stalest'
 }
 
 export function KanbanBoard({
@@ -64,6 +66,7 @@ export function KanbanBoard({
   contactIdAllowlist = null,
   focusDealId = null,
   includeSnoozed = false,
+  sortBy = 'default',
 }: KanbanBoardProps = {}) {
   const { user } = useAuth()
   const { data: stages } = useStages()
@@ -113,10 +116,17 @@ export function KanbanBoard({
   const dealsByStage = useMemo(() => {
     const map: Record<string, Deal[]> = {}
     for (const stage of stages ?? []) {
-      map[stage.id] = displayDeals.filter((d) => d.stage_id === stage.id)
+      const cards = displayDeals.filter((d) => d.stage_id === stage.id)
+      if (sortBy === 'stalest') {
+        cards.sort(
+          (a, b) =>
+            (b.days_since_last_activity ?? 0) - (a.days_since_last_activity ?? 0),
+        )
+      }
+      map[stage.id] = cards
     }
     return map
-  }, [displayDeals, stages])
+  }, [displayDeals, stages, sortBy])
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event

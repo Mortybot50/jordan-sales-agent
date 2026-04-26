@@ -337,6 +337,8 @@ export type Database = {
           install_scheduled_for: string | null
           last_touch_at: string | null
           lost_reason: string | null
+          next_step_due_at: string | null
+          next_step_note: string | null
           notes: string | null
           org_id: string
           outcome: string | null
@@ -369,6 +371,8 @@ export type Database = {
           install_scheduled_for?: string | null
           last_touch_at?: string | null
           lost_reason?: string | null
+          next_step_due_at?: string | null
+          next_step_note?: string | null
           notes?: string | null
           org_id: string
           outcome?: string | null
@@ -401,6 +405,8 @@ export type Database = {
           install_scheduled_for?: string | null
           last_touch_at?: string | null
           lost_reason?: string | null
+          next_step_due_at?: string | null
+          next_step_note?: string | null
           notes?: string | null
           org_id?: string
           outcome?: string | null
