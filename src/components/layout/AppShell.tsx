@@ -60,23 +60,46 @@ const NAV_SECTIONS: { id: string; label: string; items: NavItem[] }[] = [
 ]
 
 function DraftQueueBadge() {
-  const { data: count } = useDraftQueueCount()
-  if (!count || count <= 0) return null
+  const { data } = useDraftQueueCount()
+  const total = data?.total ?? 0
+  const needsDiary = data?.needsDiary ?? 0
+  if (total <= 0) return null
+
   // Mint for a healthy queue, amber once it backs up — no new colours,
   // both are existing Dark Anchor accents.
-  const tone = count >= 6 ? 'amber' : 'mint'
+  const tone = total >= 6 ? 'amber' : 'mint'
+  const showSplit = needsDiary > 0 && total > needsDiary
+
   return (
     <span
       data-testid="draft-queue-count"
+      data-needs-diary={needsDiary > 0 || undefined}
       className={cn(
-        'ml-auto inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full text-[10px] font-semibold tracking-[0.08em] tabular-nums jordan-tnum',
+        'ml-auto inline-flex items-center gap-0.5 h-[18px] rounded-full text-[10px] font-semibold tracking-[0.08em] tabular-nums jordan-tnum',
+        showSplit ? 'pl-1.5 pr-0' : 'px-1.5 justify-center min-w-[20px]',
         tone === 'mint'
           ? 'bg-[color:var(--jordan-accent-mint-soft)] text-[color:var(--jordan-success-text)]'
           : 'bg-[color:var(--jordan-warm-soft)] text-[color:var(--jordan-warm-text)]',
       )}
-      aria-label={`${count} draft${count === 1 ? '' : 's'} awaiting review`}
+      aria-label={
+        needsDiary > 0
+          ? `${total} draft${total === 1 ? '' : 's'} awaiting review, ${needsDiary} need${needsDiary === 1 ? 's' : ''} your diary`
+          : `${total} draft${total === 1 ? '' : 's'} awaiting review`
+      }
     >
-      {count > 99 ? '99+' : count}
+      {showSplit ? (
+        <>
+          <span>{total > 99 ? '99+' : total}</span>
+          <span
+            className="ml-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[color:var(--jordan-warm-soft)] px-1.5 text-[color:var(--jordan-warm-text)]"
+            title={`${needsDiary} need${needsDiary === 1 ? 's' : ''} your diary`}
+          >
+            {needsDiary > 99 ? '99+' : needsDiary}
+          </span>
+        </>
+      ) : (
+        <span>{total > 99 ? '99+' : total}</span>
+      )}
     </span>
   )
 }

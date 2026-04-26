@@ -59,6 +59,17 @@ export const DraftQueueRow = React.forwardRef<HTMLButtonElement, DraftQueueRowPr
           </div>
           <div className="mt-1 flex items-center gap-1.5">
             <DraftTypeBadge type={draft.draft_type} />
+            {draft.draft_kind === 'proposed_meeting' && (
+              <StatusPill
+                tone="warm"
+                uppercase
+                data-testid="needs-diary-pill"
+                title="Needs your diary — add real time slots before sending"
+              >
+                <span aria-hidden>📅</span>
+                Needs Your Diary
+              </StatusPill>
+            )}
             {draft.status === 'edited' && (
               <StatusPill tone="neutral" uppercase>
                 Edited

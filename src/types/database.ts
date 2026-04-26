@@ -513,6 +513,7 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           deal_id: string | null
+          draft_kind: string
           draft_type: string
           edit_logged_at: string | null
           edited_body: string | null
@@ -536,6 +537,7 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           deal_id?: string | null
+          draft_kind?: string
           draft_type: string
           edit_logged_at?: string | null
           edited_body?: string | null
@@ -559,6 +561,7 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           deal_id?: string | null
+          draft_kind?: string
           draft_type?: string
           edit_logged_at?: string | null
           edited_body?: string | null
