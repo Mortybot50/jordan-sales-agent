@@ -34,6 +34,7 @@ export interface BriefingReply {
   subject: string | null
   body: string | null
   occurred_at: string
+  intent: string | null
 }
 
 export function useOvernightReplies() {
@@ -45,7 +46,7 @@ export function useOvernightReplies() {
       const { data, error } = await supabase
         .from('activities')
         .select(`
-          id, contact_id, deal_id, subject, body, occurred_at,
+          id, contact_id, deal_id, subject, body, occurred_at, metadata,
           contact:contacts(id, full_name, email, venue:venues(name))
         `)
         .in('activity_type', ['reply_received', 'email_inbound'])
@@ -65,6 +66,7 @@ export function useOvernightReplies() {
         })
         .map((a) => {
           const c = a.contact as { full_name: string; venue: { name: string } | null } | null
+          const meta = (a.metadata ?? {}) as Record<string, unknown>
           return {
             id: a.id,
             contact_id: a.contact_id,
@@ -74,6 +76,7 @@ export function useOvernightReplies() {
             subject: a.subject,
             body: a.body,
             occurred_at: a.occurred_at ?? new Date().toISOString(),
+            intent: typeof meta.intent === 'string' ? meta.intent : null,
           }
         })
     },

@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { cn, formatRelative } from '@/lib/utils'
-import { DraftTypeBadge, StatusPill } from '@/components/primitives'
+import { DraftTypeBadge, IntentBadge, StatusPill } from '@/components/primitives'
 import type { Draft } from '@/lib/queries/drafts'
 
 /**
@@ -14,11 +14,13 @@ export interface DraftQueueRowProps extends React.HTMLAttributes<HTMLButtonEleme
   isActive: boolean
   isSkipped?: boolean
   isRemoving?: boolean
+  /** AI-classified reply intent for the most recent inbound from this contact */
+  intent?: string | null
   onSelect: () => void
 }
 
 export const DraftQueueRow = React.forwardRef<HTMLButtonElement, DraftQueueRowProps>(
-  ({ draft, isActive, isSkipped, isRemoving, onSelect, className, ...rest }, ref) => {
+  ({ draft, isActive, isSkipped, isRemoving, intent, onSelect, className, ...rest }, ref) => {
     const contact = draft.contact
     const venue = contact?.venue
 
@@ -47,6 +49,7 @@ export const DraftQueueRow = React.forwardRef<HTMLButtonElement, DraftQueueRowPr
             <span className="truncate text-[13px] font-medium text-ink">
               {contact?.full_name ?? 'Unknown contact'}
             </span>
+            <IntentBadge intent={intent} />
             {venue?.name && (
               <>
                 <span className="text-ink-faint">·</span>

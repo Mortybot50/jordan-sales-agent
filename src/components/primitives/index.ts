@@ -33,6 +33,9 @@ export {
   type CommandItem,
 } from './CommandPalette'
 
+/* ── Feature E — Reply Intent Classifier ───────────────────────── */
+export { IntentBadge, type IntentBadgeProps, type ReplyIntent } from './IntentBadge'
+
 /* ── Phase F — Dark Anchor ─────────────────────────────────────── */
 export { CapsLabel, type CapsLabelProps } from './CapsLabel'
 export { MeterRail, type MeterRailProps } from './MeterRail'

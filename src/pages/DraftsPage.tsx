@@ -7,6 +7,7 @@ import {
   PageHeader,
   SkeletonCard,
 } from '@/components/primitives'
+import { useInboundActivityIntents } from '@/lib/queries/activities'
 import { DraftQueueRow } from '@/components/drafts/DraftQueueRow'
 import { DraftPreviewPane } from '@/components/drafts/DraftPreviewPane'
 import { LearningBanner } from '@/components/drafts/LearningBanner'
@@ -84,6 +85,31 @@ export function DraftsPage() {
     [setSearchParams],
   )
 
+  // Intent filter chip — "all" | "positive" | "objection" | "other"
+  type IntentFilter = 'all' | 'positive' | 'objection' | 'other'
+  const intentFilter = (searchParams.get('intent') ?? 'all') as IntentFilter
+  const setIntentFilter = useCallback(
+    (next: IntentFilter) => {
+      setSearchParams(
+        (prev) => {
+          const p = new URLSearchParams(prev)
+          if (next === 'all') p.delete('intent')
+          else p.set('intent', next)
+          return p
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
+
+  // Collect contact IDs from visible drafts to fetch their intent map
+  const allContactIds = useMemo(
+    () => [...new Set((drafts ?? []).map((d) => d.contact_id).filter(Boolean))] as string[],
+    [drafts],
+  )
+  const { data: intentMap = {} } = useInboundActivityIntents(allContactIds)
+
   // Queue ordering:
   //  1. Filter to proposed-meeting only when the chip is on.
   //  2. Within each skipped/non-skipped bucket, proposed-meeting drafts
@@ -91,9 +117,22 @@ export function DraftsPage() {
   //  3. Skipped drafts always trail at the end.
   const queue = useMemo(() => {
     if (!drafts) return []
-    const source = onlyDiary
+    let source = onlyDiary
       ? drafts.filter((d) => d.draft_kind === 'proposed_meeting')
       : drafts
+
+    // Intent filter — match against the contact's most recent inbound intent
+    if (intentFilter !== 'all') {
+      source = source.filter((d) => {
+        const contactIntent = d.contact_id ? intentMap[d.contact_id] : undefined
+        if (intentFilter === 'other') {
+          // "Other" bucket = no intent classified, or intent is referral/ooo/spam/other
+          return !contactIntent || ['referral', 'ooo', 'spam', 'other'].includes(contactIntent)
+        }
+        return contactIntent === intentFilter
+      })
+    }
+
     const sortKey = (d: { draft_kind: string }) =>
       d.draft_kind === 'proposed_meeting' ? 0 : 1
     const nonSkipped = source
@@ -103,7 +142,7 @@ export function DraftsPage() {
       .filter((d) => skippedIds.has(d.id))
       .sort((a, b) => sortKey(a) - sortKey(b))
     return [...nonSkipped, ...skipped]
-  }, [drafts, skippedIds, onlyDiary])
+  }, [drafts, skippedIds, onlyDiary, intentFilter, intentMap])
 
   const diaryCount = useMemo(
     () => (drafts ?? []).filter((d) => d.draft_kind === 'proposed_meeting').length,
@@ -278,6 +317,35 @@ export function DraftsPage() {
         </div>
       )}
 
+      {/* Intent filter chips — All | Positive | Objection | Other */}
+      <div className="mt-2 flex flex-wrap items-center gap-2 px-4 sm:px-6">
+        {(
+          [
+            { value: 'all', label: 'All' },
+            { value: 'positive', label: 'Positive' },
+            { value: 'objection', label: 'Objection' },
+            { value: 'other', label: 'Other' },
+          ] as const
+        ).map((chip) => (
+          <button
+            key={chip.value}
+            type="button"
+            data-testid={`intent-filter-${chip.value}`}
+            data-active={intentFilter === chip.value || undefined}
+            onClick={() => setIntentFilter(chip.value)}
+            className={cn(
+              'inline-flex items-center h-7 rounded-full border px-2.5 text-[11px] font-medium uppercase tracking-[var(--jordan-tracking-label)] transition-colors',
+              intentFilter === chip.value
+                ? 'border-[color:color-mix(in_oklab,var(--jordan-accent)_40%,transparent)] bg-[var(--jordan-accent-soft)] text-[var(--jordan-accent-hover)]'
+                : 'border-hairline bg-surface-2 text-ink-muted hover:bg-surface-3 hover:text-ink',
+            )}
+            aria-pressed={intentFilter === chip.value}
+          >
+            {chip.label}
+          </button>
+        ))}
+      </div>
+
       <div className="mt-4 flex-1 overflow-hidden px-4 pb-6 sm:px-6">
         <div className="grid h-full grid-cols-1 overflow-hidden rounded-[var(--jordan-radius-md)] border border-hairline bg-surface-1 lg:grid-cols-[minmax(280px,360px)_1fr]">
           {/* Left pane — queue */}
@@ -311,6 +379,7 @@ export function DraftsPage() {
                     isActive={idx === activeIndex}
                     isSkipped={skippedIds.has(draft.id)}
                     isRemoving={removingIds.has(draft.id)}
+                    intent={draft.contact_id ? intentMap[draft.contact_id] : null}
                     onSelect={() => setActiveIndex(idx)}
                   />
                 ))}

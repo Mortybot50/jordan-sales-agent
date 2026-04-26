@@ -42,6 +42,7 @@ import {
   EmptyState,
   ErrorAlert,
   FieldRow,
+  IntentBadge,
   MetricNumber,
   PageHeader,
   ScoreBadge,
@@ -711,6 +712,11 @@ export function ContactDetailPage() {
                         <span className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
                           {meta.label}
                         </span>
+                        {(a.activity_type === 'reply_received' || a.activity_type === 'email_inbound') && (
+                          <IntentBadge
+                            intent={(a.metadata as Record<string, unknown> | null)?.intent as string | null}
+                          />
+                        )}
                         {a.deal?.title && (
                           <>
                             <span className="text-ink-faint">·</span>
