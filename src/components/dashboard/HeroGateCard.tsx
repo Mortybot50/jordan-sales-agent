@@ -2,6 +2,7 @@ import { CapsLabel, MeterRail, MetricNumber, SkeletonBlock } from '@/components/
 import { useMonthlyGate } from '@/lib/queries/monthlyGate'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
+import { Link } from 'react-router-dom'
 
 type AccentTone = 'mint' | 'amber' | 'red'
 
@@ -62,9 +63,12 @@ export function HeroGateCard() {
   }
 
   return (
-    <div
+    <Link
+      to="/pipeline"
+      aria-label="Open pipeline · this month progress"
+      title="Open pipeline · this month progress"
       className={cn(
-        'rounded-[10px] border bg-[color:var(--jordan-ink)] text-white p-5 sm:p-6 space-y-4',
+        'block rounded-[10px] border bg-[color:var(--jordan-ink)] text-white p-5 sm:p-6 space-y-4 cursor-pointer transition-colors hover:border-[color:var(--jordan-accent-mint)]/70',
         cls.wrap,
       )}
     >
@@ -117,7 +121,7 @@ export function HeroGateCard() {
           />
         </div>
       )}
-    </div>
+    </Link>
   )
 }
 

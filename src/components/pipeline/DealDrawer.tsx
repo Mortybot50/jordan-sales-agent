@@ -35,7 +35,7 @@ import {
 } from '@/lib/queries/deals'
 import { useContactActivities } from '@/lib/queries/activities'
 import { useStages } from '@/lib/queries/stages'
-import { dealFormSchema, type DealFormValues } from '@/lib/schemas/deal'
+import { dealFormSchema, DEAL_VALUE_WARN, type DealFormValues } from '@/lib/schemas/deal'
 import { formatCurrency, formatDate, formatRelative, activityTypeLabel, cn } from '@/lib/utils'
 import { format, addMonths, formatDistanceToNowStrict, addDays, addWeeks, nextMonday, startOfDay, nextFriday } from 'date-fns'
 import type { Deal } from '@/lib/queries/deals'
@@ -131,6 +131,16 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
   }
 
   async function handleSave(values: DealFormValues) {
+    if (
+      values.contract_value != null &&
+      values.contract_value > DEAL_VALUE_WARN &&
+      values.contract_value !== deal.contract_value &&
+      !window.confirm(
+        `${values.contract_value.toLocaleString('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 })} — that's a big number. Sure?`,
+      )
+    ) {
+      return
+    }
     const oldStageName = deal.stage?.name
     const newStage = stages?.find((s) => s.id === values.stage_id)
     const newStageName = newStage?.name

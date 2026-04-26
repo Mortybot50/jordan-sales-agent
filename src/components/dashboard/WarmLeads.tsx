@@ -78,7 +78,7 @@ export function WarmLeads() {
           }}
           disabled={createTask.isPending}
         >
-          Follow up
+          {createTask.isPending ? 'Following up…' : 'Follow up'}
         </Button>
       ),
     },

@@ -936,7 +936,7 @@ function SuppressionTab() {
 export function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get('tab')
-  const defaultTab = ['profile', 'stages', 'icp', 'integrations', 'suppression'].includes(tabParam ?? '')
+  const tab = ['profile', 'stages', 'icp', 'integrations', 'suppression'].includes(tabParam ?? '')
     ? tabParam!
     : 'profile'
 
@@ -960,7 +960,19 @@ export function SettingsPage() {
         </p>
       </div>
 
-      <Tabs defaultValue={defaultTab}>
+      <Tabs
+        value={tab}
+        onValueChange={(v) =>
+          setSearchParams(
+            (prev) => {
+              const p = new URLSearchParams(prev)
+              p.set('tab', v)
+              return p
+            },
+            { replace: true },
+          )
+        }
+      >
         <TabsList className="mb-4">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="stages">Pipeline Stages</TabsTrigger>
