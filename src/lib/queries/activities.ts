@@ -8,7 +8,7 @@ export type ActivityType =
   | 'email_sent' | 'email_opened' | 'email_clicked' | 'reply_received'
   | 'call_note' | 'meeting_note' | 'task_completed' | 'stage_change'
   | 'bounce' | 'unsubscribe' | 'email_inbound' | 'email_outbound'
-  | 'deal_created' | 'note' | 'meeting_booked' | 'email_manual'
+  | 'deal_created' | 'note' | 'meeting_booked' | 'email_manual' | 'import'
 
 export interface Activity {
   id: string
@@ -151,6 +151,40 @@ export function useMeetingsThisWeekDealIds(enabled = true) {
       return { dealIds, contactIds }
     },
     enabled,
+    staleTime: 60_000,
+  })
+}
+
+/** Map of contact_id -> intent string for the most recent classified inbound activity. */
+export function useInboundActivityIntents(contactIds: string[]) {
+  return useQuery({
+    queryKey: ['activities', 'inbound-intents', contactIds.sort().join(',')],
+    queryFn: async (): Promise<Record<string, string>> => {
+      if (contactIds.length === 0) return {}
+
+      const { data, error } = await supabase
+        .from('activities')
+        .select('contact_id, metadata, occurred_at')
+        .in('contact_id', contactIds)
+        .in('activity_type', ['reply_received', 'email_inbound'])
+        .not('metadata->intent', 'is', null)
+        .order('occurred_at', { ascending: false })
+
+      if (error) throw error
+
+      // Build map: one entry per contact_id (most recent classified reply)
+      const map: Record<string, string> = {}
+      for (const row of data ?? []) {
+        if (!row.contact_id) continue
+        if (map[row.contact_id]) continue // already have most-recent
+        const intent = (row.metadata as Record<string, unknown> | null)?.intent
+        if (typeof intent === 'string') {
+          map[row.contact_id] = intent
+        }
+      }
+      return map
+    },
+    enabled: contactIds.length > 0,
     staleTime: 60_000,
   })
 }
