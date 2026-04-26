@@ -119,11 +119,11 @@ Deno.serve(async (req: Request) => {
     console.warn('RESEND_API_KEY not set — skipping send (dev mode)')
     await supabase.from('worker_runs' as never).insert({
       worker_name: 'morning_briefing',
-      status: 'skipped',
+      status: 'success_empty',
       started_at: startedAt,
       completed_at: new Date().toISOString(),
-      rows_processed: 0,
-      error: 'RESEND_API_KEY not configured',
+      items_processed: 0,
+      error_message: 'RESEND_API_KEY not configured',
     })
     return new Response(
       JSON.stringify({
@@ -147,11 +147,11 @@ Deno.serve(async (req: Request) => {
   if (usersError) {
     await supabase.from('worker_runs' as never).insert({
       worker_name: 'morning_briefing',
-      status: 'error',
+      status: 'failed',
       started_at: startedAt,
       completed_at: new Date().toISOString(),
-      rows_processed: 0,
-      error: usersError.message,
+      items_processed: 0,
+      error_message: usersError.message,
     })
     return new Response(JSON.stringify({ error: usersError.message }), {
       status: 500,
@@ -254,13 +254,27 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // worker_runs status semantics:
+  //   success       — at least one send and no errors
+  //   success_empty — zero candidates / zero sends, zero errors (quiet hour / all dedup)
+  //   partial       — at least one send AND at least one error
+  //   failed        — zero sends and at least one error
+  const runStatus = errors.length === 0
+    ? (sent > 0 ? 'success' : 'success_empty')
+    : (sent > 0 ? 'partial' : 'failed')
   await supabase.from('worker_runs' as never).insert({
     worker_name: 'morning_briefing',
-    status: errors.length === 0 ? 'ok' : sent > 0 ? 'ok' : 'error',
+    status: runStatus,
     started_at: startedAt,
     completed_at: new Date().toISOString(),
-    rows_processed: sent,
-    error: errors.length > 0 ? errors.join('; ') : null,
+    items_processed: sent,
+    error_message: errors.length > 0 ? errors.join('; ').slice(0, 1000) : null,
+    metadata: {
+      candidate_users: eligibleUsers.length,
+      skipped_already_sent_today: skippedDup,
+      melbourne_hour: melbHour,
+      manual_trigger: !!manualUserId,
+    } as unknown,
   })
 
   return new Response(

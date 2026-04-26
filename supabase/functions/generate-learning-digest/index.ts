@@ -66,14 +66,26 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
+  // Only the cron-driven `{ all: true }` path is treated as a "background run"
+  // for worker_runs purposes — single-user invocations are on-demand and would
+  // otherwise pollute the admin observability log.
+  const startedAt = new Date().toISOString()
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
   if (!ANTHROPIC_API_KEY) {
+    await supabase.from('worker_runs' as never).insert({
+      worker_name: 'learning_digest',
+      status: 'failed',
+      started_at: startedAt,
+      completed_at: new Date().toISOString(),
+      items_processed: 0,
+      error_message: 'ANTHROPIC_API_KEY not configured',
+    })
     return new Response(
       JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured' }),
       { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     )
   }
-
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
   let payload: { user_id?: string; all?: boolean } = {}
   try {
@@ -82,14 +94,24 @@ Deno.serve(async (req) => {
     payload = {}
   }
 
+  const isCronRun = payload.all === true
+
   // Resolve the target user(s)
   let userIds: string[] = []
-  if (payload.all) {
+  if (isCronRun) {
     const { data: users, error } = await supabase
       .from('users')
       .select('id')
       .not('email', 'is', null)
     if (error) {
+      await supabase.from('worker_runs' as never).insert({
+        worker_name: 'learning_digest',
+        status: 'failed',
+        started_at: startedAt,
+        completed_at: new Date().toISOString(),
+        items_processed: 0,
+        error_message: error.message,
+      })
       return new Response(JSON.stringify({ error: error.message }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -115,6 +137,27 @@ Deno.serve(async (req) => {
       console.error(`[learning-digest] user=${userId} error:`, e)
       results.push({ user_id: userId, status: 'error', error: String(e) })
     }
+  }
+
+  if (isCronRun) {
+    const errored = results.filter((r) => r.status === 'error').length
+    const succeeded = results.length - errored
+    const runStatus = errored === 0
+      ? (succeeded > 0 ? 'success' : 'success_empty')
+      : (succeeded > 0 ? 'partial' : 'failed')
+    const errMsgs = results
+      .filter((r) => r.status === 'error')
+      .map((r) => `${r.user_id}: ${String(r.error ?? '')}`)
+      .join('; ')
+    await supabase.from('worker_runs' as never).insert({
+      worker_name: 'learning_digest',
+      status: runStatus,
+      started_at: startedAt,
+      completed_at: new Date().toISOString(),
+      items_processed: succeeded,
+      error_message: errMsgs ? errMsgs.slice(0, 1000) : null,
+      metadata: { user_count: userIds.length, results } as unknown,
+    })
   }
 
   return new Response(JSON.stringify({ results, min_drafts: MIN_DRAFTS }), {

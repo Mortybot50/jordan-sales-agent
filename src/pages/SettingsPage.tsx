@@ -1028,6 +1028,27 @@ function IntegrationsTab() {
           </Badge>
         </CardContent>
       </Card>
+
+      {/* Workers (owner-only) */}
+      {user?.role === 'owner' && (
+        <Card>
+          <CardContent className="flex items-center justify-between gap-3 py-3 px-4">
+            <div>
+              <p className="text-sm font-medium">Workers</p>
+              <p className="text-xs text-muted-foreground">
+                Background worker observability — last fired, status, items processed
+              </p>
+            </div>
+            <Link
+              to="/admin/workers"
+              className="shrink-0 inline-flex items-center gap-1 text-sm text-primary hover:underline"
+            >
+              View runs
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
