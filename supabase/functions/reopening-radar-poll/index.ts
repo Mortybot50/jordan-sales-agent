@@ -157,13 +157,17 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  const observed = summary.reduce((s, r) => s + r.observed, 0)
+  const runStatus = errors.length === 0
+    ? (observed > 0 ? 'success' : 'success_empty')
+    : (observed > 0 ? 'partial' : 'failed')
   await supabase.from('worker_runs' as never).insert({
     worker_name: 'reopening_radar_poll',
-    status: errors.length === 0 ? 'ok' : 'partial',
+    status: runStatus,
     started_at: startedAt,
     completed_at: new Date().toISOString(),
-    rows_processed: summary.reduce((s, r) => s + r.observed, 0),
-    error: errors.length > 0 ? errors.slice(0, 20).join('; ') : null,
+    items_processed: observed,
+    error_message: errors.length > 0 ? errors.slice(0, 20).join('; ').slice(0, 1000) : null,
     metadata: { summary, live: LIVE } as unknown,
   })
 

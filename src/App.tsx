@@ -16,6 +16,7 @@ import { FieldPage } from '@/pages/FieldPage'
 import { BriefingPage } from '@/pages/BriefingPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { SuppressionListPage } from '@/pages/SuppressionListPage'
+import { AdminWorkersPage } from '@/pages/AdminWorkersPage'
 import PrimitivesPage from '@/pages/_primitives'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -65,6 +66,7 @@ export default function App() {
           <Route path="briefing" element={<BriefingPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="settings/suppression-list" element={<SuppressionListPage />} />
+          <Route path="admin/workers" element={<AdminWorkersPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
