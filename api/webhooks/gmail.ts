@@ -9,17 +9,30 @@
  *   VITE_GOOGLE_OAUTH_CLIENT_ID
  *   GOOGLE_OAUTH_CLIENT_SECRET
  *   TOKEN_ENCRYPTION_KEY
+ *   GMAIL_PUBSUB_SERVICE_ACCOUNT_EMAIL  required in prod — the service account
+ *                                        configured on the Pub/Sub push subscription
+ *   GMAIL_PUBSUB_AUDIENCE  optional — overrides the default `aud` claim, which is
+ *                          inferred from the request URL otherwise
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
 import { createDecipheriv } from 'crypto'
+import { createRemoteJWKSet, jwtVerify } from 'jose'
 
 const GOOGLE_CLIENT_ID = process.env.VITE_GOOGLE_OAUTH_CLIENT_ID ?? process.env.GOOGLE_OAUTH_CLIENT_ID
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL!
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const ENCRYPTION_KEY = process.env.TOKEN_ENCRYPTION_KEY
+const PUBSUB_SERVICE_ACCOUNT_EMAIL = process.env.GMAIL_PUBSUB_SERVICE_ACCOUNT_EMAIL
+const PUBSUB_AUDIENCE_OVERRIDE = process.env.GMAIL_PUBSUB_AUDIENCE
+
+const IS_PRODUCTION =
+  process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production'
+
+// Google OIDC JWKS — cached by jose internally (ETag/max-age aware).
+const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'))
 
 function decryptToken(ciphertext: string): string {
   if (!ENCRYPTION_KEY || !ciphertext.includes(':')) return ciphertext
@@ -56,10 +69,74 @@ function parseEmailHeader(headers: Array<{ name: string; value: string }>, name:
   return headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? ''
 }
 
+function inferAudience(req: VercelRequest): string {
+  if (PUBSUB_AUDIENCE_OVERRIDE) return PUBSUB_AUDIENCE_OVERRIDE
+  const proto = (req.headers['x-forwarded-proto'] as string | undefined) ?? 'https'
+  const host = req.headers.host ?? 'jordan-sales-agent.vercel.app'
+  // Strip query string from req.url defensively
+  const path = (req.url ?? '/api/webhooks/gmail').split('?')[0]
+  return `${proto}://${host}${path}`
+}
+
+/**
+ * Verify the Pub/Sub push request carries a valid Google-signed OIDC JWT.
+ * Returns true when verification passes; otherwise the response is sent
+ * (401/503) and the caller should bail out.
+ */
+async function verifyPubSubJwt(req: VercelRequest, res: VercelResponse): Promise<boolean> {
+  if (!PUBSUB_SERVICE_ACCOUNT_EMAIL) {
+    if (IS_PRODUCTION) {
+      console.error('GMAIL_PUBSUB_SERVICE_ACCOUNT_EMAIL not configured — webhook disabled')
+      res.status(503).json({ error: 'Webhook not configured' })
+      return false
+    }
+    console.warn('GMAIL_PUBSUB_SERVICE_ACCOUNT_EMAIL not set — skipping JWT verification (dev mode only)')
+    return true
+  }
+
+  const authHeader = (req.headers.authorization ?? req.headers.Authorization) as string | undefined
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'unauthorized' })
+    return false
+  }
+  const token = authHeader.slice('Bearer '.length).trim()
+  if (!token) {
+    res.status(401).json({ error: 'unauthorized' })
+    return false
+  }
+
+  try {
+    const audience = inferAudience(req)
+    const { payload } = await jwtVerify(token, GOOGLE_JWKS, {
+      issuer: ['https://accounts.google.com', 'accounts.google.com'],
+      audience,
+    })
+    const email = payload.email as string | undefined
+    const emailVerified = payload.email_verified as boolean | undefined
+    if (!email || email.toLowerCase() !== PUBSUB_SERVICE_ACCOUNT_EMAIL.toLowerCase()) {
+      res.status(401).json({ error: 'unauthorized' })
+      return false
+    }
+    if (emailVerified === false) {
+      res.status(401).json({ error: 'unauthorized' })
+      return false
+    }
+    return true
+  } catch (err) {
+    console.warn('Gmail Pub/Sub JWT verification failed:', (err as Error).message)
+    res.status(401).json({ error: 'unauthorized' })
+    return false
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
+
+  // S2: verify Google-signed OIDC JWT BEFORE acknowledging or processing.
+  const ok = await verifyPubSubJwt(req, res)
+  if (!ok) return
 
   // Acknowledge immediately — Pub/Sub requires fast response
   res.status(204).end()

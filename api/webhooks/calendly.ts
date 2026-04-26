@@ -6,25 +6,31 @@
  *   invitee.canceled → insert note activity
  *
  * Required env vars:
- *   CALENDLY_WEBHOOK_SIGNING_KEY  from Calendly developer portal
+ *   CALENDLY_WEBHOOK_SIGNING_KEY  from Calendly developer portal (HARD-REQUIRED in prod)
  *   VITE_SUPABASE_URL
  *   SUPABASE_SERVICE_ROLE_KEY
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
-import { createHmac } from 'crypto'
+import { createHmac, timingSafeEqual } from 'crypto'
 
 const CALENDLY_SIGNING_KEY = process.env.CALENDLY_WEBHOOK_SIGNING_KEY
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL!
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
+
+const IS_PRODUCTION =
+  process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production'
 
 // Stages that should auto-advance to "Meeting Booked" on a calendly booking
 const ADVANCE_FROM_STAGE_NAMES = ['new', 'new lead', 'contacted', 'replied']
 
 function verifySignature(body: string, signature: string, key: string): boolean {
   const expected = createHmac('sha256', key).update(body).digest('hex')
-  return signature === expected
+  const a = Buffer.from(signature, 'hex')
+  const b = Buffer.from(expected, 'hex')
+  if (a.length !== b.length) return false
+  return timingSafeEqual(a, b)
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -32,15 +38,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  // Verify Calendly signature
-  if (CALENDLY_SIGNING_KEY) {
-    const signature = req.headers['calendly-webhook-signature'] as string
+  // S1: signature verification HARD-FAILS in prod when the signing key is unset.
+  // No silent fallthrough — that's how the webhook shipped to prod unauthenticated.
+  if (!CALENDLY_SIGNING_KEY) {
+    if (IS_PRODUCTION) {
+      console.error('CALENDLY_WEBHOOK_SIGNING_KEY missing — webhook disabled')
+      return res.status(503).json({ error: 'Webhook not configured' })
+    }
+    console.warn('CALENDLY_WEBHOOK_SIGNING_KEY not set — skipping signature verification (dev mode only)')
+  } else {
+    const signature = req.headers['calendly-webhook-signature'] as string | undefined
     const rawBody = JSON.stringify(req.body)
     if (!signature || !verifySignature(rawBody, signature, CALENDLY_SIGNING_KEY)) {
       return res.status(401).json({ error: 'Invalid signature' })
     }
-  } else {
-    console.warn('CALENDLY_WEBHOOK_SIGNING_KEY not set — skipping signature verification (dev mode)')
   }
 
   const payload = req.body as {
@@ -48,6 +59,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     payload: {
       event: { uri: string; name: string; start_time: string }
       invitee: { email: string; name: string; uri: string }
+      // Calendly delivers the host's calendar account in scheduled_event.event_memberships[].user_email
+      scheduled_event?: {
+        event_memberships?: Array<{ user_email?: string; user?: string }>
+      }
       questions_and_answers?: Array<{ question: string; answer: string }>
     }
   }
@@ -62,14 +77,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-  // Find matching contact across all orgs by email
+  // S1: scope the contact lookup to a single org by mapping the Calendly host
+  // account email → user.calendly_account_email → user.org_id.
+  const hostEmails = (payload.payload?.scheduled_event?.event_memberships ?? [])
+    .map((m) => (m.user_email ?? '').toLowerCase().trim())
+    .filter((e) => e.length > 0)
+
+  let scopedUser: { id: string; org_id: string } | null = null
+  if (hostEmails.length > 0) {
+    const { data: matchedUser } = await supabase
+      .from('users')
+      .select('id, org_id')
+      .in('calendly_account_email', hostEmails)
+      .limit(1)
+      .maybeSingle()
+    scopedUser = (matchedUser ?? null) as { id: string; org_id: string } | null
+  }
+
+  if (!scopedUser) {
+    // No org mapping — return 200 (don't leak existence) but write nothing.
+    console.info(
+      'Calendly webhook: no users.calendly_account_email match for host emails',
+      hostEmails,
+    )
+    return res.status(200).json({ status: 'no_match' })
+  }
+
+  // Find matching contact within the scoped org only.
   const { data: contacts } = await supabase
     .from('contacts')
     .select('id, org_id, venue_id')
+    .eq('org_id', scopedUser.org_id)
     .ilike('email', invitee.email.toLowerCase())
 
   if (!contacts || contacts.length === 0) {
-    console.info('No contact found for Calendly invitee:', invitee.email)
+    console.info('No contact found in org for Calendly invitee:', invitee.email)
     return res.status(200).json({ status: 'no_match' })
   }
 
