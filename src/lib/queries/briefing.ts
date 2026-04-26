@@ -187,11 +187,12 @@ export function useReengagementOpportunities() {
 
       if (contactIds.length === 0) return []
 
-      // Filter to contacts with no activities in 42+ days
+      // Filter to contacts with no activities in 42+ days; exclude DNC.
       const { data: contacts } = await supabase
         .from('contacts')
         .select('id, full_name, email, org_id, venue:venues(name)')
         .in('id', contactIds)
+        .eq('do_not_contact', false)
 
       if (!contacts || contacts.length === 0) return []
 

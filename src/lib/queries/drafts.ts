@@ -211,12 +211,16 @@ export function useGenerateDraft() {
       draft_type: DraftType
       context_hint?: string
     }) => {
-      // Pre-flight suppression check — avoids API spend on a hit
+      // Pre-flight suppression + DNC check — avoids API spend on a hit
       const { data: contact } = await supabase
         .from('contacts')
-        .select('email, org_id')
+        .select('email, org_id, do_not_contact')
         .eq('id', contact_id)
         .single()
+
+      if (contact?.do_not_contact) {
+        throw new Error('Cannot generate draft — contact is marked Do Not Call.')
+      }
 
       if (contact?.email && contact.org_id) {
         try {

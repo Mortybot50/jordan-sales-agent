@@ -201,9 +201,49 @@ export type Database = {
           },
         ]
       }
+      contact_tags: {
+        Row: {
+          contact_id: string
+          created_at: string
+          id: string
+          org_id: string
+          tag: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          id?: string
+          org_id: string
+          tag: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          id?: string
+          org_id?: string
+          tag?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_tags_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_tags_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           created_at: string | null
+          do_not_contact: boolean
           email: string | null
           full_name: string
           geocoded_at: string | null
@@ -223,6 +263,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          do_not_contact?: boolean
           email?: string | null
           full_name: string
           geocoded_at?: string | null
@@ -242,6 +283,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          do_not_contact?: boolean
           email?: string | null
           full_name?: string
           geocoded_at?: string | null
@@ -1806,3 +1848,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+
