@@ -878,6 +878,35 @@ export type Database = {
           },
         ]
       }
+      oauth_state_nonces: {
+        Row: {
+          created_at: string
+          expires_at: string
+          nonce: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          nonce: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          nonce?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "oauth_state_nonces_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orgs: {
         Row: {
           created_at: string | null
@@ -1445,6 +1474,7 @@ export type Database = {
       }
       users: {
         Row: {
+          calendly_account_email: string | null
           calendly_token_encrypted: string | null
           calendly_url: string | null
           created_at: string | null
@@ -1460,6 +1490,7 @@ export type Database = {
           voice_rules: string | null
         }
         Insert: {
+          calendly_account_email?: string | null
           calendly_token_encrypted?: string | null
           calendly_url?: string | null
           created_at?: string | null
@@ -1475,6 +1506,7 @@ export type Database = {
           voice_rules?: string | null
         }
         Update: {
+          calendly_account_email?: string | null
           calendly_token_encrypted?: string | null
           calendly_url?: string | null
           created_at?: string | null

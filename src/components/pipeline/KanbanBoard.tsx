@@ -41,7 +41,7 @@ import { Plus } from 'lucide-react'
 import { useForm, type FieldErrors } from 'react-hook-form'
 import { toast } from 'sonner'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { dealFormSchema, type DealFormValues } from '@/lib/schemas/deal'
+import { dealFormSchema, DEAL_VALUE_WARN, type DealFormValues } from '@/lib/schemas/deal'
 
 export interface KanbanBoardProps {
   /** Filter kanban to a single stage column (deep-link from Pipeline Health). */
@@ -200,6 +200,15 @@ export function KanbanBoard({
 
   async function handleQuickAdd(values: DealFormValues) {
     if (!user || !quickAddStageId) return
+    if (
+      values.contract_value != null &&
+      values.contract_value > DEAL_VALUE_WARN &&
+      !window.confirm(
+        `${values.contract_value.toLocaleString('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 })} — that's a big number. Sure?`,
+      )
+    ) {
+      return
+    }
     await createDeal.mutateAsync({
       org_id: user.org_id,
       title: values.title,

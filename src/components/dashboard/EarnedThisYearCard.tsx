@@ -1,10 +1,13 @@
 import { CapsLabel, MetricNumber, SkeletonBlock } from '@/components/primitives'
 import { usePipelineFinancials } from '@/lib/queries/monthlyGate'
+import { useStages } from '@/lib/queries/stages'
 import { format } from 'date-fns'
 import { formatCurrency } from '@/lib/utils'
+import { Link } from 'react-router-dom'
 
 export function EarnedThisYearCard() {
   const { data, isLoading } = usePipelineFinancials()
+  const { data: stages } = useStages()
 
   if (isLoading || !data) {
     return <SkeletonBlock height={140} className="rounded-[10px]" />
@@ -13,9 +16,16 @@ export function EarnedThisYearCard() {
   const year = format(new Date(), 'yyyy')
   const forecasted = data.forecastedCommission
   const forecastedCount = data.forecastedCommissionCount
+  const closedWonStage = stages?.find((s) => s.is_closed && /won/i.test(s.name))
+  const to = closedWonStage ? `/pipeline?stage=${closedWonStage.id}` : '/pipeline'
 
   return (
-    <div className="rounded-[10px] border border-[color:var(--jordan-accent-mint)]/30 bg-[color:var(--jordan-accent-mint-soft)] p-4 sm:p-5 h-full flex flex-col justify-between">
+    <Link
+      to={to}
+      aria-label="View won deals in pipeline"
+      title="View won deals in pipeline"
+      className="flex flex-col justify-between rounded-[10px] border border-[color:var(--jordan-accent-mint)]/30 bg-[color:var(--jordan-accent-mint-soft)] p-4 sm:p-5 h-full cursor-pointer transition-colors hover:border-[color:var(--jordan-accent-mint)]/60 hover:bg-[color:var(--jordan-accent-mint-soft)]/80"
+    >
       <div>
         <CapsLabel className="text-[color:var(--jordan-success-text)]">
           Earned · {year}
@@ -49,6 +59,6 @@ export function EarnedThisYearCard() {
           </div>
         )}
       </div>
-    </div>
+    </Link>
   )
 }
