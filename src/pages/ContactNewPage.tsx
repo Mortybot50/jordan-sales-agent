@@ -21,6 +21,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { venueTypeLabel, cn } from '@/lib/utils'
 import { Textarea } from '@/components/ui/textarea'
 import { ArrowLeft } from 'lucide-react'
+import { SuburbAutocomplete } from '@/components/venues/SuburbAutocomplete'
 
 const VENUE_TYPES = [
   'restaurant', 'cafe', 'hotel', 'event_space', 'bar',
@@ -68,6 +69,9 @@ export function ContactNewPage() {
         name: values.new_venue.name,
         venue_type: values.new_venue.venue_type,
         address: values.new_venue.address,
+        suburb: values.new_venue.suburb,
+        state: values.new_venue.state,
+        postcode: values.new_venue.postcode,
         website: values.new_venue.website || undefined,
         cover_count: validCoverCount,
       })
@@ -347,9 +351,41 @@ export function ContactNewPage() {
                   <Label>Address</Label>
                   <Input
                     {...register('new_venue.address')}
-                    placeholder="11 The Esplanade, St Kilda VIC 3182"
+                    placeholder="11 The Esplanade"
                   />
                 </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2">
+                    <SuburbAutocomplete
+                      label="Suburb"
+                      value={watch('new_venue.suburb') ?? ''}
+                      onChange={(v) =>
+                        setValue('new_venue.suburb', v, { shouldValidate: true })
+                      }
+                      onSelect={({ suburb, state, postcode }) => {
+                        setValue('new_venue.suburb', suburb, { shouldValidate: true })
+                        if (state) setValue('new_venue.state', state, { shouldValidate: true })
+                        if (postcode)
+                          setValue('new_venue.postcode', postcode, { shouldValidate: true })
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label
+                      htmlFor="new_venue.postcode"
+                      className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium"
+                    >
+                      Postcode
+                    </Label>
+                    <Input
+                      id="new_venue.postcode"
+                      {...register('new_venue.postcode')}
+                      placeholder="3182"
+                      inputMode="numeric"
+                    />
+                  </div>
+                </div>
+                <input type="hidden" {...register('new_venue.state')} />
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label>Website</Label>

@@ -48,6 +48,9 @@ export interface CreateVenueInput {
   name: string
   venue_type?: string
   address?: string
+  suburb?: string
+  state?: string
+  postcode?: string
   website?: string
   cover_count?: number | null
 }
@@ -63,6 +66,9 @@ export function useCreateVenue() {
           name: input.name,
           venue_type: input.venue_type ?? null,
           address: input.address ?? null,
+          suburb: input.suburb || null,
+          state: input.state || null,
+          postcode: input.postcode || null,
           website: input.website || null,
           cover_count: input.cover_count ?? null,
           source: 'manual',
