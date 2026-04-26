@@ -394,7 +394,7 @@ function VoiceRulesSection() {
       <Textarea
         rows={8}
         className="font-mono text-xs"
-        placeholder={'- Never use oddly specific times like "1:48pm"\n- Stay under 80 words for cold outreach'}
+        placeholder={'- Never use oddly specific times like "1:48pm"\n- Stay under 80 words for cold outreach\n- Don\'t include a Calendly link unless the venue has explicitly asked to chat\n- Always reference {{public_booking_url}} in follow-up emails (not openers)'}
         value={value}
         onChange={(e) => setValue(e.target.value)}
       />
@@ -1201,6 +1201,13 @@ function PublicBookingLinkCard() {
               </a>
             </Button>
           </div>
+        )}
+
+        {slug && (
+          <p className="text-xs text-muted-foreground flex items-center gap-1">
+            <CheckCircle2 className="w-3 h-3 text-green-600 shrink-0" />
+            Linked into AI drafts — Claude will include this URL when contextually appropriate
+          </p>
         )}
 
         {editing ? (

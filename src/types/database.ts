@@ -137,6 +137,44 @@ export type Database = {
           },
         ]
       }
+      briefing_sends: {
+        Row: {
+          error: string | null
+          id: string
+          item_count: number | null
+          resend_message_id: string | null
+          sent_at: string
+          sent_local_date: string
+          user_id: string
+        }
+        Insert: {
+          error?: string | null
+          id?: string
+          item_count?: number | null
+          resend_message_id?: string | null
+          sent_at?: string
+          sent_local_date?: string
+          user_id: string
+        }
+        Update: {
+          error?: string | null
+          id?: string
+          item_count?: number | null
+          resend_message_id?: string | null
+          sent_at?: string
+          sent_local_date?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "briefing_sends_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       calendly_events: {
         Row: {
           contact_id: string | null
@@ -529,6 +567,8 @@ export type Database = {
           original_subject: string | null
           sendgrid_msg_id: string | null
           sent_at: string | null
+          sequence_enrollment_id: string | null
+          sequence_step_number: number | null
           status: string | null
           subject: string | null
         }
@@ -553,6 +593,8 @@ export type Database = {
           original_subject?: string | null
           sendgrid_msg_id?: string | null
           sent_at?: string | null
+          sequence_enrollment_id?: string | null
+          sequence_step_number?: number | null
           status?: string | null
           subject?: string | null
         }
@@ -577,6 +619,8 @@ export type Database = {
           original_subject?: string | null
           sendgrid_msg_id?: string | null
           sent_at?: string | null
+          sequence_enrollment_id?: string | null
+          sequence_step_number?: number | null
           status?: string | null
           subject?: string | null
         }
@@ -600,6 +644,13 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_drafts_sequence_enrollment_id_fkey"
+            columns: ["sequence_enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "sequence_enrollments"
             referencedColumns: ["id"]
           },
         ]
@@ -1150,11 +1201,17 @@ export type Database = {
       sequence_enrollments: {
         Row: {
           completed_at: string | null
+          contact_id: string | null
           current_step: number | null
           deal_id: string | null
           enrolled_at: string | null
+          enrolled_by_user_id: string | null
+          failure_count: number
           id: string
+          last_status_message: string | null
+          last_step_fired_at: string | null
           next_send_at: string | null
+          next_step_due_at: string
           org_id: string
           processing_started_at: string | null
           sequence_id: string | null
@@ -1163,11 +1220,17 @@ export type Database = {
         }
         Insert: {
           completed_at?: string | null
+          contact_id?: string | null
           current_step?: number | null
           deal_id?: string | null
           enrolled_at?: string | null
+          enrolled_by_user_id?: string | null
+          failure_count?: number
           id?: string
+          last_status_message?: string | null
+          last_step_fired_at?: string | null
           next_send_at?: string | null
+          next_step_due_at?: string
           org_id: string
           processing_started_at?: string | null
           sequence_id?: string | null
@@ -1176,11 +1239,17 @@ export type Database = {
         }
         Update: {
           completed_at?: string | null
+          contact_id?: string | null
           current_step?: number | null
           deal_id?: string | null
           enrolled_at?: string | null
+          enrolled_by_user_id?: string | null
+          failure_count?: number
           id?: string
+          last_status_message?: string | null
+          last_step_fired_at?: string | null
           next_send_at?: string | null
+          next_step_due_at?: string
           org_id?: string
           processing_started_at?: string | null
           sequence_id?: string | null
@@ -1189,10 +1258,24 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "sequence_enrollments_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "sequence_enrollments_deal_id_fkey"
             columns: ["deal_id"]
             isOneToOne: false
             referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sequence_enrollments_enrolled_by_user_id_fkey"
+            columns: ["enrolled_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
           {
@@ -1218,6 +1301,7 @@ export type Database = {
           delay_days: number
           id: string
           org_id: string
+          prompt_instructions: string | null
           sequence_id: string | null
           step_number: number
           step_type: string | null
@@ -1228,9 +1312,10 @@ export type Database = {
         Insert: {
           body_template?: string | null
           created_at?: string | null
-          delay_days: number
+          delay_days?: number
           id?: string
           org_id: string
+          prompt_instructions?: string | null
           sequence_id?: string | null
           step_number: number
           step_type?: string | null
@@ -1244,6 +1329,7 @@ export type Database = {
           delay_days?: number
           id?: string
           org_id?: string
+          prompt_instructions?: string | null
           sequence_id?: string | null
           step_number?: number
           step_type?: string | null
@@ -1271,6 +1357,7 @@ export type Database = {
       sequences: {
         Row: {
           created_at: string | null
+          created_by_user_id: string | null
           description: string | null
           id: string
           is_active: boolean | null
@@ -1280,6 +1367,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          created_by_user_id?: string | null
           description?: string | null
           id?: string
           is_active?: boolean | null
@@ -1289,6 +1377,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          created_by_user_id?: string | null
           description?: string | null
           id?: string
           is_active?: boolean | null
@@ -1297,6 +1386,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "sequences_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sequences_org_id_fkey"
             columns: ["org_id"]
@@ -1895,4 +1991,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

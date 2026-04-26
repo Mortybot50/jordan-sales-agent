@@ -11,6 +11,7 @@ import {
   MapPin,
   Plus,
   Sparkles,
+  Workflow,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -60,6 +61,7 @@ import {
   useCreateActivity,
 } from '@/lib/queries/activities'
 import { useGenerateDraft } from '@/lib/queries/drafts'
+import { useSequences, useEnrolContacts } from '@/lib/queries/sequences'
 import { useAuth } from '@/hooks/useAuth'
 import {
   activityFormSchema,
@@ -101,6 +103,40 @@ export function ContactDetailPage() {
   const [draftDialogOpen, setDraftDialogOpen] = useState(false)
   const [draftType, setDraftType] = useState<DraftType>('cold_outreach')
   const [draftHint, setDraftHint] = useState('')
+  const [enrolDialogOpen, setEnrolDialogOpen] = useState(false)
+  const [selectedSequenceId, setSelectedSequenceId] = useState<string>('')
+
+  const sequencesQ = useSequences()
+  const enrolContacts = useEnrolContacts()
+
+  async function handleEnrol() {
+    if (!user || !contact || !selectedSequenceId) return
+    try {
+      const res = await enrolContacts.mutateAsync({
+        org_id: user.org_id,
+        enrolled_by_user_id: user.id,
+        sequence_id: selectedSequenceId,
+        contact_ids: [contact.id],
+      })
+      if (res.enrolled === 1) {
+        toast.success('Enrolled in sequence — first draft will appear soon')
+      } else if (res.skipped_already_enrolled > 0) {
+        toast.error('Already actively enrolled in this sequence.')
+      } else if (res.skipped_dnc > 0) {
+        toast.error('Contact is marked Do Not Contact.')
+      } else if (res.skipped_suppressed > 0) {
+        toast.error('Contact is on the suppression list.')
+      } else if (res.skipped_no_email > 0) {
+        toast.error('Contact has no email address.')
+      } else {
+        toast.error('Could not enrol contact.')
+      }
+      setEnrolDialogOpen(false)
+      setSelectedSequenceId('')
+    } catch {
+      /* toast via mutation */
+    }
+  }
 
   type ActivityFilter = 'all' | 'email' | 'call' | 'note' | 'meeting'
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>('all')
@@ -336,6 +372,15 @@ export function ContactDetailPage() {
                   Generate draft
                 </>
               )}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8"
+              onClick={() => setEnrolDialogOpen(true)}
+            >
+              <Workflow className="w-4 h-4 mr-1.5" />
+              Enrol in sequence
             </Button>
             <Button
               size="sm"
@@ -1003,6 +1048,84 @@ export function ContactDetailPage() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Enrol in sequence */}
+      <Dialog open={enrolDialogOpen} onOpenChange={setEnrolDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Enrol in sequence</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-[12px] text-ink-muted">
+              Jordan still reviews every draft — sequences just schedule the
+              next touch and queue the AI draft.
+            </p>
+            <div className="space-y-1">
+              <Label>Sequence</Label>
+              <Select
+                value={selectedSequenceId}
+                onValueChange={setSelectedSequenceId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a sequence" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(sequencesQ.data ?? [])
+                    .filter((s) => s.is_active && s.step_count > 0)
+                    .map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                        <span className="ml-2 text-ink-faint">
+                          · {s.step_count} step{s.step_count === 1 ? '' : 's'}
+                        </span>
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              {(sequencesQ.data ?? []).filter(
+                (s) => s.is_active && s.step_count > 0,
+              ).length === 0 && (
+                <p className="text-[11px] text-ink-faint">
+                  No active sequences with steps. Create one on the{' '}
+                  <a
+                    href="/sequences"
+                    className="text-[color:var(--jordan-accent)] hover:underline"
+                  >
+                    Sequences page
+                  </a>
+                  .
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={() => setEnrolDialogOpen(false)}
+              disabled={enrolContacts.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="flex-1"
+              onClick={handleEnrol}
+              disabled={!selectedSequenceId || enrolContacts.isPending}
+            >
+              {enrolContacts.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                  Enrolling…
+                </>
+              ) : (
+                'Enrol'
+              )}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -13,6 +13,7 @@ export type WorkerKey =
   | 'morning_briefing'
   | 'reopening_radar_poll'
   | 'learning_digest'
+  | 'sequence_tick'
 
 export interface WorkerExpectedInterval {
   intervalMs: number
@@ -45,6 +46,13 @@ export const WORKER_EXPECTED_INTERVALS: Record<WorkerKey, WorkerExpectedInterval
     label: 'Weekly',
     title: 'Learning digest',
     description: 'Sunday 21:00 — Claude proposes voice-rule updates from edits.',
+  },
+  sequence_tick: {
+    intervalMs: HOUR,
+    label: 'Hourly',
+    title: 'Sequence tick',
+    description:
+      'Hourly at :15 — generates next-step drafts for active sequence enrolments. Drafts only; Jordan reviews before send.',
   },
 }
 

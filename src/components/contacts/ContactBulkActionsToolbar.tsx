@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Tag as TagIcon, Trash2, Ban, ShieldOff, X } from 'lucide-react'
+import { Tag as TagIcon, Trash2, Ban, ShieldOff, X, Workflow } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -21,6 +21,14 @@ import {
   useDistinctContactTags,
 } from '@/lib/queries/contacts'
 import { useBulkAddSuppression } from '@/lib/queries/suppression'
+import { useEnrolContacts, useSequences } from '@/lib/queries/sequences'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useAuth } from '@/hooks/useAuth'
 
 interface Props {
@@ -41,20 +49,27 @@ export function ContactBulkActionsToolbar({ selected, onClear }: Props) {
   const ids = selected.map((c) => c.id)
   const count = selected.length
 
-  const [confirmOpen, setConfirmOpen] = useState<null | 'delete' | 'suppress' | 'dnc'>(null)
+  const [confirmOpen, setConfirmOpen] = useState<null | 'delete' | 'suppress' | 'dnc' | 'enrol'>(null)
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false)
   const [tagInput, setTagInput] = useState('')
+  const [enrolSequenceId, setEnrolSequenceId] = useState<string>('')
 
   const bulkDelete = useBulkDeleteContacts()
   const bulkDnc = useBulkSetDnc()
   const bulkTag = useBulkTagContacts()
   const bulkSuppress = useBulkAddSuppression()
+  const bulkEnrol = useEnrolContacts()
   const { data: distinctTags } = useDistinctContactTags()
+  const { data: sequencesData } = useSequences()
+  const enrolableSequences = (sequencesData ?? []).filter(
+    (s) => s.is_active && s.step_count > 0,
+  )
 
   function reset() {
     setConfirmOpen(null)
     setTagPopoverOpen(false)
     setTagInput('')
+    setEnrolSequenceId('')
     onClear()
   }
 
@@ -84,6 +99,35 @@ export function ContactBulkActionsToolbar({ selected, onClear }: Props) {
       rows,
       source: 'manual_bulk',
     })
+    reset()
+  }
+
+  async function doEnrol() {
+    if (!user || !enrolSequenceId) return
+    const res = await bulkEnrol.mutateAsync({
+      org_id: user.org_id,
+      enrolled_by_user_id: user.id,
+      sequence_id: enrolSequenceId,
+      contact_ids: ids,
+    })
+    const skips =
+      res.skipped_already_enrolled +
+      res.skipped_dnc +
+      res.skipped_suppressed +
+      res.skipped_no_email
+    if (res.enrolled === 0 && skips === 0) {
+      toast.error('No contacts enrolled.')
+    } else {
+      const parts: string[] = [`${res.enrolled} enrolled`]
+      if (res.skipped_already_enrolled)
+        parts.push(`${res.skipped_already_enrolled} already enrolled`)
+      if (res.skipped_dnc) parts.push(`${res.skipped_dnc} DNC`)
+      if (res.skipped_suppressed)
+        parts.push(`${res.skipped_suppressed} suppressed`)
+      if (res.skipped_no_email)
+        parts.push(`${res.skipped_no_email} without email`)
+      toast.success(parts.join(' · '))
+    }
     reset()
   }
 
@@ -191,6 +235,23 @@ export function ContactBulkActionsToolbar({ selected, onClear }: Props) {
           </PopoverContent>
         </Popover>
 
+        {/* Enrol in sequence */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-muted hover:text-ink"
+          onClick={() => setConfirmOpen('enrol')}
+          disabled={enrolableSequences.length === 0}
+          title={
+            enrolableSequences.length === 0
+              ? 'No active sequences with steps'
+              : undefined
+          }
+        >
+          <Workflow className="mr-1 h-3.5 w-3.5" />
+          Enrol
+        </Button>
+
         {/* Mark DNC */}
         <Button
           variant="ghost"
@@ -275,6 +336,55 @@ export function ContactBulkActionsToolbar({ selected, onClear }: Props) {
             </Button>
             <Button onClick={doSuppress} disabled={bulkSuppress.isPending}>
               Suppress
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm — Enrol */}
+      <Dialog open={confirmOpen === 'enrol'} onOpenChange={(o) => !o && setConfirmOpen(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enrol {count} contact{count === 1 ? '' : 's'} in a sequence</DialogTitle>
+            <DialogDescription>
+              Contacts already actively enrolled, on Do Not Contact, suppressed,
+              or without an email will be skipped. Jordan still reviews every
+              draft.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
+              Sequence
+            </label>
+            <Select value={enrolSequenceId} onValueChange={setEnrolSequenceId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose a sequence" />
+              </SelectTrigger>
+              <SelectContent>
+                {enrolableSequences.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                    <span className="ml-2 text-ink-faint">
+                      · {s.step_count} step{s.step_count === 1 ? '' : 's'}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmOpen(null)}
+              disabled={bulkEnrol.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={doEnrol}
+              disabled={!enrolSequenceId || bulkEnrol.isPending}
+            >
+              Enrol {count}
             </Button>
           </DialogFooter>
         </DialogContent>

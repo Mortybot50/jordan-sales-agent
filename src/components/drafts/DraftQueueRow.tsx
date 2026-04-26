@@ -62,6 +62,19 @@ export const DraftQueueRow = React.forwardRef<HTMLButtonElement, DraftQueueRowPr
           </div>
           <div className="mt-1 flex items-center gap-1.5">
             <DraftTypeBadge type={draft.draft_type} />
+            {draft.sequence_enrollment_id && (
+              <StatusPill
+                tone="accent"
+                uppercase
+                title={
+                  draft.sequence_enrollment?.sequence?.name
+                    ? `From sequence: ${draft.sequence_enrollment.sequence.name}`
+                    : 'From a sequence'
+                }
+              >
+                Seq · Step {draft.sequence_step_number ?? '?'}
+              </StatusPill>
+            )}
             {draft.draft_kind === 'proposed_meeting' && (
               <StatusPill
                 tone="warm"
