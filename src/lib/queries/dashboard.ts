@@ -495,3 +495,54 @@ export function usePipelineHealth() {
     },
   })
 }
+
+/* ────────────────────────────────────────────────────────────────────
+ * Lost-reason analytics — "Why deals die" card
+ *
+ * Aggregates closed-lost deals over a recent window (default 90d) and
+ * groups by lost_reason. Drives the LostReasonCard on the Dashboard so
+ * Jordan can spot "12 deals lost to price" / "5 to timing" and adjust.
+ * ──────────────────────────────────────────────────────────────────── */
+
+export interface LostReasonStat {
+  reason: string
+  count: number
+  totalValue: number
+}
+
+export function useLostReasonStats(days: number = 90) {
+  return useQuery({
+    queryKey: ['dashboard', 'lost-reasons', days],
+    queryFn: async (): Promise<LostReasonStat[]> => {
+      const since = subDays(new Date(), days).toISOString()
+      const { data, error } = await supabase
+        .from('deals')
+        .select('lost_reason, final_value, contract_value')
+        .eq('outcome', 'lost')
+        .gte('closed_at', since)
+
+      if (error) throw error
+
+      // Aggregate client-side — Supabase JS doesn't support GROUP BY directly.
+      // Volumes here are tens of rows for a solo seller, so this is fine.
+      const buckets = new Map<string, { count: number; totalValue: number }>()
+      for (const row of data ?? []) {
+        const reason = (row.lost_reason ?? '').trim() || 'Not specified'
+        const value =
+          (row.final_value != null ? Number(row.final_value) : null) ??
+          (row.contract_value != null ? Number(row.contract_value) : 0) ??
+          0
+        const bucket = buckets.get(reason) ?? { count: 0, totalValue: 0 }
+        bucket.count += 1
+        bucket.totalValue += Number.isFinite(value) ? value : 0
+        buckets.set(reason, bucket)
+      }
+
+      return Array.from(buckets.entries())
+        .map(([reason, b]) => ({ reason, count: b.count, totalValue: b.totalValue }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5)
+    },
+    staleTime: 5 * 60_000, // 5 min
+  })
+}

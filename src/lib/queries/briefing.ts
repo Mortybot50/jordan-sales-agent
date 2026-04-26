@@ -94,12 +94,13 @@ export function useTodayBriefingTasks() {
     queryKey: ['briefing', 'tasks-today'],
     queryFn: async (): Promise<BriefingTask[]> => {
       const today = new Date()
+      const nowIso = new Date().toISOString()
       const { data, error } = await supabase
         .from('tasks')
         .select(`
           id, title, due_at,
           contact:contacts(full_name, venue:venues(name)),
-          deal:deals(title)
+          deal:deals(title, snoozed_until)
         `)
         .lte('due_at', endOfDay(today).toISOString())
         .is('completed_at', null)
@@ -107,18 +108,24 @@ export function useTodayBriefingTasks() {
 
       if (error) throw error
 
-      return (data ?? []).map((t) => {
-        const c = t.contact as { full_name: string; venue: { name: string } | null } | null
-        const d = t.deal as { title: string } | null
-        return {
-          id: t.id,
-          title: t.title,
-          contact_name: c?.full_name ?? null,
-          venue_name: c?.venue?.name ?? null,
-          deal_title: d?.title ?? null,
-          due_at: t.due_at,
-        }
-      })
+      return (data ?? [])
+        // Hide tasks tied to snoozed deals — wakes automatically once snoozed_until passes.
+        .filter((t) => {
+          const d = t.deal as { snoozed_until: string | null } | null
+          return !d?.snoozed_until || d.snoozed_until <= nowIso
+        })
+        .map((t) => {
+          const c = t.contact as { full_name: string; venue: { name: string } | null } | null
+          const d = t.deal as { title: string } | null
+          return {
+            id: t.id,
+            title: t.title,
+            contact_name: c?.full_name ?? null,
+            venue_name: c?.venue?.name ?? null,
+            deal_title: d?.title ?? null,
+            due_at: t.due_at,
+          }
+        })
     },
   })
 }

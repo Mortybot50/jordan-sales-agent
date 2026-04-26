@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { CapsLabel, MetricNumber } from '@/components/primitives'
 import {
   useUpdateDeal,
@@ -29,19 +30,20 @@ import {
   useUpdateDealStage,
   useMarkInstallConfirmed,
   useMarkInstalled,
+  useSnoozeDeal,
 } from '@/lib/queries/deals'
 import { useContactActivities } from '@/lib/queries/activities'
 import { useStages } from '@/lib/queries/stages'
 import { dealFormSchema, type DealFormValues } from '@/lib/schemas/deal'
 import { formatCurrency, formatDate, formatRelative, activityTypeLabel, cn } from '@/lib/utils'
-import { format, addMonths, formatDistanceToNowStrict } from 'date-fns'
+import { format, addMonths, formatDistanceToNowStrict, addDays, addWeeks, nextMonday, startOfDay } from 'date-fns'
 import type { Deal } from '@/lib/queries/deals'
 import type { ActivityType } from '@/lib/queries/activities'
 import {
   Trash2, Mail, MailOpen, MousePointerClick, Reply, Phone, CalendarCheck,
   CheckSquare, ArrowRight, AlertCircle, UserMinus, PlusCircle, StickyNote,
   Calendar, Activity, Pause, Play, Wrench, CheckCircle2, XCircle, AlertTriangle,
-  Clock,
+  Clock, Moon,
 } from 'lucide-react'
 import { MarkOutcomeDialog } from './MarkOutcomeDialog'
 
@@ -88,6 +90,8 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
   const [installScheduledFor, setInstallScheduledFor] = useState<string>(
     deal.install_scheduled_for ?? '',
   )
+  const [snoozeOpen, setSnoozeOpen] = useState(false)
+  const [snoozeDateInput, setSnoozeDateInput] = useState<string>('')
   const { data: stages } = useStages()
   const { data: activities } = useContactActivities(deal.contact_id ?? '')
   const updateDeal = useUpdateDeal()
@@ -95,6 +99,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
   const updateStage = useUpdateDealStage()
   const markConfirmed = useMarkInstallConfirmed()
   const markInstalled = useMarkInstalled()
+  const snoozeDeal = useSnoozeDeal()
 
   const form = useForm<DealFormValues>({
     resolver: zodResolver(dealFormSchema),
@@ -164,6 +169,30 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
     await markInstalled.mutateAsync(deal.id)
   }
 
+  /** Build a wake date at 09:00 local time (start-of-working-day) for a given date. */
+  function wakeAt9am(d: Date): Date {
+    const out = new Date(d)
+    out.setHours(9, 0, 0, 0)
+    return out
+  }
+
+  async function handleSnooze(until: Date | null) {
+    await snoozeDeal.mutateAsync({ dealId: deal.id, until })
+    setSnoozeOpen(false)
+    setSnoozeDateInput('')
+  }
+
+  function handleSnoozeFromInput() {
+    if (!snoozeDateInput) return
+    // <input type="date"> gives YYYY-MM-DD — anchor to local midday then promote to 9am.
+    const parsed = new Date(`${snoozeDateInput}T12:00:00`)
+    if (isNaN(parsed.getTime())) {
+      toast.error('Pick a valid date')
+      return
+    }
+    handleSnooze(wakeAt9am(parsed))
+  }
+
   const dealActivities = (activities ?? []).filter((a) => a.deal_id === deal.id)
   const acv = deal.acv != null ? Number(deal.acv) : null
   const tcv = deal.tcv != null ? Number(deal.tcv) : null
@@ -175,6 +204,18 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
   const isLost = /lost/i.test(stageName)
   const isClosedStage = !!deal.stage?.is_closed
   const needsOutcomeTag = isClosedStage && !deal.outcome
+  const snoozedUntilDate = deal.snoozed_until ? new Date(deal.snoozed_until) : null
+  const isCurrentlySnoozed = !!snoozedUntilDate && snoozedUntilDate.getTime() > Date.now()
+  // Don't allow snoozing closed deals — once won/lost there's nothing to schedule back.
+  const canSnooze = !isClosedWon && !isLost && !deal.outcome
+
+  const today = startOfDay(new Date())
+  const snoozePresets: Array<{ label: string; date: Date }> = [
+    { label: '+1 week', date: wakeAt9am(addDays(today, 7)) },
+    { label: '+2 weeks', date: wakeAt9am(addWeeks(today, 2)) },
+    { label: '+1 month', date: wakeAt9am(addMonths(today, 1)) },
+    { label: 'Until next Mon', date: wakeAt9am(nextMonday(today)) },
+  ]
 
   return (
     <>
@@ -448,7 +489,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
           )}
 
           {!isHeld && !isClosedWon && !isLost && (
-            <div className="mb-3">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
               <Button
                 size="sm"
                 variant="outline"
@@ -458,6 +499,84 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
               >
                 <Pause className="w-3.5 h-3.5 mr-1" />
                 Hold for next month
+              </Button>
+
+              {canSnooze && !isCurrentlySnoozed && (
+                <Popover open={snoozeOpen} onOpenChange={setSnoozeOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-[12px]"
+                      disabled={snoozeDeal.isPending}
+                    >
+                      <Moon className="w-3.5 h-3.5 mr-1" />
+                      Snooze
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-72 p-3 space-y-3">
+                    <CapsLabel>Snooze until</CapsLabel>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {snoozePresets.map((p) => (
+                        <Button
+                          key={p.label}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="text-[12px] justify-start"
+                          disabled={snoozeDeal.isPending}
+                          onClick={() => handleSnooze(p.date)}
+                        >
+                          {p.label}
+                        </Button>
+                      ))}
+                    </div>
+                    <Separator />
+                    <div className="space-y-1">
+                      <Label className="text-[11px]">Or pick a date</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          type="date"
+                          value={snoozeDateInput}
+                          min={format(addDays(today, 1), 'yyyy-MM-dd')}
+                          onChange={(e) => setSnoozeDateInput(e.target.value)}
+                          className="flex-1"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleSnoozeFromInput}
+                          disabled={snoozeDeal.isPending || !snoozeDateInput}
+                        >
+                          Snooze
+                        </Button>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+            </div>
+          )}
+
+          {/* ── Currently-snoozed banner ─────────────────────── */}
+          {isCurrentlySnoozed && snoozedUntilDate && (
+            <div className="mb-5 rounded-[10px] border border-hairline bg-surface-2 p-3 flex items-start justify-between gap-3">
+              <div>
+                <CapsLabel>Snoozed</CapsLabel>
+                <p className="text-[12px] text-ink-muted mt-0.5">
+                  Hidden from active pipeline until {format(snoozedUntilDate, 'd MMM yyyy')} ·
+                  auto-wakes at 09:00.
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={snoozeDeal.isPending}
+                onClick={() => handleSnooze(null)}
+              >
+                <Play className="w-3.5 h-3.5 mr-1" />
+                Wake now
               </Button>
             </div>
           )}

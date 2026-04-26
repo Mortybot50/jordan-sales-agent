@@ -8,6 +8,7 @@ import { PipelineFinancialBar } from '@/components/dashboard/PipelineFinancialBa
 import { PendingInstallsCard } from '@/components/dashboard/PendingInstallsCard'
 import { EarnedThisYearCard } from '@/components/dashboard/EarnedThisYearCard'
 import { ReopeningRadarCard } from '@/components/dashboard/ReopeningRadarCard'
+import { LostReasonCard } from '@/components/dashboard/LostReasonCard'
 import { WarmLeads } from '@/components/dashboard/WarmLeads'
 import { PipelineHealth } from '@/components/dashboard/PipelineHealth'
 import { RecentActivity } from '@/components/dashboard/RecentActivity'
@@ -66,6 +67,7 @@ export function DashboardPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <ReopeningRadarCard />
+        <LostReasonCard />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

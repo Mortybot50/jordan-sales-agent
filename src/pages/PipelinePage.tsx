@@ -7,7 +7,8 @@ import { DarkMetricCard, PageHeader, SkeletonBlock } from '@/components/primitiv
 import { usePipelineHeroMetrics } from '@/lib/queries/dashboard'
 import { useStages } from '@/lib/queries/stages'
 import { useMeetingsThisWeekDealIds } from '@/lib/queries/activities'
-import { LayoutGrid, List, X } from 'lucide-react'
+import { useSnoozedDealsCount } from '@/lib/queries/deals'
+import { LayoutGrid, List, Moon, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 function useIsDesktop() {
@@ -90,6 +91,8 @@ function PipelineHeroBar() {
 export function PipelinePage() {
   const isDesktop = useIsDesktop()
   const [view, setView] = useState<ViewMode | null>(null)
+  const [showSnoozed, setShowSnoozed] = useState(false)
+  const { data: snoozedCount = 0 } = useSnoozedDealsCount()
   const [searchParams, setSearchParams] = useSearchParams()
 
   const stageParam = searchParams.get('stage')
@@ -133,31 +136,49 @@ export function PipelinePage() {
           title="Pipeline"
           description="Drag deals between stages · click to expand"
           actions={
-            <div className="flex items-center gap-1 rounded-[6px] border border-hairline bg-surface-1 p-0.5">
-              <Button
-                variant="ghost"
-                size="sm"
-                className={cn(
-                  'h-7 px-2.5',
-                  effectiveView === 'kanban' && 'bg-surface-4 text-ink',
-                )}
-                onClick={() => setView('kanban')}
-                title="Kanban view"
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={cn(
-                  'h-7 px-2.5',
-                  effectiveView === 'list' && 'bg-surface-4 text-ink',
-                )}
-                onClick={() => setView('list')}
-                title="List view"
-              >
-                <List className="w-4 h-4" />
-              </Button>
+            <div className="flex items-center gap-2">
+              {snoozedCount > 0 && (
+                <Button
+                  variant={showSnoozed ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-7 px-2.5 text-[12px]"
+                  onClick={() => setShowSnoozed((v) => !v)}
+                  title={
+                    showSnoozed
+                      ? 'Hide snoozed deals'
+                      : `Show ${snoozedCount} snoozed deal${snoozedCount === 1 ? '' : 's'}`
+                  }
+                >
+                  <Moon className="w-3.5 h-3.5 mr-1" />
+                  {showSnoozed ? 'Hide' : 'Show'} snoozed ({snoozedCount})
+                </Button>
+              )}
+              <div className="flex items-center gap-1 rounded-[6px] border border-hairline bg-surface-1 p-0.5">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={cn(
+                    'h-7 px-2.5',
+                    effectiveView === 'kanban' && 'bg-surface-4 text-ink',
+                  )}
+                  onClick={() => setView('kanban')}
+                  title="Kanban view"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={cn(
+                    'h-7 px-2.5',
+                    effectiveView === 'list' && 'bg-surface-4 text-ink',
+                  )}
+                  onClick={() => setView('list')}
+                  title="List view"
+                >
+                  <List className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
           }
         />
@@ -202,9 +223,10 @@ export function PipelinePage() {
               meetingsFilterActive ? meetingIds?.contactIds ?? null : null
             }
             focusDealId={dealParam}
+            includeSnoozed={showSnoozed}
           />
         ) : (
-          <DealListView />
+          <DealListView includeSnoozed={showSnoozed} />
         )}
       </div>
     </div>
