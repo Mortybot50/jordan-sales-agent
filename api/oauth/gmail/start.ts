@@ -13,7 +13,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
-import { signState } from '../../_lib/oauth-state.ts'
+import { signState } from '../../_lib/oauth-state.js'
 
 const GOOGLE_CLIENT_ID = process.env.VITE_GOOGLE_OAUTH_CLIENT_ID ?? process.env.GOOGLE_OAUTH_CLIENT_ID
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL!

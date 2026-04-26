@@ -11,7 +11,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
 import { createCipheriv, randomBytes } from 'crypto'
-import { verifyState } from '../../_lib/oauth-state.ts'
+import { verifyState } from '../../_lib/oauth-state.js'
 
 const GOOGLE_CLIENT_ID = process.env.VITE_GOOGLE_OAUTH_CLIENT_ID ?? process.env.GOOGLE_OAUTH_CLIENT_ID
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET
