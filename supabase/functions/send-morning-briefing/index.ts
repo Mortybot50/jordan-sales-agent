@@ -1,23 +1,19 @@
 /**
  * send-morning-briefing — Supabase Edge Function
  *
- * Sends a morning briefing email digest to every user with
- * email_notifications.morning_briefing !== false.
+ * Cron-triggered hourly. For each user we check (in Melbourne local time):
+ *   - email_notifications.morning_briefing       (must be true / unset)
+ *   - email_notifications.briefing_time_hour     (must equal current Melb hour)
+ *   - email_notifications.morning_briefing_paused_until (must be in the past)
+ * Already-sent-today is enforced by a UNIQUE index on briefing_sends
+ * (user_id, sent_local_date) so retries are no-ops.
  *
- * Phase C restyle (2026-04-22): HTML template now matches the in-app
- * Jordan visual language — Inter (with Helvetica fallback for email
- * clients that lack variable-font support), hairline borders, electric
- * blue `#2563eb` accents, tabular numerals in data blocks, 600px max
- * width, inline styles only, single-column responsive.
- *
- * Designed to be triggered via Supabase cron at 7am AEST (21:00 UTC prev day):
- *   SELECT cron.schedule('morning-briefing', '0 21 * * *', $$
- *     SELECT net.http_post(
- *       url := current_setting('app.supabase_url') || '/functions/v1/send-morning-briefing',
- *       headers := '{"Authorization": "Bearer <SERVICE_ROLE_KEY>"}'::jsonb,
- *       body := '{}'::jsonb
- *     );
- *   $$);
+ * Phase G additions (2026-04-26):
+ *   - dedup via briefing_sends
+ *   - plain-text fallback alongside HTML
+ *   - dynamic subject ("N items need you" / "Quiet morning")
+ *   - DST-safe scheduling: cron fires hourly, function gates on Melb hour
+ *   - manual-trigger mode (POST { mode: 'manual', user_id }) for "send me one now"
  *
  * Required env vars:
  *   RESEND_API_KEY         — if absent, logs 'skipped' run and returns 200
@@ -30,15 +26,18 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 // @ts-expect-error Deno globals
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
-// @ts-expect-error Deno globals
-const SUPABASE_URL = Deno.env.get('VITE_SUPABASE_URL')!
+// Functions runtime auto-injects SUPABASE_URL; VITE_SUPABASE_URL is the Vercel name
+// — accept either so the function works locally and in prod without manual setup.
+const SUPABASE_URL =
+  // @ts-expect-error Deno globals
+  Deno.env.get('VITE_SUPABASE_URL') ?? Deno.env.get('SUPABASE_URL')!
 // @ts-expect-error Deno globals
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
 const FROM_ADDRESS = 'Jordan Briefing <briefing@jordan.purezza.com.au>'
+const APP_URL = 'https://jordan-sales-agent.vercel.app'
 
 // ── Jordan design tokens (inline — email-safe subset) ──────────────
-// Phase F "Dark Anchor" adds INK_DARK + MINT for the hero card at top.
 const INK = '#0f172a'
 const INK_DARK = '#0f1113'
 const INK_DARK_FAINT = 'rgba(255,255,255,0.55)'
@@ -58,10 +57,63 @@ const SUCCESS_TEXT = '#047857'
 const FONT = `'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif`
 const FONT_MONO = `'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace`
 
+interface UserRow {
+  id: string
+  org_id: string
+  email: string | null
+  full_name: string | null
+  email_notifications: {
+    morning_briefing?: boolean
+    briefing_time_hour?: number
+    morning_briefing_paused_until?: string | null
+  } | null
+}
+
+// Returns the Melbourne local hour (0–23) at the given instant.
+function melbourneHour(at: Date): number {
+  const parts = new Intl.DateTimeFormat('en-AU', {
+    timeZone: 'Australia/Melbourne',
+    hour: 'numeric',
+    hour12: false,
+  }).formatToParts(at)
+  const h = parts.find((p) => p.type === 'hour')?.value ?? '0'
+  // en-AU returns "24" for midnight in some runtimes — normalise.
+  const n = parseInt(h, 10)
+  return n === 24 ? 0 : n
+}
+
+function melbourneDateIso(at: Date): string {
+  // YYYY-MM-DD in Melbourne local calendar.
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Australia/Melbourne',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(at)
+  return parts // en-CA gives YYYY-MM-DD
+}
+
 // @ts-expect-error Deno serve
-Deno.serve(async () => {
+Deno.serve(async (req: Request) => {
   const startedAt = new Date().toISOString()
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  const now = new Date()
+
+  // Optional manual-trigger mode for "send me one now" Settings button.
+  // Body: { mode: 'manual', user_id?: string, force?: boolean }
+  let manualUserId: string | null = null
+  let manualForce = false
+  if (req.method === 'POST') {
+    try {
+      const body = await req.json()
+      if (body && body.mode === 'manual') {
+        manualUserId = typeof body.user_id === 'string' ? body.user_id : null
+        manualForce = body.force === true
+      }
+    } catch {
+      // empty/invalid body is fine — treat as scheduled run
+    }
+  }
 
   if (!RESEND_API_KEY) {
     console.warn('RESEND_API_KEY not set — skipping send (dev mode)')
@@ -82,11 +134,15 @@ Deno.serve(async () => {
     )
   }
 
-  // Fetch all users who want morning briefings
-  const { data: users, error: usersError } = await supabase
+  // Fetch all candidate users.
+  let query = supabase
     .from('users')
     .select('id, org_id, email, full_name, email_notifications')
     .not('email', 'is', null)
+  if (manualUserId) {
+    query = query.eq('id', manualUserId)
+  }
+  const { data: users, error: usersError } = await query
 
   if (usersError) {
     await supabase.from('worker_runs' as never).insert({
@@ -103,17 +159,61 @@ Deno.serve(async () => {
     })
   }
 
-  const eligibleUsers = (users ?? []).filter((u: { email_notifications: unknown }) => {
-    const notif = (u.email_notifications as { morning_briefing?: boolean } | null) ?? {}
-    return notif.morning_briefing !== false
+  const melbHour = melbourneHour(now)
+  const melbDate = melbourneDateIso(now)
+
+  // Eligibility filter for scheduled runs:
+  //   - opted in (default true)
+  //   - not paused
+  //   - briefing_time_hour matches current Melbourne hour
+  // Manual trigger bypasses the hour gate but still respects opt-in/pause
+  // unless `force=true`.
+  const eligibleUsers = (users ?? []).filter((u: UserRow) => {
+    if (!u.email) return false
+    const notif = u.email_notifications ?? {}
+    if (manualForce) return true
+    if (notif.morning_briefing === false) return false
+    const pausedUntil = notif.morning_briefing_paused_until
+    if (pausedUntil && new Date(pausedUntil) > now) return false
+    if (manualUserId) return true // manual: skip hour gate
+    const hour = typeof notif.briefing_time_hour === 'number' ? notif.briefing_time_hour : 7
+    return hour === melbHour
   })
 
   let sent = 0
+  let skippedDup = 0
   const errors: string[] = []
 
-  for (const user of eligibleUsers) {
+  for (const user of eligibleUsers as UserRow[]) {
+    if (!user.email) continue
     try {
-      const html = await buildBriefingHtml(supabase, user.org_id, user.full_name)
+      // Idempotency: try to insert a stub row first. Unique index on
+      // (user_id, sent_local_date) means a duplicate insert errors out
+      // with code 23505 → that user already received today's briefing.
+      const { error: stubErr } = await supabase
+        .from('briefing_sends' as never)
+        .insert({
+          user_id: user.id,
+          sent_local_date: melbDate,
+          item_count: 0,
+        } as never)
+
+      if (stubErr) {
+        // 23505 = unique_violation
+        if ((stubErr as { code?: string }).code === '23505') {
+          skippedDup++
+          console.log(`Already sent today: ${user.email}`)
+          continue
+        }
+        errors.push(`${user.email}: stub insert failed: ${stubErr.message}`)
+        continue
+      }
+
+      const { html, text, itemCount } = await buildBriefing(supabase, user.org_id, user.full_name ?? 'Jordan')
+      const subject = itemCount > 0
+        ? `Your morning briefing — ${itemCount} ${itemCount === 1 ? 'item needs' : 'items need'} you`
+        : `Quiet morning — nothing urgent`
+
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
@@ -123,20 +223,30 @@ Deno.serve(async () => {
         body: JSON.stringify({
           from: FROM_ADDRESS,
           to: [user.email],
-          subject: `Morning Briefing — ${new Date().toLocaleDateString('en-AU', {
-            weekday: 'short',
-            day: 'numeric',
-            month: 'short',
-            timeZone: 'Australia/Melbourne',
-          })}`,
+          subject,
           html,
+          text,
         }),
       })
 
       if (!res.ok) {
         const body = await res.text()
         errors.push(`${user.email}: ${res.status} ${body}`)
+        await supabase
+          .from('briefing_sends' as never)
+          .update({ error: `${res.status} ${body.slice(0, 500)}` } as never)
+          .eq('user_id', user.id)
+          .eq('sent_local_date', melbDate)
       } else {
+        const json = (await res.json().catch(() => null)) as { id?: string } | null
+        await supabase
+          .from('briefing_sends' as never)
+          .update({
+            item_count: itemCount,
+            resend_message_id: json?.id ?? null,
+          } as never)
+          .eq('user_id', user.id)
+          .eq('sent_local_date', melbDate)
         sent++
       }
     } catch (e) {
@@ -153,10 +263,16 @@ Deno.serve(async () => {
     error: errors.length > 0 ? errors.join('; ') : null,
   })
 
-  return new Response(JSON.stringify({ sent, errors }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  })
+  return new Response(
+    JSON.stringify({
+      sent,
+      skipped_already_sent_today: skippedDup,
+      melbourne_hour: melbHour,
+      candidate_users: eligibleUsers.length,
+      errors,
+    }),
+    { status: 200, headers: { 'Content-Type': 'application/json' } },
+  )
 })
 
 function escapeHtml(s: string): string {
@@ -204,12 +320,12 @@ interface BriefingReopeningRow {
   new_licensee: string | null
 }
 
-async function buildBriefingHtml(
+async function buildBriefing(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
   orgId: string,
   fullName: string,
-): Promise<string> {
+): Promise<{ html: string; text: string; itemCount: number }> {
   const since18h = new Date(Date.now() - 18 * 60 * 60 * 1000).toISOString()
   const since1d = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
   const now = new Date()
@@ -405,6 +521,9 @@ async function buildBriefingHtml(
   })
   const firstName = fullName?.split(' ')[0] ?? 'Jordan'
 
+  // Items-needing-attention counter — drives the dynamic subject line.
+  const itemCount = replies.length + tasks.length + candidates.length + reopenings.length
+
   // ── Section rendering ────────────────────────────────────────────
   const emptyRow = (msg: string) => `
     <tr><td style="padding:12px 16px;font-family:${FONT};font-size:13px;line-height:20px;color:${INK_FAINT};">${escapeHtml(msg)}</td></tr>
@@ -513,7 +632,7 @@ async function buildBriefingHtml(
     </td></tr>
   `
 
-  return `<!DOCTYPE html>
+  const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -525,6 +644,10 @@ async function buildBriefingHtml(
   <![endif]-->
 </head>
 <body style="margin:0;padding:0;background:${SURFACE_2};font-family:${FONT};color:${INK};">
+  <!-- Preheader (hidden, shows in inbox preview) -->
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:${SURFACE_2};">
+    ${itemCount > 0 ? `${itemCount} ${itemCount === 1 ? 'item needs' : 'items need'} you this morning.` : 'Quiet morning — nothing urgent on the radar.'}
+  </div>
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${SURFACE_2};">
     <tr>
       <td align="center" style="padding:24px 12px;">
@@ -607,7 +730,7 @@ async function buildBriefingHtml(
           <!-- CTA -->
           <tr>
             <td style="padding:20px 16px;border-top:1px solid ${HAIRLINE};background:${SURFACE_2};text-align:center;">
-              <a href="https://jordan-sales-agent.vercel.app/briefing" style="display:inline-block;background:${ACCENT};color:#ffffff;font-family:${FONT};font-size:13px;line-height:20px;font-weight:600;text-decoration:none;padding:8px 16px;border-radius:6px;">
+              <a href="${APP_URL}/briefing" style="display:inline-block;background:${ACCENT};color:#ffffff;font-family:${FONT};font-size:13px;line-height:20px;font-weight:600;text-decoration:none;padding:8px 16px;border-radius:6px;">
                 Open briefing →
               </a>
             </td>
@@ -617,8 +740,10 @@ async function buildBriefingHtml(
           <tr>
             <td style="padding:14px 16px 16px 16px;border-top:1px solid ${HAIRLINE};background:${SURFACE_2};">
               <div style="font-family:${FONT};font-size:11px;line-height:16px;color:${INK_FAINT};text-align:center;">
-                Jordan Sales Agent &middot; Sent at 7am AEST.
-                <a href="https://jordan-sales-agent.vercel.app/settings" style="color:${INK_FAINT};text-decoration:underline;">Manage preferences</a>
+                You're receiving this because morning briefings are on.
+                <a href="${APP_URL}/settings?tab=profile&action=pause-briefing" style="color:${INK_FAINT};text-decoration:underline;">Pause for a week</a>
+                &middot;
+                <a href="${APP_URL}/settings?tab=profile&action=disable-briefing" style="color:${INK_FAINT};text-decoration:underline;">Disable</a>
               </div>
             </td>
           </tr>
@@ -628,4 +753,66 @@ async function buildBriefingHtml(
   </table>
 </body>
 </html>`
+
+  // ── Plain-text fallback ─────────────────────────────────────────
+  // Most clients (Gmail mobile, Apple Mail) prefer multipart/alternative
+  // and will pick HTML — but a real text part is required for accessibility,
+  // spam filters, and a clean "view source" experience.
+  const textLines: string[] = []
+  textLines.push(`Morning Briefing — ${dateStr}`)
+  textLines.push(`Good morning, ${firstName}.`)
+  textLines.push('')
+  textLines.push(`Jordan Score: ${jordanScore}/100 (${tierLabel}, tier ${tier})`)
+  textLines.push(`Meetings: ${meetingsCount}/${meetingsTarget} · Reply rate: ${weekResponseRate}%`)
+  textLines.push('')
+  textLines.push(`OVERNIGHT REPLIES (${replies.length})`)
+  if (replies.length === 0) {
+    textLines.push('  - No new replies overnight.')
+  } else {
+    for (const r of replies) {
+      const name = r.contact?.full_name ?? 'Unknown'
+      const venue = r.contact?.venue?.name ? ` · ${r.contact.venue.name}` : ''
+      const preview = ((r.body ?? '').replace(/\s+/g, ' ').slice(0, 140) || '').trim()
+      textLines.push(`  - ${name}${venue}${r.subject ? `: ${r.subject}` : ''}`)
+      if (preview) textLines.push(`      "${preview}${(r.body ?? '').length > 140 ? '…' : ''}"`)
+    }
+  }
+  textLines.push('')
+  textLines.push(`FOLLOW-UPS DUE TODAY (${tasks.length})`)
+  if (tasks.length === 0) {
+    textLines.push('  - Nothing due today.')
+  } else {
+    for (const t of tasks) {
+      const who = t.contact?.full_name ? ` (${t.contact.full_name})` : ''
+      textLines.push(`  - ${t.title}${who}`)
+    }
+  }
+  textLines.push('')
+  textLines.push(`REOPENED THIS WEEK (${reopenings.length})`)
+  if (reopenings.length === 0) {
+    textLines.push('  - No reopenings detected.')
+  } else {
+    for (const r of reopenings) {
+      const meta = [r.suburb, r.event_type?.replace(/_/g, ' ')].filter(Boolean).join(' · ')
+      textLines.push(`  - ${r.venue_name}${meta ? ` (${meta})` : ''}`)
+    }
+  }
+  textLines.push('')
+  textLines.push(`NEW CANDIDATES (${candidates.length})`)
+  if (candidates.length === 0) {
+    textLines.push('  - No new candidates today.')
+  } else {
+    for (const c of candidates) {
+      const meta = [c.venue_type_guess, c.suburb].filter(Boolean).join(' · ')
+      const score = c.icp_score_guess != null ? ` [ICP ${c.icp_score_guess}]` : ''
+      textLines.push(`  - ${c.name ?? 'Unnamed venue'}${score}${meta ? ` (${meta})` : ''}`)
+    }
+  }
+  textLines.push('')
+  textLines.push(`Open briefing: ${APP_URL}/briefing`)
+  textLines.push('')
+  textLines.push(`Manage preferences: ${APP_URL}/settings?tab=profile`)
+  textLines.push(`Pause for a week: ${APP_URL}/settings?tab=profile&action=pause-briefing`)
+
+  return { html, text: textLines.join('\n'), itemCount }
 }

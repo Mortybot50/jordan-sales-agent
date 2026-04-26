@@ -13,7 +13,11 @@ export interface AppUser {
   email_signature: string | null
   voice_rules: string | null
   icp_config: Record<string, unknown>
-  email_notifications: { morning_briefing: boolean; briefing_time_hour: number }
+  email_notifications: {
+    morning_briefing: boolean
+    briefing_time_hour: number
+    morning_briefing_paused_until?: string | null
+  }
   default_commission_pct: number | null
 }
 
@@ -83,7 +87,11 @@ async function fetchUserProfile(userId: string): Promise<AppUser | null> {
     email_signature: d.email_signature as string | null,
     voice_rules: d.voice_rules as string | null,
     icp_config: ((d.icp_config ?? {}) as Record<string, unknown>),
-    email_notifications: ((d.email_notifications ?? { morning_briefing: true, briefing_time_hour: 7 }) as { morning_briefing: boolean; briefing_time_hour: number }),
+    email_notifications: ((d.email_notifications ?? { morning_briefing: true, briefing_time_hour: 7 }) as {
+      morning_briefing: boolean
+      briefing_time_hour: number
+      morning_briefing_paused_until?: string | null
+    }),
     default_commission_pct: d.default_commission_pct == null ? null : Number(d.default_commission_pct),
   }
 }
