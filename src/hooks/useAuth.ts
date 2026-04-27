@@ -10,6 +10,9 @@ export interface AppUser {
   full_name: string | null
   role: string
   calendly_url: string | null
+  calendly_account_email: string | null
+  calendly_webhook_registered_at: string | null
+  calendly_test_booking_at: string | null
   email_signature: string | null
   voice_rules: string | null
   icp_config: Record<string, unknown>
@@ -70,7 +73,7 @@ function redirectToLogin() {
 async function fetchUserProfile(userId: string): Promise<AppUser | null> {
   const { data, error } = await supabase
     .from('users')
-    .select('id, org_id, full_name, email, role, calendly_url, email_signature, voice_rules, icp_config, email_notifications, default_commission_pct')
+    .select('id, org_id, full_name, email, role, calendly_url, calendly_account_email, calendly_webhook_registered_at, calendly_test_booking_at, email_signature, voice_rules, icp_config, email_notifications, default_commission_pct')
     .eq('id', userId)
     .maybeSingle()
 
@@ -84,6 +87,9 @@ async function fetchUserProfile(userId: string): Promise<AppUser | null> {
     full_name: d.full_name as string | null,
     role: (d.role as string | null) ?? 'member',
     calendly_url: d.calendly_url as string | null,
+    calendly_account_email: d.calendly_account_email as string | null,
+    calendly_webhook_registered_at: d.calendly_webhook_registered_at as string | null,
+    calendly_test_booking_at: d.calendly_test_booking_at as string | null,
     email_signature: d.email_signature as string | null,
     voice_rules: d.voice_rules as string | null,
     icp_config: ((d.icp_config ?? {}) as Record<string, unknown>),
