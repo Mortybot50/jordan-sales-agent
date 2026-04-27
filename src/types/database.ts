@@ -1489,6 +1489,7 @@ export type Database = {
           icp_config: Json | null
           id: string
           org_id: string
+          public_slug: string | null
           role: string | null
           voice_rules: string | null
         }
@@ -1505,6 +1506,7 @@ export type Database = {
           icp_config?: Json | null
           id: string
           org_id: string
+          public_slug?: string | null
           role?: string | null
           voice_rules?: string | null
         }
@@ -1521,6 +1523,7 @@ export type Database = {
           icp_config?: Json | null
           id?: string
           org_id?: string
+          public_slug?: string | null
           role?: string | null
           voice_rules?: string | null
         }

@@ -19,6 +19,7 @@ import { SettingsPage } from '@/pages/SettingsPage'
 import { SuppressionListPage } from '@/pages/SuppressionListPage'
 import { AdminWorkersPage } from '@/pages/AdminWorkersPage'
 import PrimitivesPage from '@/pages/_primitives'
+import { BookingPage } from '@/pages/BookingPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth()
@@ -43,6 +44,8 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        {/* Public booking page — no auth required */}
+        <Route path="/book/:slug" element={<BookingPage />} />
         {/* Phase A internal surface — not linked from the main nav. */}
         <Route path="/__primitives" element={<PrimitivesPage />} />
         <Route
