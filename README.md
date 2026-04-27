@@ -220,3 +220,4 @@ Environment variables required in Vercel dashboard — see `.env.local.example`.
 | Proxycurl | ~$60/mo (~200 contacts x $0.01) |
 | Google Places | ~$20/mo |
 | **Total** | ~$120-140/mo |
+
