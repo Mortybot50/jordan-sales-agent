@@ -44,7 +44,7 @@ import {
   Trash2, Mail, MailOpen, MousePointerClick, Reply, Phone, CalendarCheck,
   CheckSquare, ArrowRight, AlertCircle, UserMinus, PlusCircle, StickyNote,
   Calendar, Activity, Pause, Play, Wrench, CheckCircle2, XCircle, AlertTriangle,
-  Clock, Moon,
+  Clock, Moon, User, Building2,
 } from 'lucide-react'
 import { MarkOutcomeDialog } from './MarkOutcomeDialog'
 
@@ -278,25 +278,30 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
       <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
         <SheetContent
           side="right"
-          className="w-full sm:max-w-lg overflow-y-auto"
+          className="w-full sm:max-w-[480px] overflow-y-auto pb-6"
         >
-          <SheetHeader className="mb-4">
-            <SheetTitle className="text-lg">
+          <SheetHeader className="mb-6">
+            <SheetTitle
+              className="text-lg truncate"
+              title={deal.title ?? 'Untitled deal'}
+            >
               {deal.title ?? 'Untitled deal'}
             </SheetTitle>
-            <div className="flex items-center gap-2 flex-wrap text-sm text-muted-foreground">
-              {deal.contact?.full_name && <span>{deal.contact.full_name}</span>}
-              {deal.venue?.name && (
-                <>
-                  <span>·</span>
-                  <span>{deal.venue.name}</span>
-                </>
+            <div className="space-y-1 mt-1">
+              {deal.contact?.full_name && (
+                <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                  <User size={12} className="shrink-0" />
+                  <span>{deal.contact.full_name}</span>
+                </div>
               )}
-              {deal.product?.label && (
-                <>
-                  <span>·</span>
-                  <span className="text-ink-muted font-medium">{deal.product.label}</span>
-                </>
+              {deal.venue?.name && (
+                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/80">
+                  <Building2 size={12} className="shrink-0" />
+                  <span>{deal.venue.name}</span>
+                  {deal.product?.label && (
+                    <span className="text-ink-muted font-medium ml-1">· {deal.product.label}</span>
+                  )}
+                </div>
               )}
             </div>
           </SheetHeader>
@@ -545,7 +550,9 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
           )}
 
           {!isHeld && !isClosedWon && !isLost && (
-            <div className="mb-3 flex flex-wrap items-center gap-2">
+            <div className="mb-5">
+              <p className="text-[10px] tracking-[0.18em] uppercase text-zinc-500 font-medium mb-2">Quick Actions</p>
+              <div className="flex flex-wrap items-center gap-2">
               <Button
                 size="sm"
                 variant="outline"
@@ -611,6 +618,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
                   </PopoverContent>
                 </Popover>
               )}
+              </div>
             </div>
           )}
 
@@ -658,13 +666,13 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
               value={nextStepNote}
               onChange={(e) => setNextStepNote(e.target.value.slice(0, 280))}
               placeholder="What's the very next thing? e.g. send Espy quote, call back about install date"
-              rows={2}
+              rows={3}
               maxLength={280}
-              className="text-[13px]"
+              className="text-[13px] min-h-[96px]"
             />
-            <div className="flex items-center justify-between gap-2 text-[11px] text-ink-faint">
-              <span>{nextStepNote.length}/280</span>
-              <span>{deal.next_step_due_at && `Currently due ${format(new Date(deal.next_step_due_at), 'EEE d MMM')}`}</span>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-zinc-600">{deal.next_step_due_at && `Currently due ${format(new Date(deal.next_step_due_at), 'EEE d MMM')}`}</span>
+              <span className="text-[11px] text-ink-faint">{nextStepNote.length}/280</span>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {(
@@ -719,13 +727,14 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
           </div>
 
           {/* ── Edit form ────────────────────────────────────── */}
-          <form onSubmit={form.handleSubmit(handleSave, onInvalid)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(handleSave, onInvalid)} className="space-y-5">
+            <p className="text-[11px] tracking-[0.18em] uppercase text-zinc-500 font-semibold pb-1">Deal Details</p>
             {Object.keys(form.formState.errors).length > 0 && (
               <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
                 Please fix the highlighted fields before saving.
               </div>
             )}
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <Label>Title</Label>
               <Input
                 {...form.register('title')}
@@ -736,7 +745,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
               )}
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <Label>Stage</Label>
               <Select
                 value={form.watch('stage_id') ?? ''}
@@ -755,8 +764,8 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
                 <Label>Legacy contract value</Label>
                 <Input
                   type="number"
@@ -766,18 +775,18 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
                   })}
                 />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <Label>Follow-up due</Label>
                 <Input type="date" {...form.register('follow_up_due')} />
               </div>
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <Label>Notes</Label>
-              <Textarea {...form.register('notes')} rows={3} />
+              <Textarea {...form.register('notes')} rows={4} className="min-h-[96px]" />
             </div>
 
-            <div className="flex items-center justify-between pt-1 gap-3">
+            <div className="flex items-center justify-between border-t border-zinc-200 pt-4 mt-4 gap-3">
               <Button
                 type="button"
                 variant="outline"
