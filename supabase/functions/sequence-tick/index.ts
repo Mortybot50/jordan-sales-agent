@@ -493,6 +493,7 @@ async function processEnrolment(supabase: any, enr: EnrolmentRow): Promise<Proce
 }
 
 // @ts-expect-error Deno serve
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 Deno.serve(async (_req: Request) => {
   const startedAt = new Date().toISOString()
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
