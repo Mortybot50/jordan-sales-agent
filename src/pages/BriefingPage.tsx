@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select'
 import {
   EmptyState,
+  IntentBadge,
   PageHeader,
   SkeletonRow,
   StatusPill,
@@ -240,9 +241,12 @@ export function BriefingPage() {
                 <div key={reply.id} className="space-y-2 px-4 py-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="break-words text-[13px] font-medium text-ink">
-                        {reply.contact_name}
-                      </p>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="break-words text-[13px] font-medium text-ink">
+                          {reply.contact_name}
+                        </p>
+                        <IntentBadge intent={reply.intent} />
+                      </div>
                       {reply.venue_name && (
                         <p className="break-words text-[12px] text-ink-muted">
                           {reply.venue_name}

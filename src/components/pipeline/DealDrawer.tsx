@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { CapsLabel, MetricNumber } from '@/components/primitives'
+import { CapsLabel, IntentBadge, MetricNumber } from '@/components/primitives'
 import {
   useUpdateDeal,
   useDeleteDeal,
@@ -842,6 +842,11 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
                         <Badge variant="outline" className="text-xs h-4">
                           {activityTypeLabel(activity.activity_type)}
                         </Badge>
+                        {(activity.activity_type === 'reply_received' || activity.activity_type === 'email_inbound') && (
+                          <IntentBadge
+                            intent={(activity.metadata as Record<string, unknown> | null)?.intent as string | null}
+                          />
+                        )}
                         <span className="text-xs text-muted-foreground">
                           {formatRelative(activity.occurred_at)}
                         </span>

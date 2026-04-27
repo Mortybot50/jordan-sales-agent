@@ -158,7 +158,7 @@ export function useMeetingsThisWeekDealIds(enabled = true) {
 /** Map of contact_id -> intent string for the most recent classified inbound activity. */
 export function useInboundActivityIntents(contactIds: string[]) {
   return useQuery({
-    queryKey: ['activities', 'inbound-intents', contactIds.sort().join(',')],
+    queryKey: ['activities', 'inbound-intents', contactIds.slice().sort().join(',')],
     queryFn: async (): Promise<Record<string, string>> => {
       if (contactIds.length === 0) return {}
 
@@ -176,7 +176,7 @@ export function useInboundActivityIntents(contactIds: string[]) {
       const map: Record<string, string> = {}
       for (const row of data ?? []) {
         if (!row.contact_id) continue
-        if (map[row.contact_id]) continue // already have most-recent
+        if (map[row.contact_id]) continue
         const intent = (row.metadata as Record<string, unknown> | null)?.intent
         if (typeof intent === 'string') {
           map[row.contact_id] = intent
@@ -188,6 +188,7 @@ export function useInboundActivityIntents(contactIds: string[]) {
     staleTime: 60_000,
   })
 }
+
 
 export function useArchiveActivity() {
   const qc = useQueryClient()
