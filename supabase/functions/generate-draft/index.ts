@@ -45,13 +45,12 @@ Deno.serve(async (req) => {
     })
   }
 
-  // Get caller's org_id
-  // TODO: include {{public_booking_url}} in personalisation context
-  // e.g. `${origin}/book/${userProfile.public_slug}` — wire in follow-up PR
-  // so cold emails can include a direct booking CTA when Jordan's slug is set.
+  // Get caller's profile — public_slug is used to build {{public_booking_url}}
+  // which is passed to the system prompt as a documented variable so Claude can
+  // include Jordan's booking page as a soft CTA when contextually appropriate.
   const { data: userProfile } = await supabase
     .from('users')
-    .select('org_id, full_name, email_signature, calendly_url, voice_rules')
+    .select('org_id, full_name, email_signature, calendly_url, voice_rules, public_slug')
     .eq('id', user.id)
     .single()
 
@@ -61,6 +60,12 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
+
+  // Build booking URL if slug is set; empty string otherwise. Claude decides
+  // whether to include it based on voice rules + email context.
+  const public_booking_url = userProfile.public_slug
+    ? `https://jordan-sales-agent.vercel.app/book/${userProfile.public_slug}`
+    : ''
 
   const { contact_id, draft_type, context_hint } = await req.json()
 
@@ -184,7 +189,10 @@ Jordan's email rules:
 - No marketing jargon ("exciting", "amazing", "cutting-edge")
 - One clear ask at the end — a call, a meeting, or a yes/no
 - Personalise with venue-specific detail (covers, venue type, suburb)
-- End with "Cheers, Jordan"`
+- End with "Cheers, Jordan"${public_booking_url ? `
+
+AVAILABLE VARIABLES:
+- {{public_booking_url}} = ${public_booking_url} — Jordan's personal booking page. Include as a soft CTA when the venue context suggests interest (e.g. asking a question, scheduling a call). Leave out for very short opening emails or when the voice rules instruct against it.` : ''}`
 
   const userVoiceRules = (userProfile.voice_rules ?? '').trim()
   const systemPrompt = userVoiceRules

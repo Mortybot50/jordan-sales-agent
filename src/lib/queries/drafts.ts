@@ -34,6 +34,14 @@ export interface Draft {
   generated_at: string | null
   approved_at: string | null
   created_at: string
+  sequence_enrollment_id: string | null
+  sequence_step_number: number | null
+  sequence_enrollment?: {
+    sequence?: {
+      id: string
+      name: string
+    } | null
+  } | null
   contact?: {
     id: string
     full_name: string
@@ -50,7 +58,9 @@ export function useDrafts() {
         .select(`
           id, org_id, contact_id, deal_id, draft_type, draft_kind, subject, body,
           context_json, model, status, generated_at, approved_at, created_at,
-          contact:contacts(id, full_name, venue:venues(name, venue_type))
+          sequence_enrollment_id, sequence_step_number,
+          contact:contacts(id, full_name, venue:venues(name, venue_type)),
+          sequence_enrollment:sequence_enrollments(sequence:sequences(id, name))
         `)
         .in('status', ['pending', 'edited'])
         .order('generated_at', { ascending: false })
@@ -113,7 +123,9 @@ export function useDraft(id: string) {
         .select(`
           id, org_id, contact_id, deal_id, draft_type, draft_kind, subject, body,
           context_json, model, status, generated_at, approved_at, created_at,
-          contact:contacts(id, full_name, venue:venues(name, venue_type))
+          sequence_enrollment_id, sequence_step_number,
+          contact:contacts(id, full_name, venue:venues(name, venue_type)),
+          sequence_enrollment:sequence_enrollments(sequence:sequences(id, name))
         `)
         .eq('id', id)
         .single()
