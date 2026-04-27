@@ -3,6 +3,11 @@ import { z } from 'zod'
 export const profileFormSchema = z.object({
   full_name: z.string().min(1, 'Name is required'),
   calendly_url: z.string().url('Enter a valid Calendly URL').optional().or(z.literal('')),
+  calendly_account_email: z
+    .string()
+    .email('Enter a valid email address')
+    .optional()
+    .or(z.literal('')),
   email_signature: z.string().optional(),
   default_commission_pct: z
     .number()

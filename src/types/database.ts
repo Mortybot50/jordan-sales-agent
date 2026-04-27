@@ -1574,8 +1574,10 @@ export type Database = {
       users: {
         Row: {
           calendly_account_email: string | null
+          calendly_test_booking_at: string | null
           calendly_token_encrypted: string | null
           calendly_url: string | null
+          calendly_webhook_registered_at: string | null
           created_at: string | null
           default_commission_pct: number | null
           email: string | null
@@ -1591,8 +1593,10 @@ export type Database = {
         }
         Insert: {
           calendly_account_email?: string | null
+          calendly_test_booking_at?: string | null
           calendly_token_encrypted?: string | null
           calendly_url?: string | null
+          calendly_webhook_registered_at?: string | null
           created_at?: string | null
           default_commission_pct?: number | null
           email?: string | null
@@ -1608,8 +1612,10 @@ export type Database = {
         }
         Update: {
           calendly_account_email?: string | null
+          calendly_test_booking_at?: string | null
           calendly_token_encrypted?: string | null
           calendly_url?: string | null
+          calendly_webhook_registered_at?: string | null
           created_at?: string | null
           default_commission_pct?: number | null
           email?: string | null

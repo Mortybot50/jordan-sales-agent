@@ -31,7 +31,7 @@ import { useDeals } from '@/lib/queries/deals'
 import { profileFormSchema, icpFormSchema, type ProfileFormValues, type IcpFormValues } from '@/lib/schemas/user'
 import { venueTypeLabel, cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
-import { Plus, Trash2, ChevronUp, ChevronDown, CheckCircle2, XCircle, CheckCircle, ExternalLink, ShieldAlert, ArrowRight, Link2, Copy } from 'lucide-react'
+import { Plus, Trash2, ChevronUp, ChevronDown, CheckCircle2, XCircle, CheckCircle, ExternalLink, ShieldAlert, ArrowRight, Link2, Copy, Calendar, Circle } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSuppressionList } from '@/lib/queries/suppression'
 import { SendingInfrastructureCard } from '@/components/settings/SendingInfrastructureCard'
@@ -82,6 +82,7 @@ function ProfileTab() {
     defaultValues: {
       full_name: user?.full_name ?? '',
       calendly_url: user?.calendly_url ?? '',
+      calendly_account_email: user?.calendly_account_email ?? '',
       email_signature: user?.email_signature ?? '',
       default_commission_pct: user?.default_commission_pct ?? null,
     },
@@ -93,6 +94,9 @@ function ProfileTab() {
       id: user.id,
       full_name: values.full_name,
       calendly_url: values.calendly_url || undefined,
+      calendly_account_email: values.calendly_account_email
+        ? values.calendly_account_email.toLowerCase().trim()
+        : null,
       email_signature: values.email_signature || undefined,
       default_commission_pct:
         values.default_commission_pct == null || Number.isNaN(values.default_commission_pct)
@@ -197,6 +201,26 @@ function ProfileTab() {
         />
         {form.formState.errors.calendly_url && (
           <p className="text-xs text-destructive">{form.formState.errors.calendly_url.message}</p>
+        )}
+      </div>
+
+      <div className="space-y-1">
+        <Label htmlFor="calendly_account_email">Calendly account email</Label>
+        <Input
+          id="calendly_account_email"
+          type="email"
+          placeholder="you@example.com"
+          {...form.register('calendly_account_email')}
+          className={cn(form.formState.errors.calendly_account_email && 'border-destructive')}
+        />
+        <p className="text-xs text-muted-foreground">
+          The email on your Calendly account (the one Calendly sends bookings from).
+          Used to route incoming webhook events to your account.
+        </p>
+        {form.formState.errors.calendly_account_email && (
+          <p className="text-xs text-destructive">
+            {form.formState.errors.calendly_account_email.message}
+          </p>
         )}
       </div>
 
@@ -1091,6 +1115,216 @@ function SuppressionTab() {
   )
 }
 
+// --- Connect Calendly walkthrough card ---
+function CalendlyStepIcon({ done }: { done: boolean }) {
+  return done ? (
+    <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+  ) : (
+    <Circle className="w-4 h-4 text-muted-foreground shrink-0" />
+  )
+}
+
+function ConnectCalendlyCard() {
+  const { user } = useAuth()
+  const updateProfile = useUpdateUserProfile()
+  const webhookUrl = `${window.location.origin}/api/webhooks/calendly`
+
+  // Step 4 derives from a live probe of the deployed env var.
+  const { data: webhookStatus, isLoading: statusLoading } = useQuery({
+    queryKey: ['calendly-webhook-status'],
+    queryFn: async () => {
+      const res = await fetch('/api/webhooks/calendly/status', {
+        headers: { 'cache-control': 'no-store' },
+      })
+      if (!res.ok) return { configured: false }
+      return (await res.json()) as { configured: boolean }
+    },
+    staleTime: 30_000,
+  })
+
+  const step1Done = !!user?.calendly_account_email
+  const step2Done = !!user?.calendly_url
+  const step3Done = !!user?.calendly_webhook_registered_at
+  const step4Done = !!webhookStatus?.configured
+  const step5Done = !!user?.calendly_test_booking_at
+
+  async function toggleStep3() {
+    if (!user) return
+    await updateProfile.mutateAsync({
+      id: user.id,
+      calendly_webhook_registered_at: step3Done ? null : new Date().toISOString(),
+    })
+  }
+
+  async function toggleStep5() {
+    if (!user) return
+    await updateProfile.mutateAsync({
+      id: user.id,
+      calendly_test_booking_at: step5Done ? null : new Date().toISOString(),
+    })
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Calendar className="w-4 h-4" />
+          Connect Calendly
+        </CardTitle>
+        <div className="flex items-center gap-2 pt-1">
+          <span className="text-xs text-muted-foreground">Webhook status:</span>
+          {statusLoading ? (
+            <Badge variant="outline" className="text-xs">Checking…</Badge>
+          ) : step4Done ? (
+            <Badge className="bg-green-100 text-green-700 border-0 text-xs">
+              <CheckCircle className="w-3 h-3 mr-1" />
+              Connected
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-xs text-amber-600 border-amber-200">
+              Not configured
+            </Badge>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <ol className="space-y-3 text-sm">
+          {/* Step 1 */}
+          <li className="flex items-start gap-3">
+            <CalendlyStepIcon done={step1Done} />
+            <div className="flex-1 min-w-0">
+              <p className="font-medium">1. Copy your Calendly account email</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Calendly → Account Settings → copy your account email → paste it
+                into the <em>Calendly account email</em> field above.
+              </p>
+            </div>
+          </li>
+
+          {/* Step 2 */}
+          <li className="flex items-start gap-3">
+            <CalendlyStepIcon done={step2Done} />
+            <div className="flex-1 min-w-0">
+              <p className="font-medium">2. Set up your scheduling link</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Calendly → create / copy the URL of your event type
+                (e.g.{' '}
+                <code className="text-xs bg-muted px-1 rounded">
+                  https://calendly.com/jordan-leadflow/30min
+                </code>
+                ) → paste into the <em>Calendly URL</em> field above.
+              </p>
+            </div>
+          </li>
+
+          {/* Step 3 */}
+          <li className="flex items-start gap-3">
+            <button
+              type="button"
+              onClick={toggleStep3}
+              disabled={updateProfile.isPending}
+              className="mt-0.5 cursor-pointer disabled:cursor-default"
+              aria-label={step3Done ? 'Mark step 3 incomplete' : 'Mark step 3 complete'}
+            >
+              <CalendlyStepIcon done={step3Done} />
+            </button>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium">3. Register the webhook in Calendly</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Calendly → Integrations → Webhooks → Create Webhook.
+              </p>
+              <ul className="text-xs text-muted-foreground mt-1 space-y-0.5 list-disc pl-4">
+                <li>
+                  URL:{' '}
+                  <code className="text-xs bg-muted px-1 rounded break-all">
+                    {webhookUrl}
+                  </code>
+                </li>
+                <li>
+                  Events:{' '}
+                  <code className="text-xs bg-muted px-1 rounded">invitee.created</code>{' '}
+                  and{' '}
+                  <code className="text-xs bg-muted px-1 rounded">invitee.canceled</code>
+                </li>
+                <li>Scope: User</li>
+              </ul>
+              <p className="text-xs text-muted-foreground mt-1">
+                Tap the circle on the left when you've created the webhook in Calendly.
+              </p>
+            </div>
+          </li>
+
+          {/* Step 4 */}
+          <li className="flex items-start gap-3">
+            <CalendlyStepIcon done={step4Done} />
+            <div className="flex-1 min-w-0">
+              <p className="font-medium">4. Send the signing key to Morty</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Calendly will give you a <em>signing key</em> when you create the
+                webhook. Copy it and send it to Morty — it goes into Vercel as{' '}
+                <code className="text-xs bg-muted px-1 rounded">
+                  CALENDLY_WEBHOOK_SIGNING_KEY
+                </code>{' '}
+                and the webhook activates automatically. This step ticks itself
+                green once the key is live.
+              </p>
+            </div>
+          </li>
+
+          {/* Step 5 */}
+          <li className="flex items-start gap-3">
+            <button
+              type="button"
+              onClick={toggleStep5}
+              disabled={updateProfile.isPending}
+              className="mt-0.5 cursor-pointer disabled:cursor-default"
+              aria-label={step5Done ? 'Mark step 5 incomplete' : 'Mark step 5 complete'}
+            >
+              <CalendlyStepIcon done={step5Done} />
+            </button>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium">5. Test it with a fake booking</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Open your scheduling page, book a fake event using your own email
+                (matching a contact in the CRM) — within ~5 seconds a{' '}
+                <code className="text-xs bg-muted px-1 rounded">meeting_booked</code>{' '}
+                activity should appear on that contact's timeline. Tap the circle
+                when you've confirmed it.
+              </p>
+            </div>
+          </li>
+        </ol>
+
+        <div className="space-y-1 pt-2 border-t">
+          <Label className="text-xs text-muted-foreground uppercase tracking-wide">
+            Webhook URL
+          </Label>
+          <div className="flex items-center gap-2">
+            <Input
+              readOnly
+              value={webhookUrl}
+              className="font-mono text-xs bg-muted"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={() => {
+                navigator.clipboard.writeText(webhookUrl)
+                toast.success('Copied')
+              }}
+            >
+              <Copy className="w-3.5 h-3.5 mr-1" />
+              Copy
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 // --- Public Booking Link Card ---
 function PublicBookingLinkCard() {
   const { user } = useAuth()
@@ -1322,6 +1556,8 @@ export function SettingsPage() {
               <VoiceRulesSection />
             </CardContent>
           </Card>
+
+          <ConnectCalendlyCard />
 
           <PublicBookingLinkCard />
 
