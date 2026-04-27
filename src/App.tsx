@@ -22,6 +22,7 @@ import { SuppressionListPage } from '@/pages/SuppressionListPage'
 import { AdminWorkersPage } from '@/pages/AdminWorkersPage'
 import PrimitivesPage from '@/pages/_primitives'
 import { BookingPage } from '@/pages/BookingPage'
+import { PrivacyPolicyPage } from '@/pages/PrivacyPolicyPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth()
@@ -48,6 +49,8 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         {/* Public booking page — no auth required */}
         <Route path="/book/:slug" element={<BookingPage />} />
+        {/* Public privacy policy — required for Google OAuth verification */}
+        <Route path="/privacy" element={<PrivacyPolicyPage />} />
         {/* Phase A internal surface — not linked from the main nav. */}
         <Route path="/__primitives" element={<PrimitivesPage />} />
         <Route
