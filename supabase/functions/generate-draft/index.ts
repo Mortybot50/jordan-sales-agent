@@ -46,6 +46,9 @@ Deno.serve(async (req) => {
   }
 
   // Get caller's org_id
+  // TODO: include {{public_booking_url}} in personalisation context
+  // e.g. `${origin}/book/${userProfile.public_slug}` — wire in follow-up PR
+  // so cold emails can include a direct booking CTA when Jordan's slug is set.
   const { data: userProfile } = await supabase
     .from('users')
     .select('org_id, full_name, email_signature, calendly_url, voice_rules')

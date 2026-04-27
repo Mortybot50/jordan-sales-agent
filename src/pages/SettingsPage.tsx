@@ -31,7 +31,7 @@ import { useDeals } from '@/lib/queries/deals'
 import { profileFormSchema, icpFormSchema, type ProfileFormValues, type IcpFormValues } from '@/lib/schemas/user'
 import { venueTypeLabel, cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
-import { Plus, Trash2, ChevronUp, ChevronDown, CheckCircle2, XCircle, CheckCircle, ExternalLink, ShieldAlert, ArrowRight } from 'lucide-react'
+import { Plus, Trash2, ChevronUp, ChevronDown, CheckCircle2, XCircle, CheckCircle, ExternalLink, ShieldAlert, ArrowRight, Link2, Copy } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSuppressionList } from '@/lib/queries/suppression'
 import { SendingInfrastructureCard } from '@/components/settings/SendingInfrastructureCard'
@@ -1091,6 +1091,163 @@ function SuppressionTab() {
   )
 }
 
+// --- Public Booking Link Card ---
+function PublicBookingLinkCard() {
+  const { user } = useAuth()
+  const qc = useQueryClient()
+
+  // Fetch current public_slug from DB (not in AppUser yet)
+  const { data: slugData, isLoading } = useQuery({
+    queryKey: ['user-public-slug', user?.id],
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase as any)
+        .from('users')
+        .select('public_slug')
+        .eq('id', user?.id ?? '')
+        .maybeSingle()
+      return (data as { public_slug: string | null } | null)?.public_slug ?? null
+    },
+    enabled: !!user?.id,
+  })
+
+  const [editing, setEditing] = useState(false)
+  const [editValue, setEditValue] = useState('')
+  const [slugError, setSlugError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const slug = slugData ?? null
+  const bookingUrl = slug ? `${window.location.origin}/book/${slug}` : null
+
+  function handleStartEdit() {
+    setEditValue(slug ?? '')
+    setSlugError(null)
+    setEditing(true)
+  }
+
+  async function handleSaveSlug() {
+    const trimmed = editValue.trim().toLowerCase()
+    if (!/^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/.test(trimmed)) {
+      setSlugError('3–30 chars, lowercase letters, numbers, and hyphens only')
+      return
+    }
+    if (!user) return
+    setSaving(true)
+    setSlugError(null)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
+        .from('users')
+        .update({ public_slug: trimmed })
+        .eq('id', user.id)
+      if (error) {
+        if (error.code === '23505') {
+          setSlugError('That slug is already taken — try another')
+        } else {
+          setSlugError(error.message)
+        }
+        return
+      }
+      qc.invalidateQueries({ queryKey: ['user-public-slug', user.id] })
+      setEditing(false)
+      toast.success('Booking link updated')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Link2 className="w-4 h-4" />
+          Public booking link
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {isLoading ? (
+          <p className="text-xs text-muted-foreground">Loading…</p>
+        ) : !slug ? (
+          <p className="text-xs text-muted-foreground">No booking slug set yet.</p>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Input
+              readOnly
+              value={bookingUrl ?? ''}
+              className="font-mono text-xs bg-muted flex-1"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={() => {
+                navigator.clipboard.writeText(bookingUrl ?? '')
+                toast.success('Copied')
+              }}
+            >
+              <Copy className="w-3.5 h-3.5 mr-1" />
+              Copy
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="shrink-0"
+              asChild
+            >
+              <a href={bookingUrl ?? '#'} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </Button>
+          </div>
+        )}
+
+        {editing ? (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground shrink-0">
+                {window.location.origin}/book/
+              </span>
+              <Input
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                className="h-7 text-sm flex-1"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveSlug()
+                  if (e.key === 'Escape') setEditing(false)
+                }}
+                placeholder="your-name"
+              />
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={handleSaveSlug} disabled={saving}>
+                <CheckCircle2 className="w-4 h-4 text-green-600" />
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditing(false)}>
+                <XCircle className="w-4 h-4 text-muted-foreground" />
+              </Button>
+            </div>
+            {slugError && <p className="text-xs text-destructive">{slugError}</p>}
+            <p className="text-xs text-muted-foreground">
+              Lowercase letters, numbers, hyphens. 3–30 characters.
+            </p>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={handleStartEdit}
+          >
+            Edit slug
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 // --- Main Settings Page ---
 export function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -1158,6 +1315,8 @@ export function SettingsPage() {
               <VoiceRulesSection />
             </CardContent>
           </Card>
+
+          <PublicBookingLinkCard />
 
           <SendingInfrastructureCard />
         </TabsContent>
