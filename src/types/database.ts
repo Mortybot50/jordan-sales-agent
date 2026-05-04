@@ -569,8 +569,10 @@ export type Database = {
           sent_at: string | null
           sequence_enrollment_id: string | null
           sequence_step_number: number | null
+          sender_inbox_id: string | null
           status: string | null
           subject: string | null
+          suppression_reason: string | null
         }
         Insert: {
           approved_at?: string | null
@@ -595,8 +597,10 @@ export type Database = {
           sent_at?: string | null
           sequence_enrollment_id?: string | null
           sequence_step_number?: number | null
+          sender_inbox_id?: string | null
           status?: string | null
           subject?: string | null
+          suppression_reason?: string | null
         }
         Update: {
           approved_at?: string | null
@@ -621,8 +625,10 @@ export type Database = {
           sent_at?: string | null
           sequence_enrollment_id?: string | null
           sequence_step_number?: number | null
+          sender_inbox_id?: string | null
           status?: string | null
           subject?: string | null
+          suppression_reason?: string | null
         }
         Relationships: [
           {

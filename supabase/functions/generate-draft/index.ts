@@ -8,8 +8,44 @@ const corsHeaders = {
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+const UNSUBSCRIBE_SIGNING_KEY = Deno.env.get('UNSUBSCRIBE_SIGNING_KEY')
+const PUBLIC_APP_URL = Deno.env.get('PUBLIC_APP_URL') ?? 'https://jordan-sales-agent.vercel.app'
 
 const MODEL = 'claude-sonnet-4-6'
+
+// HMAC-SHA256 of the lowercased+trimmed email, hex-encoded — matches the
+// Node-side `signUnsubscribeToken` in api/unsubscribe.ts so a token signed
+// here verifies there. The footer is the Spam Act 2003 mandatory unsubscribe
+// mechanism — appended verbatim so Claude can never paraphrase the legal copy.
+async function signEmailHmac(email: string, key: string): Promise<string> {
+  const enc = new TextEncoder()
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(key),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  )
+  const sig = await crypto.subtle.sign(
+    'HMAC',
+    cryptoKey,
+    enc.encode(email.trim().toLowerCase()),
+  )
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+async function buildUnsubFooter(email: string): Promise<string | null> {
+  if (!UNSUBSCRIBE_SIGNING_KEY) {
+    console.warn('UNSUBSCRIBE_SIGNING_KEY not set — skipping unsub footer')
+    return null
+  }
+  const normalised = email.trim().toLowerCase()
+  const token = await signEmailHmac(normalised, UNSUBSCRIBE_SIGNING_KEY)
+  const link = `${PUBLIC_APP_URL}/unsubscribe?email=${encodeURIComponent(normalised)}&token=${token}`
+  return `\n\n---\nThis email was sent by Jordan Marziale (Premium Water AU). To unsubscribe, click here: ${link}`
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -286,6 +322,17 @@ Respond with ONLY valid JSON in this exact format (no markdown, no explanation):
       JSON.stringify({ error: 'Failed to generate draft. Check logs.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
+  }
+
+  // Append the Spam Act 2003 unsubscribe footer AFTER Claude has generated
+  // the body — never via the prompt, so the legal copy can't be paraphrased.
+  // We bake it into both `body` and `original_body` so the Learning Loop's
+  // diff doesn't fire a false positive when Jordan leaves the footer alone.
+  if (contact.email) {
+    const footer = await buildUnsubFooter(String(contact.email))
+    if (footer) {
+      body = body + footer
+    }
   }
 
   const contextJson = {

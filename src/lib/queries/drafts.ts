@@ -3,7 +3,15 @@ import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { getSuppressionSet, isSuppressed } from '@/lib/suppression'
 
-export type DraftStatus = 'pending' | 'edited' | 'approved' | 'rejected' | 'sent' | 'draft_failed'
+export type DraftStatus =
+  | 'pending'
+  | 'edited'
+  | 'approved'
+  | 'rejected'
+  | 'sent'
+  | 'draft_failed'
+  | 'queued'
+  | 'suppressed'
 export type DraftType = 'cold_outreach' | 'follow_up' | 'follow_up_soft' | 'follow_up_close' | 'reply'
 export type DraftKind = 'standard' | 'proposed_meeting'
 
@@ -36,6 +44,8 @@ export interface Draft {
   created_at: string
   sequence_enrollment_id: string | null
   sequence_step_number: number | null
+  sender_inbox_id: string | null
+  suppression_reason: string | null
   sequence_enrollment?: {
     sequence?: {
       id: string
@@ -59,6 +69,7 @@ export function useDrafts() {
           id, org_id, contact_id, deal_id, draft_type, draft_kind, subject, body,
           context_json, model, status, generated_at, approved_at, created_at,
           sequence_enrollment_id, sequence_step_number,
+          sender_inbox_id, suppression_reason,
           contact:contacts(id, full_name, venue:venues(name, venue_type)),
           sequence_enrollment:sequence_enrollments(sequence:sequences(id, name))
         `)
@@ -124,6 +135,7 @@ export function useDraft(id: string) {
           id, org_id, contact_id, deal_id, draft_type, draft_kind, subject, body,
           context_json, model, status, generated_at, approved_at, created_at,
           sequence_enrollment_id, sequence_step_number,
+          sender_inbox_id, suppression_reason,
           contact:contacts(id, full_name, venue:venues(name, venue_type)),
           sequence_enrollment:sequence_enrollments(sequence:sequences(id, name))
         `)
@@ -137,16 +149,23 @@ export function useDraft(id: string) {
   })
 }
 
+export interface ApproveDraftResult {
+  status: DraftStatus
+  suppression_reason: string | null
+  sender_inbox_id: string | null
+  daily_cap_reached: boolean
+}
+
 export function useApproveDraft() {
   const qc = useQueryClient()
-  return useMutation({
+  return useMutation<ApproveDraftResult, Error, string>({
     mutationFn: async (id: string) => {
       // Learning Loop — read current vs original to capture the edit delta.
       // Approve is the "sent" signal in this app today; if Jordan changed
       // subject or body before approving, record the diff for weekly analysis.
       const { data: current } = await supabase
         .from('email_drafts')
-        .select('subject, body, original_subject, original_body')
+        .select('subject, body, original_subject, original_body, org_id, contact_id')
         .eq('id', id)
         .single()
 
@@ -158,6 +177,31 @@ export function useApproveDraft() {
         )
       }
 
+      // Pick the next sender inbox via the SQL helper (weighted round-robin
+      // honouring per-inbox daily caps in Australia/Melbourne TZ). Returns
+      // null when every enabled inbox has hit its cap for the day — in that
+      // case the draft still flips to 'approved' (so Jordan can see it),
+      // but with no sender attached, and we log a daily_cap_reached activity
+      // so the cap-hit is visible in the timeline.
+      let senderInboxId: string | null = null
+      let dailyCapReached = false
+      if (current?.org_id) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: senderRow, error: senderErr } = await (supabase.rpc as any)(
+          'select_next_sender',
+          { p_org_id: current.org_id },
+        )
+        if (senderErr) {
+          console.warn('select_next_sender failed', senderErr)
+        }
+        const picked = senderRow as { id: string } | null
+        if (picked?.id) {
+          senderInboxId = picked.id
+        } else {
+          dailyCapReached = true
+        }
+      }
+
       const now = new Date().toISOString()
       const subjectChanged = !!current && current.subject !== current.original_subject
       const bodyChanged = !!current && current.body !== current.original_body
@@ -166,6 +210,7 @@ export function useApproveDraft() {
         status: 'approved',
         approved_at: now,
         edit_logged_at: now,
+        sender_inbox_id: senderInboxId,
       }
       if (subjectChanged) updates.edited_subject = current?.subject ?? null
       if (bodyChanged) updates.edited_body = current?.body ?? null
@@ -176,9 +221,58 @@ export function useApproveDraft() {
         .update(updates as any)
         .eq('id', id)
       if (error) throw error
+
+      // Re-read the row — the BEFORE-UPDATE suppression-guard trigger may
+      // have rewritten our 'approved' to 'suppressed' on the way in, so we
+      // want the authoritative state to drive the toast.
+      const { data: postUpdate } = await supabase
+        .from('email_drafts')
+        .select('status, suppression_reason, sender_inbox_id, contact_id, deal_id, org_id')
+        .eq('id', id)
+        .single()
+
+      const finalStatus = (postUpdate?.status ?? 'approved') as DraftStatus
+      const finalReason = postUpdate?.suppression_reason ?? null
+
+      // Audit-trail activity rows so the draft suppression / cap-hit is
+      // visible in the contact's timeline. Best-effort — failures here
+      // shouldn't break the approve flow.
+      if (postUpdate?.org_id && (finalStatus === 'suppressed' || dailyCapReached)) {
+        const activityType =
+          finalStatus === 'suppressed' ? 'draft_suppressed' : 'daily_cap_reached'
+        await supabase.from('activities').insert({
+          org_id: postUpdate.org_id,
+          contact_id: postUpdate.contact_id ?? null,
+          deal_id: postUpdate.deal_id ?? null,
+          activity_type: activityType,
+          subject: activityType === 'draft_suppressed'
+            ? `Draft auto-suppressed (${finalReason ?? 'unknown'})`
+            : 'Daily cap reached — no sender available',
+          metadata: { draft_id: id, reason: finalReason },
+        })
+      }
+
+      return {
+        status: finalStatus,
+        suppression_reason: finalReason,
+        sender_inbox_id: postUpdate?.sender_inbox_id ?? null,
+        daily_cap_reached: dailyCapReached,
+      }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['drafts'] })
+      if (result.status === 'suppressed') {
+        toast.error(
+          `Blocked — recipient is on the suppression list (${result.suppression_reason ?? 'unknown'}). No email will send.`,
+        )
+        return
+      }
+      if (result.daily_cap_reached) {
+        toast.warning(
+          'Approved, but every sender inbox has hit its daily cap. This draft will sit until tomorrow.',
+        )
+        return
+      }
       toast.success('Approved — will send when email integration is connected')
     },
     onError: (err: Error) => toast.error(`Failed to approve: ${err.message}`),
