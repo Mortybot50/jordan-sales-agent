@@ -34,8 +34,48 @@ const SUPABASE_URL =
   Deno.env.get('VITE_SUPABASE_URL') ?? Deno.env.get('SUPABASE_URL')!
 // @ts-expect-error Deno globals
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+// @ts-expect-error Deno globals
+const UNSUBSCRIBE_SIGNING_KEY = Deno.env.get('UNSUBSCRIBE_SIGNING_KEY')
+const PUBLIC_APP_URL =
+  // @ts-expect-error Deno globals
+  Deno.env.get('PUBLIC_APP_URL') ?? 'https://jordan-sales-agent.vercel.app'
 
 const MODEL = 'claude-sonnet-4-6'
+
+// HMAC-SHA256(email, UNSUBSCRIBE_SIGNING_KEY), hex-encoded. Matches
+// signUnsubscribeToken() in api/unsubscribe.ts so the footer link verifies
+// at the public endpoint. Spam Act 2003 mandates a working unsubscribe on
+// every commercial email — appended after Claude's body so the legal copy
+// is never paraphrased by the model.
+async function signEmailHmac(email: string, key: string): Promise<string> {
+  const enc = new TextEncoder()
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(key),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  )
+  const sig = await crypto.subtle.sign(
+    'HMAC',
+    cryptoKey,
+    enc.encode(email.trim().toLowerCase()),
+  )
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+async function buildUnsubFooter(email: string): Promise<string | null> {
+  if (!UNSUBSCRIBE_SIGNING_KEY) {
+    console.warn('UNSUBSCRIBE_SIGNING_KEY not set — skipping unsub footer')
+    return null
+  }
+  const normalised = email.trim().toLowerCase()
+  const token = await signEmailHmac(normalised, UNSUBSCRIBE_SIGNING_KEY)
+  const link = `${PUBLIC_APP_URL}/unsubscribe?email=${encodeURIComponent(normalised)}&token=${token}`
+  return `\n\n---\nThis email was sent by Jordan Marziale (Premium Water AU). To unsubscribe, click here: ${link}`
+}
 const BATCH_SIZE = 10
 const MAX_FAILURES = 3
 
@@ -393,6 +433,10 @@ async function processEnrolment(supabase: any, enr: EnrolmentRow): Promise<Proce
     )
     subject = result.subject
     body = result.body
+    if (contact.email) {
+      const footer = await buildUnsubFooter(String(contact.email))
+      if (footer) body = body + footer
+    }
   } catch (err) {
     const message = (err as Error).message ?? 'Unknown error'
     const newFailureCount = (enr.failure_count ?? 0) + 1
