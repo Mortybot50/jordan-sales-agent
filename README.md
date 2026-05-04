@@ -101,6 +101,17 @@ cp .env.local.example .env.local
 | `REOPENING_RADAR_LIVE` | `false` | Flip to `true` to enable VCGLR + Google Places live scraping in `reopening-radar-poll`. Leave off until GATE-5 (VCGLR validation) clears. |
 | `GOOGLE_PLACES_API_KEY` | unset | Only consumed when `REOPENING_RADAR_LIVE=true`. |
 
+#### Webhook signing keys (Vercel project env)
+
+| Var | Required in | Purpose |
+|-----|-------------|---------|
+| `CALENDLY_WEBHOOK_SIGNING_KEY` | prod | HMAC-SHA256 secret from Calendly developer portal. Validates inbound `/api/webhooks/calendly` events. Hard-fails the webhook in production when unset. |
+| `INSTANTLY_WEBHOOK_SIGNING_KEY` | prod | HMAC-SHA256 secret shared with Instantly.ai for `/api/webhooks/instantly` (replies, bounces, unsubscribes). Hard-fails the webhook in production when unset. Generate with `openssl rand -hex 32`. |
+| `UNSUBSCRIBE_SIGNING_KEY` | prod | HMAC-SHA256 secret used to sign the `?token=` parameter on `/unsubscribe` links appended to outbound emails. Generate with `openssl rand -hex 32`. |
+| `SUPABASE_SERVICE_ROLE_KEY` | prod | Service-role key for server-side Supabase writes from webhooks. **Never** expose to the client. |
+
+To rotate any of the above: generate a fresh secret, update Vercel env, redeploy, then update the corresponding integration (Calendly/Instantly/email-template). Coordinate the cutover so in-flight webhooks aren't dropped.
+
 
 ### 3. Apply database migrations
 
