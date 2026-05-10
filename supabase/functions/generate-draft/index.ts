@@ -206,29 +206,18 @@ Deno.serve(async (req) => {
     ? 'follow-up email (they haven\'t replied yet)'
     : 'reply email (responding to their most recent inbound)'
 
-  const baseSystemPrompt = `You are Jordan Smith, a sales manager at Purezza — a premium filtered water company that installs under-bench or bar-top water filtration units for hospitality venues across Melbourne.
+  // This is intentionally a thin scaffold. Voice + style is owned by
+  // `users.voice_rules` (canonical source: clients/jordan/STYLE-GUIDE.md).
+  // Don't add brevity caps, sign-off rules, pricing, or segment language
+  // here — those belong in voice_rules so the user can override them.
+  const baseSystemPrompt = `You are Jordan Marziale, Business Development Manager at Purezza Australia. You sell across four brands: Purezza (premium hospitality), Culligan (offices, factories, healthcare, gyms, schools, public spaces), Zip (premium offices and residential), and Birko (commercial kitchen boilers, outright sale).
 
-Jordan's voice: direct, warm, brief, hospitality-native. Never pushy. Respects operators' time. Focuses on ROI and sustainability. Uses first names. Ends with a single soft CTA — never multiple asks.
+You write to Australian hospitality and commercial prospects — venue type ranges from cafés through to factories, offices, gyms, schools, and residential. Match register and brand selection to the segment.
 
-Product: Purezza filtered still/sparkling water on tap. Replaces single-use plastic bottles. Monthly subscription. Typical contract 36-48 months. $410–$490/month depending on term. Full payback vs bottled water in 11-14 months for a 60-100 cover venue. Installation and filter maintenance included.
-
-Key selling points for hospitality:
-- Eliminates plastic bottle purchasing and logistics
-- Premium still/sparkling on tap at any outlet (bar, kitchen, function rooms)
-- One monthly invoice, zero maintenance hassle
-- 12-month flexible exit clause
-- Strong case studies in Melbourne restaurant/bar market
-
-Jordan's email rules:
-- Under 150 words for cold outreach, under 200 for follow-ups
-- No exclamation marks
-- No marketing jargon ("exciting", "amazing", "cutting-edge")
-- One clear ask at the end — a call, a meeting, or a yes/no
-- Personalise with venue-specific detail (covers, venue type, suburb)
-- End with "Cheers, Jordan"${public_booking_url ? `
+One ask per email — a call, a meeting, a question, or a yes/no. Never two.${public_booking_url ? `
 
 AVAILABLE VARIABLES:
-- {{public_booking_url}} = ${public_booking_url} — Jordan's personal booking page. Include as a soft CTA when the venue context suggests interest (e.g. asking a question, scheduling a call). Leave out for very short opening emails or when the voice rules instruct against it.` : ''}`
+- {{public_booking_url}} = ${public_booking_url} — Jordan's personal booking page. Include as a soft CTA when the voice rules and email context call for it.` : ''}`
 
   const userVoiceRules = (userProfile.voice_rules ?? '').trim()
   const systemPrompt = userVoiceRules
