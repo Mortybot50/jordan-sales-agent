@@ -16,6 +16,7 @@ import { SequenceEditPage } from '@/pages/SequenceEditPage'
 import { ReopeningRadarPage } from '@/pages/ReopeningRadarPage'
 import { CataloguePage } from '@/pages/CataloguePage'
 import { FieldPage } from '@/pages/FieldPage'
+import { RoutePage } from '@/pages/RoutePage'
 import { BriefingPage } from '@/pages/BriefingPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { SuppressionListPage } from '@/pages/SuppressionListPage'
@@ -70,6 +71,7 @@ export default function App() {
           <Route path="reopening-radar" element={<ReopeningRadarPage />} />
           <Route path="catalogue" element={<CataloguePage />} />
           <Route path="field" element={<FieldPage />} />
+          <Route path="route" element={<RoutePage />} />
           <Route path="contacts" element={<ContactsPage />} />
           <Route path="contacts/new" element={<ContactNewPage />} />
           <Route path="contacts/import" element={<ContactImportPage />} />
