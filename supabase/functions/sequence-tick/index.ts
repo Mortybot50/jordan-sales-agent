@@ -5,11 +5,43 @@
  *   1. If contact has any inbound activity since last_step_fired_at → mark
  *      reply_received and stop. (Reply detection — sequences end on engagement.)
  *   2. If contact is Do-Not-Contact or on suppression list → mark cancelled.
- *   3. Otherwise generate the next step's draft via Anthropic, save it to
- *      email_drafts with sequence_enrollment_id + sequence_step_number set,
- *      bump current_step, and schedule next_step_due_at from the upcoming
- *      step's delay_days. If no further steps exist → mark completed.
+ *   3. Otherwise produce the next step's draft and save it to email_drafts
+ *      with sequence_enrollment_id + sequence_step_number set, bump
+ *      current_step, and schedule next_step_due_at from the upcoming step's
+ *      delay_days. If no further steps exist → mark completed.
+ *
+ *      Two production paths:
+ *        a. Template path (canonical hospitality 3-touch and any future
+ *           verbatim sequences) — used when the step has `template_variants`
+ *           set. The worker picks a variant by rule, renders
+ *           `{{first_name}}` / `{{venue_name}}` / `{{suburb}}`, and skips
+ *           the LLM entirely so Jordan's verbatim copy is preserved.
+ *        b. Prompt path (legacy + future LLM-driven sequences) — used when
+ *           `template_variants` is null. Calls Anthropic with the rep's
+ *           voice rules + per-step `prompt_instructions`.
+ *
  *   4. On generation error → bump failure_count; at 3 → mark failed.
+ *
+ * --------------------------------------------------------------------------
+ * Variant A/B selection logic (template path) — VERBATIM, locked 2026-05-10:
+ *
+ *   If `contact.venue.suburb` matches a row in `field_visits.suburb` for
+ *   this user in the last 30 days → use Variant A with `{{suburb}}` filled.
+ *   Else if `contact.venue.venue_type` is hospitality (restaurant/cafe/
+ *   bar/hotel/function/fine_dining) AND we have a non-null suburb → use
+ *   Variant A with the contact's suburb.
+ *   Else → use Variant B.
+ *
+ * The actual rule list lives on each step's `template_variants.variants[].when`
+ * JSON so it's editable without redeploying — but the canonical hospitality
+ * 3-touch ships pre-loaded with exactly the two rules above.
+ *
+ * `field_visits.suburb` is derived (the table has no suburb column directly):
+ * we join through `venue_observations.suburb` for visits whose
+ * `venue_observation_id` is set, and through `contacts → venues.suburb` for
+ * visits whose `contact_id` is set. Distinct list of suburbs is built per
+ * tick per enrolment.
+ * --------------------------------------------------------------------------
  *
  * Process up to BATCH_SIZE enrolments per tick — leftover work is picked up
  * on the next hour to keep the function within Vercel/Supabase serverless
@@ -26,6 +58,13 @@
 
 // @ts-expect-error Deno edge runtime import — not typed in Node tsc
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import {
+  type TemplateVariantsConfig,
+  type SelectionContext,
+  selectVariant,
+  renderTemplate,
+  firstNameFromFullName,
+} from './templates.ts'
 
 // @ts-expect-error Deno globals
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
@@ -96,6 +135,7 @@ interface SequenceStepRow {
   step_number: number
   delay_days: number
   prompt_instructions: string | null
+  template_variants: TemplateVariantsConfig | null
 }
 
 interface ContactRow {
@@ -244,6 +284,50 @@ async function callAnthropic(
   }
 }
 
+// Returns the distinct suburbs the user visited in the last `lookbackDays`
+// days. Used for Variant A selection on the canonical hospitality 3-touch
+// — the walk-by hook is only legitimate when Jordan was actually nearby.
+//
+// `field_visits` doesn't carry a suburb column directly, so we fan out via
+// (a) `venue_observations.suburb` for visits with a venue_observation_id,
+// and (b) `contacts → venues.suburb` for visits with a contact_id. Either
+// path is enough — if a visit has both, both contribute the same suburb
+// from independent sources, which is fine.
+async function fetchRecentVisitSuburbs(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  orgId: string,
+  userId: string,
+  lookbackDays: number,
+): Promise<string[]> {
+  const since = new Date(Date.now() - lookbackDays * 86_400_000).toISOString()
+  const { data, error } = await supabase
+    .from('field_visits')
+    .select(
+      `visited_at,
+       venue_observation:venue_observations(suburb),
+       contact:contacts(venue:venues(suburb))`,
+    )
+    .eq('org_id', orgId)
+    .eq('user_id', userId)
+    .gte('visited_at', since)
+  if (error) {
+    console.warn(`fetchRecentVisitSuburbs: ${error.message}`)
+    return []
+  }
+  const suburbs = new Set<string>()
+  for (const row of (data ?? []) as Array<{
+    venue_observation: { suburb: string | null } | null
+    contact: { venue: { suburb: string | null } | null } | null
+  }>) {
+    const s1 = row.venue_observation?.suburb
+    if (s1 && s1.trim()) suburbs.add(s1.trim())
+    const s2 = row.contact?.venue?.suburb
+    if (s2 && s2.trim()) suburbs.add(s2.trim())
+  }
+  return Array.from(suburbs)
+}
+
 // Returns true if the contact is on the org's suppression list (email or
 // domain match). Mirrors the logic in generate-draft so worker drafts are
 // blocked by the same rules a manual generation would be.
@@ -302,7 +386,7 @@ async function processEnrolment(supabase: any, enr: EnrolmentRow): Promise<Proce
   // Load step list for this sequence.
   const { data: stepsData, error: stepsErr } = await supabase
     .from('sequence_steps')
-    .select('id, sequence_id, step_number, delay_days, prompt_instructions')
+    .select('id, sequence_id, step_number, delay_days, prompt_instructions, template_variants')
     .eq('sequence_id', enr.sequence_id)
     .order('step_number', { ascending: true })
 
@@ -384,17 +468,9 @@ async function processEnrolment(supabase: any, enr: EnrolmentRow): Promise<Proce
     return { enrolment_id: enr.id, outcome: 'cancelled_suppressed' }
   }
 
-  // Pull recent activities for context (same shape generate-draft uses).
-  const { data: activitiesData } = await supabase
-    .from('activities')
-    .select('activity_type, subject, body, occurred_at')
-    .eq('contact_id', enr.contact_id)
-    .order('occurred_at', { ascending: false })
-    .limit(3)
-  const activities = (activitiesData ?? []) as ActivityRow[]
-
   // Pick a user for voice + signature — prefer the original enroller, fall
-  // back to any user in the org.
+  // back to any user in the org. Needed by the LLM path; the template path
+  // only needs the user_id for the field_visits suburb lookup.
   const { data: enrolDetails } = await supabase
     .from('sequence_enrollments')
     .select('enrolled_by_user_id')
@@ -423,44 +499,86 @@ async function processEnrolment(supabase: any, enr: EnrolmentRow): Promise<Proce
     throw new Error(`No user found for org ${enr.org_id}`)
   }
 
-  // Call Anthropic.
+  // ── Production path A — verbatim template (canonical sequences) ──────
+  // If the step has `template_variants` set, skip the LLM and render the
+  // selected variant's templates directly. Variant selection rules are
+  // documented in the file header (search "Variant A/B selection logic").
   let subject = ''
   let body = ''
-  try {
-    const result = await callAnthropic(
-      buildSystemPrompt(user.voice_rules ?? null),
-      buildUserPrompt(contact, step, activities),
+  let chosenVariantId: string | null = null
+
+  if (step.template_variants) {
+    const recentSuburbs = await fetchRecentVisitSuburbs(
+      supabase,
+      enr.org_id,
+      enrolDetails?.enrolled_by_user_id ?? user.id,
+      30,
     )
-    subject = result.subject
-    body = result.body
+    const selectionCtx: SelectionContext = {
+      contactSuburb: contact.venue?.suburb ?? null,
+      venueType: contact.venue?.venue_type ?? null,
+      recentVisitSuburbs: recentSuburbs,
+    }
+    const variant = selectVariant(step.template_variants, selectionCtx)
+    chosenVariantId = variant.id
+    const renderCtx = {
+      first_name: firstNameFromFullName(contact.full_name),
+      venue_name: contact.venue?.name ?? '',
+      suburb: contact.venue?.suburb ?? '',
+    }
+    subject = renderTemplate(variant.subject_template, renderCtx)
+    body = renderTemplate(variant.body_template, renderCtx)
     if (contact.email) {
       const footer = await buildUnsubFooter(String(contact.email))
       if (footer) body = body + footer
     }
-  } catch (err) {
-    const message = (err as Error).message ?? 'Unknown error'
-    const newFailureCount = (enr.failure_count ?? 0) + 1
-    if (newFailureCount >= MAX_FAILURES) {
-      await supabase
-        .from('sequence_enrollments')
-        .update({
-          status: 'failed',
-          failure_count: newFailureCount,
-          last_status_message: `Failed ${newFailureCount}x: ${message.slice(0, 200)}`,
-        })
-        .eq('id', enr.id)
-    } else {
-      // Don't advance current_step — leave next_step_due_at where it is so
-      // the next tick retries this same step.
-      await supabase
-        .from('sequence_enrollments')
-        .update({
-          failure_count: newFailureCount,
-          last_status_message: `Retry ${newFailureCount}/${MAX_FAILURES}: ${message.slice(0, 200)}`,
-        })
-        .eq('id', enr.id)
+  } else {
+    // ── Production path B — LLM-generated draft (legacy / future) ──────
+    // Pull recent activities for context (same shape generate-draft uses).
+    const { data: activitiesData } = await supabase
+      .from('activities')
+      .select('activity_type, subject, body, occurred_at')
+      .eq('contact_id', enr.contact_id)
+      .order('occurred_at', { ascending: false })
+      .limit(3)
+    const activities = (activitiesData ?? []) as ActivityRow[]
+
+    try {
+      const result = await callAnthropic(
+        buildSystemPrompt(user.voice_rules ?? null),
+        buildUserPrompt(contact, step, activities),
+      )
+      subject = result.subject
+      body = result.body
+      if (contact.email) {
+        const footer = await buildUnsubFooter(String(contact.email))
+        if (footer) body = body + footer
+      }
+    } catch (err) {
+      const message = (err as Error).message ?? 'Unknown error'
+      const newFailureCount = (enr.failure_count ?? 0) + 1
+      if (newFailureCount >= MAX_FAILURES) {
+        await supabase
+          .from('sequence_enrollments')
+          .update({
+            status: 'failed',
+            failure_count: newFailureCount,
+            last_status_message: `Failed ${newFailureCount}x: ${message.slice(0, 200)}`,
+          })
+          .eq('id', enr.id)
+      } else {
+        // Don't advance current_step — leave next_step_due_at where it is so
+        // the next tick retries this same step.
+        await supabase
+          .from('sequence_enrollments')
+          .update({
+            failure_count: newFailureCount,
+            last_status_message: `Retry ${newFailureCount}/${MAX_FAILURES}: ${message.slice(0, 200)}`,
+          })
+          .eq('id', enr.id)
+      }
+      return { enrolment_id: enr.id, outcome: 'failed', error: message }
     }
-    return { enrolment_id: enr.id, outcome: 'failed', error: message }
   }
 
   // Insert draft.
@@ -486,13 +604,20 @@ async function processEnrolment(supabase: any, enr: EnrolmentRow): Promise<Proce
         sequence_id: enr.sequence_id,
         sequence_enrollment_id: enr.id,
         sequence_step_number: step.step_number,
+        production_path: step.template_variants ? 'template' : 'llm',
+        variant_id: chosenVariantId,
         contact: {
           name: contact.full_name,
           venue: contact.venue?.name,
           suburb: contact.venue?.suburb,
         },
       },
-      model: MODEL,
+      // For template-rendered drafts, record the variant id as the "model"
+      // so analytics + the review UI can tell at a glance which variant
+      // produced the copy without joining sequence_steps.
+      model: step.template_variants
+        ? `template:${chosenVariantId ?? 'unknown'}`
+        : MODEL,
       status: 'pending',
       generated_at: new Date().toISOString(),
       created_by: user.id,

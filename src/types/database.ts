@@ -1314,6 +1314,7 @@ export type Database = {
           stop_on_meeting: boolean | null
           stop_on_reply: boolean | null
           subject_template: string | null
+          template_variants: Json | null
         }
         Insert: {
           body_template?: string | null
@@ -1328,6 +1329,7 @@ export type Database = {
           stop_on_meeting?: boolean | null
           stop_on_reply?: boolean | null
           subject_template?: string | null
+          template_variants?: Json | null
         }
         Update: {
           body_template?: string | null
@@ -1342,6 +1344,7 @@ export type Database = {
           stop_on_meeting?: boolean | null
           stop_on_reply?: boolean | null
           subject_template?: string | null
+          template_variants?: Json | null
         }
         Relationships: [
           {
@@ -1367,6 +1370,7 @@ export type Database = {
           description: string | null
           id: string
           is_active: boolean | null
+          is_canonical: boolean
           name: string
           org_id: string
           updated_at: string | null
@@ -1377,6 +1381,7 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean | null
+          is_canonical?: boolean
           name: string
           org_id: string
           updated_at?: string | null
@@ -1387,6 +1392,7 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean | null
+          is_canonical?: boolean
           name?: string
           org_id?: string
           updated_at?: string | null

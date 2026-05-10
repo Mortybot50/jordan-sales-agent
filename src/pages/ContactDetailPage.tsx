@@ -61,7 +61,11 @@ import {
   useCreateActivity,
 } from '@/lib/queries/activities'
 import { useGenerateDraft } from '@/lib/queries/drafts'
-import { useSequences, useEnrolContacts } from '@/lib/queries/sequences'
+import {
+  useSequences,
+  useEnrolContacts,
+  useCanonicalSequence,
+} from '@/lib/queries/sequences'
 import { useAuth } from '@/hooks/useAuth'
 import {
   activityFormSchema,
@@ -108,6 +112,40 @@ export function ContactDetailPage() {
 
   const sequencesQ = useSequences()
   const enrolContacts = useEnrolContacts()
+  const canonicalSequenceQ = useCanonicalSequence(user?.org_id)
+
+  // Quick-enrol into the canonical Hospitality 3-Touch (seeded per-org).
+  // Same plumbing as the dialog enrol — Day-0 draft is produced by the
+  // sequence-tick worker (template path) and lands in the Drafts queue
+  // with status='pending' for Jordan's manual approval. No auto-send.
+  async function handleQuickEnrolCanonical() {
+    if (!user || !contact || !canonicalSequenceQ.data) return
+    try {
+      const res = await enrolContacts.mutateAsync({
+        org_id: user.org_id,
+        enrolled_by_user_id: user.id,
+        sequence_id: canonicalSequenceQ.data.id,
+        contact_ids: [contact.id],
+      })
+      if (res.enrolled === 1) {
+        toast.success(
+          'Enrolled in Hospitality 3-Touch — Day-0 draft will appear in Drafts shortly',
+        )
+      } else if (res.skipped_already_enrolled > 0) {
+        toast.error('Already actively enrolled in this sequence.')
+      } else if (res.skipped_dnc > 0) {
+        toast.error('Contact is marked Do Not Contact.')
+      } else if (res.skipped_suppressed > 0) {
+        toast.error('Contact is on the suppression list.')
+      } else if (res.skipped_no_email > 0) {
+        toast.error('Contact has no email address.')
+      } else {
+        toast.error('Could not enrol contact.')
+      }
+    } catch {
+      /* toast via mutation */
+    }
+  }
 
   async function handleEnrol() {
     if (!user || !contact || !selectedSequenceId) return
@@ -373,6 +411,23 @@ export function ContactDetailPage() {
                 </>
               )}
             </Button>
+            {canonicalSequenceQ.data && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8"
+                onClick={handleQuickEnrolCanonical}
+                disabled={enrolContacts.isPending}
+                title="Enrol in Jordan's canonical 3-touch hospitality cadence"
+              >
+                {enrolContacts.isPending ? (
+                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                ) : (
+                  <Workflow className="w-4 h-4 mr-1.5" />
+                )}
+                Hospitality 3-Touch
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"
