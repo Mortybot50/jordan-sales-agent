@@ -312,5 +312,15 @@ values
    'jordan@jordanmarziale.com.au',
    'Jordan Marziale',
    30, true, 1,
-   'Warming on Instantly from 2026-05-03. Cap stays at 30 until day 14.')
+   'Warming on Instantly from 2026-05-03. Cap stays at 30 until day 14.'),
+  ('5557189e-5c2d-4990-afad-6aa1861826cd',
+   'jordan@premiumwaterau.com',
+   'Jordan Marziale (Premium Water AU - .com)',
+   30, true, 1,
+   'Warming on Instantly from 2026-05-04. Cap stays at 30 until day 14.'),
+  ('5557189e-5c2d-4990-afad-6aa1861826cd',
+   'jordan@jordanmarziale.com',
+   'Jordan Marziale (.com)',
+   30, true, 1,
+   'Warming on Instantly from 2026-05-04. Cap stays at 30 until day 14.')
 on conflict do nothing;
