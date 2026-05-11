@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { Compass, Loader2, Route, X } from 'lucide-react'
@@ -20,17 +21,7 @@ import { useFieldPins, useCreateFieldVisit, optimizeRoute, type FieldPin } from 
 import { useAuth } from '@/hooks/useAuth'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-
-type Outcome = 'interested' | 'not_now' | 'closed' | 'not_in' | 'dm_absent' | 'other'
-
-const OUTCOME_OPTIONS: Array<{ value: Outcome; label: string }> = [
-  { value: 'interested', label: 'Interested' },
-  { value: 'not_now', label: 'Not now' },
-  { value: 'closed', label: 'Closed/quiet' },
-  { value: 'not_in', label: 'Not in' },
-  { value: 'dm_absent', label: 'DM absent' },
-  { value: 'other', label: 'Other' },
-]
+import { FIELD_OUTCOME_OPTIONS, type FieldOutcome } from '@/lib/fieldOutcomes'
 
 // Phase F palette — using existing tokens only (no new colours).
 const PIN_COLOURS: Record<FieldPin['kind'], string> = {
@@ -68,7 +59,7 @@ export function FieldPage() {
   const [orderedPins, setOrderedPins] = useState<FieldPin[] | null>(null)
   const [routeMeta, setRouteMeta] = useState<{ km: number; mins: number } | null>(null)
   const [selected, setSelected] = useState<FieldPin | null>(null)
-  const [outcome, setOutcome] = useState<Outcome>('interested')
+  const [outcome, setOutcome] = useState<FieldOutcome>('interested')
   const [notes, setNotes] = useState('')
 
   const suburbs = useMemo(() => {
@@ -254,12 +245,19 @@ export function FieldPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="px-6 pt-6 pb-3">
+      <div className="px-6 pt-6 pb-3 flex items-start justify-between gap-3">
         <PageHeader
           eyebrow="Field"
           title="Field Mode"
           description="Map of warm contacts, active deals, and reopening events — plan a sensible drive route and log drop-ins as you go."
         />
+        <Button asChild variant="outline" size="sm" className="shrink-0 gap-2 mt-1">
+          <Link to="/route">
+            <Route className="size-4" />
+            <span className="hidden sm:inline">View week</span>
+            <span className="sm:hidden">Week</span>
+          </Link>
+        </Button>
       </div>
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_400px] min-h-0">
@@ -395,12 +393,12 @@ export function FieldPage() {
 
               <div className="space-y-1.5">
                 <Label htmlFor="outcome">Outcome</Label>
-                <Select value={outcome} onValueChange={(v) => setOutcome(v as Outcome)}>
+                <Select value={outcome} onValueChange={(v) => setOutcome(v as FieldOutcome)}>
                   <SelectTrigger id="outcome">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {OUTCOME_OPTIONS.map((o) => (
+                    {FIELD_OUTCOME_OPTIONS.map((o) => (
                       <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                     ))}
                   </SelectContent>
