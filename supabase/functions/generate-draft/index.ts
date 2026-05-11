@@ -172,6 +172,29 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Guard: cold_outreach is only valid for contacts with ZERO prior activities.
+  // If we've already emailed, called, met, or booked with them, this is not a
+  // cold contact — caller should use 'follow_up' or 'reply' instead. Without
+  // this guard the model pulls prior-activity details (e.g. "Thanks for the call
+  // we locked in last week") into what's supposed to be a first-touch email.
+  if (draft_type === 'cold_outreach') {
+    const { count: priorActivityCount } = await supabase
+      .from('activities')
+      .select('id', { count: 'exact', head: true })
+      .eq('contact_id', contact_id)
+
+    if ((priorActivityCount ?? 0) > 0) {
+      return new Response(
+        JSON.stringify({
+          error: `Cannot generate cold_outreach — contact has ${priorActivityCount} prior activity record(s). Use draft_type='follow_up' or 'reply' instead.`,
+          not_cold: true,
+          prior_activity_count: priorActivityCount,
+        }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+  }
+
   // Load last 3 activities for this contact
   const { data: activities } = await supabase
     .from('activities')
