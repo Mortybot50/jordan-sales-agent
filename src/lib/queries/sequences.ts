@@ -18,6 +18,7 @@ export interface Sequence {
   name: string
   description: string | null
   is_active: boolean | null
+  is_canonical?: boolean | null
   created_at: string | null
   updated_at: string | null
 }
@@ -99,6 +100,30 @@ export function useSequences() {
         active_enrolments: activeCounts.get(s.id) ?? 0,
       }))
     },
+  })
+}
+
+/**
+ * The org's canonical Hospitality 3-Touch sequence — seeded by the
+ * `seed_jordan_canonical_sequence` migration. Used to back the quick-enrol
+ * button on ContactDetailPage and the bulk toolbar. There is at most one
+ * canonical sequence per org (enforced by a partial unique index).
+ */
+export function useCanonicalSequence(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ['sequence-canonical', orgId],
+    queryFn: async (): Promise<Sequence | null> => {
+      if (!orgId) return null
+      const { data, error } = await supabase
+        .from('sequences')
+        .select('*')
+        .eq('org_id', orgId)
+        .eq('is_canonical', true)
+        .maybeSingle()
+      if (error) throw error
+      return data ?? null
+    },
+    enabled: !!orgId,
   })
 }
 

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Tag as TagIcon, Trash2, Ban, ShieldOff, X, Workflow } from 'lucide-react'
+import { Tag as TagIcon, Trash2, Ban, ShieldOff, X, Workflow, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -21,7 +21,11 @@ import {
   useDistinctContactTags,
 } from '@/lib/queries/contacts'
 import { useBulkAddSuppression } from '@/lib/queries/suppression'
-import { useEnrolContacts, useSequences } from '@/lib/queries/sequences'
+import {
+  useEnrolContacts,
+  useSequences,
+  useCanonicalSequence,
+} from '@/lib/queries/sequences'
 import {
   Select,
   SelectContent,
@@ -61,6 +65,7 @@ export function ContactBulkActionsToolbar({ selected, onClear }: Props) {
   const bulkEnrol = useEnrolContacts()
   const { data: distinctTags } = useDistinctContactTags()
   const { data: sequencesData } = useSequences()
+  const { data: canonicalSequence } = useCanonicalSequence(user?.org_id)
   const enrolableSequences = (sequencesData ?? []).filter(
     (s) => s.is_active && s.step_count > 0,
   )
@@ -119,6 +124,35 @@ export function ContactBulkActionsToolbar({ selected, onClear }: Props) {
       toast.error('No contacts enrolled.')
     } else {
       const parts: string[] = [`${res.enrolled} enrolled`]
+      if (res.skipped_already_enrolled)
+        parts.push(`${res.skipped_already_enrolled} already enrolled`)
+      if (res.skipped_dnc) parts.push(`${res.skipped_dnc} DNC`)
+      if (res.skipped_suppressed)
+        parts.push(`${res.skipped_suppressed} suppressed`)
+      if (res.skipped_no_email)
+        parts.push(`${res.skipped_no_email} without email`)
+      toast.success(parts.join(' · '))
+    }
+    reset()
+  }
+
+  async function doQuickEnrolCanonical() {
+    if (!user || !canonicalSequence) return
+    const res = await bulkEnrol.mutateAsync({
+      org_id: user.org_id,
+      enrolled_by_user_id: user.id,
+      sequence_id: canonicalSequence.id,
+      contact_ids: ids,
+    })
+    const skips =
+      res.skipped_already_enrolled +
+      res.skipped_dnc +
+      res.skipped_suppressed +
+      res.skipped_no_email
+    if (res.enrolled === 0 && skips === 0) {
+      toast.error('No contacts enrolled.')
+    } else {
+      const parts: string[] = [`${res.enrolled} enrolled in Hospitality 3-Touch`]
       if (res.skipped_already_enrolled)
         parts.push(`${res.skipped_already_enrolled} already enrolled`)
       if (res.skipped_dnc) parts.push(`${res.skipped_dnc} DNC`)
@@ -234,6 +268,21 @@ export function ContactBulkActionsToolbar({ selected, onClear }: Props) {
             )}
           </PopoverContent>
         </Popover>
+
+        {/* Quick-enrol — canonical hospitality 3-touch */}
+        {canonicalSequence && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-[var(--jordan-accent)] hover:text-ink"
+            onClick={doQuickEnrolCanonical}
+            disabled={bulkEnrol.isPending}
+            title="One-click enrol into the canonical 3-touch hospitality cadence"
+          >
+            <Sparkles className="mr-1 h-3.5 w-3.5" />
+            Hospitality 3-Touch
+          </Button>
+        )}
 
         {/* Enrol in sequence */}
         <Button
