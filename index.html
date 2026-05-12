@@ -40,6 +40,12 @@
         if(r&&r.stack)L.push('  stack: '+r.stack.substring(0,800));
         show();
       });
+      // 5s is a deliberate trade-off: too short → false positives on slow
+      // networks (Codex review v2 12/05/2026 [P2]); too long → real blackscreen
+      // cases go undetected longer. TUNE-LATER candidates: move timer into
+      // src/main.tsx so it doesn't include bundle download time, OR add a
+      // "React mounted" signal that clears the overlay when App renders.
+      // Strip overlay entirely once project has had a successful prod session.
       setTimeout(function(){
         var root=document.getElementById('root');
         if(root&&root.children.length===0&&L.length===0){
