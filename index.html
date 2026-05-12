@@ -24,6 +24,12 @@
       var el=document.getElementById('ppb-error'), t=document.getElementById('ppb-error-text'), L=[];
       function show(){t.textContent=L.join('\n\n');el.style.display='block';}
       window.addEventListener('error',function(e){
+        // Only handle real script errors. Resource load failures (img, iframe,
+        // stylesheet, lazy chunk) also fire 'error' in capture mode but with
+        // e.target as the failed element, not as an ErrorEvent. Without this
+        // guard, a single failed asset triggered the full-screen red overlay
+        // on an otherwise healthy session. (Codex review 12/05/2026, FE-P0-01.)
+        if(!(e instanceof ErrorEvent)) return;
         L.push('window.error: '+(e.message||'unknown'));
         if(e.error&&e.error.stack)L.push('  stack: '+e.error.stack.substring(0,800));
         show();
