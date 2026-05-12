@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "test": "node --test --experimental-strip-types --no-warnings tests/*.test.mts",
     "preview": "vite preview",
+    "smoke": "bash scripts/smoke-api.sh",
     "classify-backlog": "deno run --allow-env --allow-net scripts/classify-backlog.ts"
   },
   "dependencies": {
