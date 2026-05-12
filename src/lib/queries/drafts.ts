@@ -387,7 +387,21 @@ export function useGenerateDraft() {
         body: { contact_id, draft_type, context_hint },
       })
 
-      if (error) throw error
+      if (error) {
+        // supabase-js wraps non-2xx as a generic FunctionsHttpError. Try to
+        // surface the function's own JSON `error` field so admin-actionable
+        // failures (e.g. BE-P0-03 UNSUB_KEY_MISSING 503) reach the toast
+        // instead of "Edge Function returned a non-2xx status code".
+        let serverMsg: string | undefined
+        try {
+          const ctx = (error as { context?: Response }).context
+          if (ctx && typeof ctx.clone === 'function') {
+            const body = await ctx.clone().json()
+            if (body && typeof body.error === 'string') serverMsg = body.error
+          }
+        } catch { /* fall through to generic message */ }
+        throw new Error(serverMsg ?? error.message)
+      }
 
       if (data?.error) {
         throw new Error(data.error)

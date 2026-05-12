@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { checkUnsubKey } from './_unsub-key.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,6 +11,12 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const UNSUBSCRIBE_SIGNING_KEY = Deno.env.get('UNSUBSCRIBE_SIGNING_KEY')
 const PUBLIC_APP_URL = Deno.env.get('PUBLIC_APP_URL') ?? 'https://jordan-sales-agent.vercel.app'
+
+// Spam Act 2003 (Cth) s.18 — commercial electronic messages MUST carry a
+// functional unsubscribe. We sign per-recipient unsub tokens with this key,
+// and refuse to draft at all when it is absent or malformed. Don't relax
+// this without legal review — see _unsub-key.ts for the check semantics.
+const UNSUB_KEY_CHECK = checkUnsubKey(UNSUBSCRIBE_SIGNING_KEY)
 
 const MODEL = 'claude-sonnet-4-6'
 
@@ -36,10 +43,12 @@ async function signEmailHmac(email: string, key: string): Promise<string> {
     .join('')
 }
 
-async function buildUnsubFooter(email: string): Promise<string | null> {
+async function buildUnsubFooter(email: string): Promise<string> {
+  // Caller is guarded by UNSUB_KEY_CHECK in the request handler — if we ever
+  // reach here the key is present and ≥32 chars. Belt-and-braces throw so a
+  // future refactor that moves the gate doesn't silently send footerless mail.
   if (!UNSUBSCRIBE_SIGNING_KEY) {
-    console.warn('UNSUBSCRIBE_SIGNING_KEY not set — skipping unsub footer')
-    return null
+    throw new Error('UNSUBSCRIBE_SIGNING_KEY missing at footer build — gate bypass bug')
   }
   const normalised = email.trim().toLowerCase()
   const token = await signEmailHmac(normalised, UNSUBSCRIBE_SIGNING_KEY)
@@ -55,6 +64,23 @@ Deno.serve(async (req) => {
   if (!ANTHROPIC_API_KEY) {
     return new Response(
       JSON.stringify({ error: 'Anthropic API key not configured — ask admin.' }),
+      { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
+
+  // Hard-fail (Spam Act 2003 s.18 gap): refuse to draft when the unsubscribe
+  // signing key is missing or too short. Previously this silently skipped the
+  // unsubscribe footer and shipped non-compliant commercial email.
+  if (!UNSUB_KEY_CHECK.ok) {
+    console.error(
+      `generate-draft refused: UNSUBSCRIBE_SIGNING_KEY ${UNSUB_KEY_CHECK.reason}`,
+    )
+    return new Response(
+      JSON.stringify({
+        error: 'UNSUBSCRIBE_SIGNING_KEY not configured — refusing to draft commercial email (Spam Act 2003 s.18). Contact admin.',
+        code: 'UNSUB_KEY_MISSING',
+        reason: UNSUB_KEY_CHECK.reason,
+      }),
       { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
@@ -341,10 +367,7 @@ Respond with ONLY valid JSON in this exact format (no markdown, no explanation):
   // We bake it into both `body` and `original_body` so the Learning Loop's
   // diff doesn't fire a false positive when Jordan leaves the footer alone.
   if (contact.email) {
-    const footer = await buildUnsubFooter(String(contact.email))
-    if (footer) {
-      body = body + footer
-    }
+    body = body + (await buildUnsubFooter(String(contact.email)))
   }
 
   const contextJson = {
