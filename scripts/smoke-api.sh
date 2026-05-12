@@ -4,6 +4,26 @@
 # field-name-drift class of bug (e.g. PPB suggestions vs suppliers) BEFORE
 # deploy. Run as part of every deploy pre-flight + post-deploy verification.
 #
+# KNOWN LIMITATIONS (Codex review v2 12/05/2026 — accepted for now, follow-up tracked):
+#
+# 1. [P1, residual] OPTIONS probes against Edge Functions assume each handler
+#    short-circuits on req.method === 'OPTIONS' and returns the CORS preflight
+#    response WITHOUT running business logic. If a handler doesn't include that
+#    guard (especially cron-callable: send-morning-briefing, sequence-tick,
+#    reopening-radar-poll), OPTIONS can still trigger side effects.
+#
+# 2. [P2, residual] verify_jwt enforcement is only verified for generate-draft.
+#    Other functions could have verify_jwt off and this smoke wouldn't catch it.
+#
+# Both limitations have the same fix: switch from HTTP probes to the Supabase
+# Management API (GET /v1/projects/{ref}/functions returns each function's
+# verify_jwt flag + deployment status, zero HTTP calls to function handlers).
+# Requires SUPABASE_ACCESS_TOKEN (Supabase CLI Personal Access Token) — Morty
+# has this in Keychain (`security find-generic-password -s "Supabase CLI" -a supabase`).
+#
+# Follow-up PR: rewrite reachability + auth probes to use Management API,
+# keep only the end-to-end generate-draft probe as the HTTP layer check.
+#
 # Run:   bash scripts/smoke-api.sh
 # Alias: npm run smoke
 #
