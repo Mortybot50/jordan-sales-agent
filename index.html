@@ -8,6 +8,55 @@
   </head>
   <body>
     <div id="root"></div>
+    <!--
+      Error overlay — captures window.onerror + unhandledrejection + a 5s
+      "did React mount?" timeout and renders the result as a red panel.
+      Costs ~1KB. Strip only after a successful real-user production session.
+      Source: ~/.openclaw/roles/dev/templates/error-overlay.html
+    -->
+    <div id="ppb-error" style="display:none;position:fixed;inset:0;padding:20px;
+      background:#7f1d1d;color:#fff;overflow:auto;font:12px/1.4 ui-monospace,monospace;z-index:9999">
+      <h1 style="font:600 14px/1 -apple-system,sans-serif;margin:0 0 12px">Error caught</h1>
+      <pre id="ppb-error-text" style="white-space:pre-wrap;margin:0"></pre>
+    </div>
+    <script>
+    (function(){
+      var el=document.getElementById('ppb-error'), t=document.getElementById('ppb-error-text'), L=[];
+      function show(){t.textContent=L.join('\n\n');el.style.display='block';}
+      window.addEventListener('error',function(e){
+        // Only handle real script errors. Resource load failures (img, iframe,
+        // stylesheet, lazy chunk) also fire 'error' in capture mode but with
+        // e.target as the failed element, not as an ErrorEvent. Without this
+        // guard, a single failed asset triggered the full-screen red overlay
+        // on an otherwise healthy session. (Codex review 12/05/2026, FE-P0-01.)
+        if(!(e instanceof ErrorEvent)) return;
+        L.push('window.error: '+(e.message||'unknown'));
+        if(e.error&&e.error.stack)L.push('  stack: '+e.error.stack.substring(0,800));
+        show();
+      },true);
+      window.addEventListener('unhandledrejection',function(e){
+        var r=e.reason;
+        L.push('unhandledrejection: '+(r&&r.message?r.message:String(r)));
+        if(r&&r.stack)L.push('  stack: '+r.stack.substring(0,800));
+        show();
+      });
+      // 5s is a deliberate trade-off: too short → false positives on slow
+      // networks (Codex review v2 12/05/2026 [P2]); too long → real blackscreen
+      // cases go undetected longer. TUNE-LATER candidates: move timer into
+      // src/main.tsx so it doesn't include bundle download time, OR add a
+      // "React mounted" signal that clears the overlay when App renders.
+      // Strip overlay entirely once project has had a successful prod session.
+      setTimeout(function(){
+        var root=document.getElementById('root');
+        if(root&&root.children.length===0&&L.length===0){
+          L.push('TIMEOUT: React did not mount within 5 seconds.');
+          L.push('userAgent: '+navigator.userAgent);
+          L.push('localStorage keys: '+Object.keys(localStorage).join(', '));
+          show();
+        }
+      },5000);
+    })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
