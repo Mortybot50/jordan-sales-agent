@@ -131,39 +131,73 @@ done
 echo ""
 echo "--- Edge Functions (negative / probe) ---"
 
-# A) Unauthed call must 401 — confirms verify_jwt is on
+# A) Function deployed + reachable. We use OPTIONS (CORS preflight) instead of
+#    POST {} so the function's business logic NEVER runs during smoke. The
+#    previous POST {} version could trigger real side effects (emails sent,
+#    drafts created, cron handlers fired) if `verify_jwt` was off for cron
+#    functions like send-morning-briefing or sequence-tick — Codex review
+#    12/05/2026 [P1] flagged this as a production-safety hole.
 for fn in generate-draft send-morning-briefing classify-reply-intent field-route-optimize sequence-tick generate-learning-digest voice-transcribe geocode-batch geocode-venues-batch reopening-radar-manual reopening-radar-poll; do
   HTTP=$($CURL -s -o /dev/null -w "%{http_code}" \
-    -X POST "${FUNCS}/${fn}" \
-    -H "Content-Type: application/json" \
-    -d '{}')
+    -X OPTIONS "${FUNCS}/${fn}" \
+    -H "Origin: https://smoke-test.local" \
+    -H "Access-Control-Request-Method: POST")
   case "$HTTP" in
-    401|403)
-      echo "✓ ${fn} (unauthed) → ${HTTP}"
+    200|204)
+      echo "✓ ${fn} (deployed, CORS preflight) → ${HTTP}"
       PASS=$((PASS + 1))
       ;;
     *)
-      echo "✗ ${fn} (unauthed) → ${HTTP} (expected 401/403)"
+      echo "✗ ${fn} (deployed?) → ${HTTP} (expected 200/204 from CORS preflight)"
       FAIL=$((FAIL + 1))
       ;;
   esac
 done
 
-# B) Authed generate-draft with missing body → 400 (validates input without
-#    firing the model). Also tolerates 503 (BE-P0-03 hard-fail when
-#    UNSUBSCRIBE_SIGNING_KEY absent) and 404 (caller has no profile).
+# A.2) Auth enforcement — verify `verify_jwt` is on for at least one
+# representative function. We use generate-draft because it's input-validating
+# (empty body → 400 from the handler, NOT a side effect). If `verify_jwt` is on,
+# the platform 401s before the handler ever runs. Side-effect-free either way.
+HTTP_NOAUTH=$($CURL -s -o /dev/null -w "%{http_code}" \
+  -X POST "${FUNCS}/generate-draft" \
+  -H "Content-Type: application/json" \
+  -d '{}')
+case "$HTTP_NOAUTH" in
+  401|403)
+    echo "✓ verify_jwt enforced (generate-draft no-auth → ${HTTP_NOAUTH})"
+    PASS=$((PASS + 1))
+    ;;
+  *)
+    echo "✗ verify_jwt NOT enforced (generate-draft no-auth → ${HTTP_NOAUTH}, expected 401)"
+    FAIL=$((FAIL + 1))
+    ;;
+esac
+
+# B) Authed generate-draft with missing body must hit input validation (400).
+# 503 = ANTHROPIC_API_KEY missing (config gap, NOT a healthy deploy).
+# 404 = demo user has no profile (env not seeded, NOT a healthy deploy).
+# Previously these were treated as PASS — Codex review 12/05/2026 [P2] flagged
+# that as masking broken deploys. Now they FAIL.
 HTTP=$($CURL -s -o /tmp/leadflow-smoke-gd.txt -w "%{http_code}" \
   -X POST "${FUNCS}/generate-draft" \
   "${AUTH_HDR[@]}" \
   -H "Content-Type: application/json" \
   -d '{}')
 case "$HTTP" in
-  400|404|503)
-    echo "✓ generate-draft (authed, empty body) → ${HTTP}"
+  400)
+    echo "✓ generate-draft (authed, empty body) → 400 (input validation)"
     PASS=$((PASS + 1))
     ;;
+  503)
+    echo "✗ generate-draft (authed, empty body) → 503 (ANTHROPIC_API_KEY missing — config gap)"
+    FAIL=$((FAIL + 1))
+    ;;
+  404)
+    echo "✗ generate-draft (authed, empty body) → 404 (demo user has no profile — env not seeded)"
+    FAIL=$((FAIL + 1))
+    ;;
   *)
-    echo "✗ generate-draft (authed, empty body) → ${HTTP} (expected 400/404/503): $(cat /tmp/leadflow-smoke-gd.txt | head -c 160)"
+    echo "✗ generate-draft (authed, empty body) → ${HTTP} (expected 400): $(cat /tmp/leadflow-smoke-gd.txt | head -c 160)"
     FAIL=$((FAIL + 1))
     ;;
 esac
