@@ -33,7 +33,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const MIN_DRAFTS = parseInt(Deno.env.get('LEARNING_MIN_DRAFTS') ?? '3', 10)
 
 const MODEL = 'claude-sonnet-4-6'
-const FROM_ADDRESS = 'Jordan Briefing <briefing@jordan.purezza.com.au>'
+const FROM_ADDRESS = 'Jordan Briefing <briefing@premiumwaterau.com>'
 const APP_URL = 'https://jordan-sales-agent.vercel.app'
 
 const corsHeaders = {

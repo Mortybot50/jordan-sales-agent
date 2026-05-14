@@ -34,7 +34,7 @@ const SUPABASE_URL =
 // @ts-expect-error Deno globals
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-const FROM_ADDRESS = 'Jordan Briefing <briefing@jordan.purezza.com.au>'
+const FROM_ADDRESS = 'Jordan Briefing <briefing@premiumwaterau.com>'
 const APP_URL = 'https://jordan-sales-agent.vercel.app'
 
 // ── Jordan design tokens (inline — email-safe subset) ──────────────
