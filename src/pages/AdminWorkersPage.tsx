@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { useAuth } from '@/hooks/useAuth'
+import { canAdmin } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { WORKER_EXPECTED_INTERVALS, getWorkerMeta } from '@/lib/workersConfig'
 import { ArrowLeft, RefreshCw, Send } from 'lucide-react'
@@ -143,7 +144,7 @@ export function AdminWorkersPage() {
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
   const [sendingNow, setSendingNow] = useState(false)
 
-  const isOwner = user?.role === 'owner'
+  const isAdmin = canAdmin(user)
 
   const { data, isLoading, error, refetch, isFetching, dataUpdatedAt } = useQuery({
     queryKey: ['worker-runs', 100],
@@ -156,7 +157,7 @@ export function AdminWorkersPage() {
       if (error) throw error
       return (data ?? []) as WorkerRunRow[]
     },
-    enabled: !!user && isOwner,
+    enabled: !!user && isAdmin,
     refetchInterval: 30_000,
     staleTime: 10_000,
   })
@@ -178,7 +179,7 @@ export function AdminWorkersPage() {
       if (error) throw error
       return (data ?? []) as BriefingSendRow[]
     },
-    enabled: !!user && isOwner,
+    enabled: !!user && isAdmin,
     refetchInterval: 30_000,
     staleTime: 10_000,
   })
@@ -277,7 +278,7 @@ export function AdminWorkersPage() {
     )
   }
 
-  if (!isOwner) {
+  if (!isAdmin) {
     return (
       <div className="p-6">
         <PageHeader
@@ -288,7 +289,7 @@ export function AdminWorkersPage() {
         <div className="mt-8">
           <EmptyState
             title="403 — admin access required"
-            body="This page is restricted to org owners."
+            body="This page is restricted to org owners and admins."
           />
         </div>
       </div>

@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useAuth } from '@/hooks/useAuth'
+import { canAdmin } from '@/lib/auth'
 import { useUpdateUserProfile } from '@/lib/queries/users'
 import { useStages, useCreateStage, useDeleteStage, useUpdateStage } from '@/lib/queries/stages'
 import { useDeals } from '@/lib/queries/deals'
@@ -48,8 +49,7 @@ function ProfileTab() {
   const [sendingTest, setSendingTest] = useState(false)
 
   const isDev = import.meta.env.MODE === 'development'
-  const isAdmin = user?.role === 'admin'
-  const showManualTrigger = isDev || isAdmin
+  const showManualTrigger = isDev || canAdmin(user)
 
   const isPaused = !!pausedUntil && new Date(pausedUntil) > new Date()
   const pausedUntilLabel = pausedUntil
@@ -1053,8 +1053,8 @@ function IntegrationsTab() {
         </CardContent>
       </Card>
 
-      {/* Workers (owner-only) */}
-      {user?.role === 'owner' && (
+      {/* Workers (owner / admin) */}
+      {canAdmin(user) && (
         <Card>
           <CardContent className="flex items-center justify-between gap-3 py-3 px-4">
             <div>
