@@ -22,6 +22,7 @@ import {
 import { DraftEditor } from '@/components/drafts/DraftEditor'
 import { formatRelative, venueTypeLabel } from '@/lib/utils'
 import {
+  getDraftVariantLabel,
   hasUnresolvedPlaceholder,
   TIMES_PLACEHOLDER,
   useApproveDraft,
@@ -165,6 +166,19 @@ export function DraftPreviewPane({
         eyebrow={
           <span className="flex items-center gap-2">
             <DraftTypeBadge type={draft.draft_type} />
+            {(() => {
+              const variantLabel = getDraftVariantLabel(draft)
+              return variantLabel ? (
+                <StatusPill
+                  tone="neutral"
+                  uppercase
+                  data-testid="variant-pill"
+                  title={`Rendered from template variant: ${variantLabel}`}
+                >
+                  Variant · {variantLabel}
+                </StatusPill>
+              ) : null
+            })()}
             {draft.status === 'edited' && (
               <StatusPill tone="neutral" uppercase>
                 Edited

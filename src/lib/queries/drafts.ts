@@ -27,6 +27,30 @@ export function hasUnresolvedPlaceholder(body: string | null | undefined): boole
   return !!body && body.includes(TIMES_PLACEHOLDER)
 }
 
+/**
+ * Variant label for a sequence-rendered draft.
+ *
+ * The sequence-tick worker stores the chosen template variant id on
+ * `email_drafts.context_json.variant_id` whenever `production_path` is
+ * `template` (rule-based copy path — see PR #42 / sequence-tick/index.ts).
+ * LLM-rendered drafts have `production_path: 'llm'` and no variant.
+ *
+ * Returns a human-readable label like "Walk-by" / "LinkedIn" for the queue
+ * and preview chips, or null when the draft wasn't rendered from a variant
+ * template (LLM path, manual draft, ad-hoc reply, etc.).
+ */
+export function getDraftVariantLabel(draft: Pick<Draft, 'context_json'>): string | null {
+  const ctx = draft.context_json
+  if (!ctx || typeof ctx !== 'object') return null
+  const productionPath = (ctx as { production_path?: unknown }).production_path
+  if (productionPath !== 'template') return null
+  const variantId = (ctx as { variant_id?: unknown }).variant_id
+  if (typeof variantId !== 'string' || variantId.length === 0) return null
+  return variantId
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
 export interface Draft {
   id: string
   org_id: string

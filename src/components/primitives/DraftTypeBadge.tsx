@@ -12,14 +12,22 @@ export interface DraftTypeBadgeProps {
   className?: string
 }
 
+// Maps `email_drafts.draft_type` → display label + tone.
+// `follow_up_soft` and `follow_up_close` correspond to the sequence engine's
+// canonical 3-touch shape (PR #42): step 1 = cold_outreach, step 2 = nudge,
+// step 3 = close-the-loop. Without these entries the badge falls through to
+// the prettify-default ("follow up soft") which Jordan can't visually parse
+// as a sequence stage.
 const typeMeta: Record<string, { tone: PillTone; label: string }> = {
-  cold_outreach:   { tone: 'accent', label: 'Cold Outreach' },
-  follow_up:       { tone: 'warm',   label: 'Follow-up' },
-  reply:           { tone: 'success', label: 'Reply' },
-  nudge:           { tone: 'warning', label: 'Nudge' },
-  introduction:    { tone: 'accent', label: 'Intro' },
-  re_engagement:   { tone: 'cold',   label: 'Re-engage' },
-  proposal:        { tone: 'accent', label: 'Proposal' },
+  cold_outreach:    { tone: 'accent',  label: 'Cold Outreach' },
+  follow_up:        { tone: 'warm',    label: 'Follow-up' },
+  follow_up_soft:   { tone: 'warm',    label: 'Nudge' },
+  follow_up_close:  { tone: 'warning', label: 'Close-the-loop' },
+  reply:            { tone: 'success', label: 'Reply' },
+  nudge:            { tone: 'warning', label: 'Nudge' },
+  introduction:     { tone: 'accent',  label: 'Intro' },
+  re_engagement:    { tone: 'cold',    label: 'Re-engage' },
+  proposal:         { tone: 'accent',  label: 'Proposal' },
 }
 
 export const DraftTypeBadge = React.forwardRef<HTMLSpanElement, DraftTypeBadgeProps>(

@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { cn, formatRelative } from '@/lib/utils'
 import { DraftTypeBadge, IntentBadge, StatusPill } from '@/components/primitives'
-import type { Draft } from '@/lib/queries/drafts'
+import { getDraftVariantLabel, type Draft } from '@/lib/queries/drafts'
 
 /**
  * Compact queue row for the Drafts left pane.
@@ -23,6 +23,7 @@ export const DraftQueueRow = React.forwardRef<HTMLButtonElement, DraftQueueRowPr
   ({ draft, isActive, isSkipped, isRemoving, intent, onSelect, className, ...rest }, ref) => {
     const contact = draft.contact
     const venue = contact?.venue
+    const variantLabel = getDraftVariantLabel(draft)
 
     return (
       <button
@@ -62,6 +63,16 @@ export const DraftQueueRow = React.forwardRef<HTMLButtonElement, DraftQueueRowPr
           </div>
           <div className="mt-1 flex items-center gap-1.5">
             <DraftTypeBadge type={draft.draft_type} />
+            {variantLabel && (
+              <StatusPill
+                tone="neutral"
+                uppercase
+                data-testid="variant-pill"
+                title={`Rendered from template variant: ${variantLabel}`}
+              >
+                Variant · {variantLabel}
+              </StatusPill>
+            )}
             {draft.sequence_enrollment_id && (
               <StatusPill
                 tone="accent"
