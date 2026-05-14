@@ -101,18 +101,54 @@ Deno.serve(async (req: Request) => {
 
   // Optional manual-trigger mode for "send me one now" Settings button.
   // Body: { mode: 'manual', user_id?: string, force?: boolean }
+  //
+  // BE-P1-03: manual mode previously accepted body.user_id without
+  // verifying it matched the JWT subject. With verify_jwt=true that's a
+  // latent cross-tenant exposure (any signed-in caller could trigger a
+  // briefing for a different user). Now: manual mode REQUIRES a Bearer
+  // JWT, the user_id is derived from the JWT subject, and any body.user_id
+  // is verified to match before being honoured.
   let manualUserId: string | null = null
   let manualForce = false
+  let manualMode = false
+  let bodyUserIdRaw: string | null = null
   if (req.method === 'POST') {
     try {
       const body = await req.json()
       if (body && body.mode === 'manual') {
-        manualUserId = typeof body.user_id === 'string' ? body.user_id : null
+        manualMode = true
+        bodyUserIdRaw = typeof body.user_id === 'string' ? body.user_id : null
         manualForce = body.force === true
       }
     } catch {
       // empty/invalid body is fine — treat as scheduled run
     }
+  }
+
+  if (manualMode) {
+    const authHeader = req.headers.get('Authorization') ?? ''
+    const authJwt = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
+    if (!authJwt) {
+      return new Response(
+        JSON.stringify({ error: 'Manual mode requires authentication' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } },
+      )
+    }
+    const { data: userRes, error: authErr } = await supabase.auth.getUser(authJwt)
+    if (authErr || !userRes?.user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid auth token' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } },
+      )
+    }
+    const authUid = userRes.user.id
+    if (bodyUserIdRaw && bodyUserIdRaw !== authUid) {
+      return new Response(
+        JSON.stringify({ error: 'user_id in body does not match authenticated caller' }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } },
+      )
+    }
+    manualUserId = authUid
   }
 
   if (!RESEND_API_KEY) {

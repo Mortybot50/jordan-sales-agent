@@ -118,13 +118,37 @@ Deno.serve(async (req) => {
       })
     }
     userIds = (users ?? []).map((u: { id: string }) => u.id)
-  } else if (payload.user_id) {
-    userIds = [payload.user_id]
   } else {
-    return new Response(
-      JSON.stringify({ error: 'Expected { user_id } or { all: true }' }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    )
+    // BE-P1-05: manual mode previously honoured body.user_id without
+    // verifying it matched the JWT subject. With verify_jwt=true that's
+    // a latent cross-tenant exposure (any signed-in caller could trigger
+    // a learning-digest run for a different user). Now: manual mode
+    // REQUIRES a Bearer JWT, the target user_id is derived from the JWT
+    // subject, and any body.user_id is verified to match before being
+    // honoured.
+    const authHeader = req.headers.get('Authorization') ?? ''
+    const authJwt = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
+    if (!authJwt) {
+      return new Response(
+        JSON.stringify({ error: 'Manual mode requires authentication' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      )
+    }
+    const { data: userRes, error: authErr } = await supabase.auth.getUser(authJwt)
+    if (authErr || !userRes?.user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid auth token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      )
+    }
+    const authUid = userRes.user.id
+    if (payload.user_id && payload.user_id !== authUid) {
+      return new Response(
+        JSON.stringify({ error: 'user_id in body does not match authenticated caller' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      )
+    }
+    userIds = [authUid]
   }
 
   const results: Array<{ user_id: string; status: string; [k: string]: unknown }> = []
