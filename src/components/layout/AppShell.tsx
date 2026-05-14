@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import {
   LayoutDashboard,
   KanbanSquare,
@@ -179,6 +180,7 @@ function TargetWidget() {
 
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const location = useLocation()
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -273,7 +275,9 @@ export function AppShell() {
         </header>
 
         <main className="flex-1 overflow-auto">
-          <Outlet />
+          <ErrorBoundary label={`Route (${location.pathname})`} resetKey={location.pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>
