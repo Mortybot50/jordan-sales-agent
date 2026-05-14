@@ -1,4 +1,10 @@
-# DB-P1-01 — Migration history drift resolution
+# DB-P1-01 — Migration history drift PARTIAL repair (subtask DB-P1-01a)
+
+**Status:** This PR closes the **local-only subtask** of DB-P1-01 only. Two further DB-P1-01 subtasks remain open and tracked separately on the broader L2 cleanup backlog (see "Out of scope" section below):
+- DB-P1-01b — 3 remote-only migrations (`pricing_model_triggers_and_stages`, `add_deal_next_step`, `add_draft_kind_to_email_drafts`) need pulling into local files.
+- DB-P1-01c — universal shared-pair version-stamp drift across the rest of the history.
+
+DB-P1-01 in the consolidated audit cannot be fully closed until 01b and 01c are also closed. This PR explicitly does NOT claim full closure of DB-P1-01.
 
 **Date:** 2026-05-14
 **Source finding:** `docs/audits/CONSOLIDATED-AUDIT-2026-05-11.md` §3 / DB-P1-01
@@ -153,7 +159,7 @@ The audit explicitly notes "Version timestamps drift on every shared pair". This
 - **3 remote-only entries** — `20260425134731 pricing_model_triggers_and_stages`, `20260426003635 add_deal_next_step`, `20260426033634 add_draft_kind_to_email_drafts`. Need `supabase db pull <version>` per-entry, or a manual local-file recreation. Not in this PR.
 - **20260504000001, 20260510000001, 20260510235959, 20260514120000** — local-only shared-pair drift siblings (have corresponding remote entries with different stamps). PR #53's 20260514120000 had its DDL applied via MCP earlier today, generating the remote stamp `20260514122414`.
 
-These remain on the broader L2 cleanup backlog. The DB-P1-01 audit-scoped fix is closed.
+These remain on the broader L2 cleanup backlog. Only DB-P1-01a (local-only) is closed by this PR; DB-P1-01b (remote-only) and DB-P1-01c (shared-pair version-stamp drift) are open and required before DB-P1-01 as a whole can be marked closed.
 
 ## Post-repair state
 
