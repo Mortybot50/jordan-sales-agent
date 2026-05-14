@@ -19,11 +19,87 @@ Verify-before-claim probe against live schema (rather than blanket `repair --sta
 | 20260427000001 | salesforce_csv_import.sql | `contacts.metadata` MISSING; `activities_activity_type_check` already broader than this migration would set | Apply `contacts.metadata` column add only. Skip the check-constraint DDL (live constraint already includes `import`, `voice_note`, `daily_cap_reached`, `draft_suppressed` — replaying would strip 3 of those + break an existing `voice_note` row). |
 | 20260427000002 | activities_intent_idx.sql | `idx_activities_intent` exists | No-op; mark applied. |
 | 20260427000003 | users_public_slug.sql | `users.public_slug` column exists | No-op; mark applied. |
-| 20260427000004 | sequence_engine.sql | `sequence_enrollments` + `sequence_steps` tables exist | No-op; mark applied. (Not in audit list; sibling to 000001-3.) |
+| 20260427000004 | sequence_engine.sql | All 22 DDL components verified — see exhaustive table below | No-op; mark applied. (Not in audit list; sibling to 000001-3.) |
 | 20260427000005 | sequence_tick_cron.sql | `cron.job` row `leadflow-sequence-tick` schedule `15 * * * *` active | No-op; mark applied. (Not in audit list; sibling to 000004.) |
 | 20260428000001 | calendly_setup_state.sql | `users.calendly_webhook_registered_at` + `users.calendly_test_booking_at` MISSING | Apply both column adds. |
 | 20260511102600 | oauth_state_nonces_rls.sql | `service_role_full_access` policy present (PR #43) | No-op; mark applied. |
 | 20260511103200 | normalise_suppression_emails.sql | Zero `+alias` rows post-normalisation (PR #44) | No-op; mark applied. |
+
+## Exhaustive DDL verification (addresses Codex P1 round 1)
+
+Round 1 of `codex review` flagged that "tables exist" was insufficient evidence for `20260427000004 sequence_engine.sql` because the migration adds columns, constraints, indexes, policies, and `email_drafts` links beyond the scaffold tables. Re-ran a per-component probe against live (via `mcp__supabase__execute_sql` against `information_schema`, `pg_constraint`, `pg_indexes`, `pg_policies`, `pg_proc`, `pg_trigger`).
+
+### 20260427000004 sequence_engine.sql — all 22 DDL components
+
+| # | Component | Live state |
+|---|---|---|
+| c1  | `sequences.created_by_user_id` column | ✅ |
+| c2  | `sequences_org_isolation` RLS policy | ✅ |
+| c3  | `sequence_steps.prompt_instructions` column | ✅ |
+| c4  | `sequence_steps.delay_days` default = `0` | ✅ |
+| c5  | `sequence_steps_step_number_check` constraint | ✅ |
+| c6  | `sequence_steps_delay_days_check` constraint | ✅ |
+| c7  | `sequence_steps_seq_step_unique` unique constraint | ✅ |
+| c8  | `sequence_steps_org_isolation` RLS policy | ✅ |
+| c9  | `sequence_enrollments.contact_id` column | ✅ |
+| c10 | `sequence_enrollments.enrolled_by_user_id` column | ✅ |
+| c11 | `sequence_enrollments.next_step_due_at` column | ✅ |
+| c12 | `sequence_enrollments.last_step_fired_at` column | ✅ |
+| c13 | `sequence_enrollments.last_status_message` column | ✅ |
+| c14 | `sequence_enrollments.failure_count` column | ✅ |
+| c15 | `sequence_enrollments.current_step` default = `0` | ✅ |
+| c16 | `sequence_enrollments_status_check` (v1 vocab) | ✅ |
+| c17 | `sequence_enrollments_seq_contact_active_idx` | ❌ — **expected**, see note below |
+| c17b | `sequence_enrollments_contact_seq_unique` (PR #53 broader idx covering active+paused) | ✅ |
+| c18 | `sequence_enrollments_due_idx` partial index | ✅ |
+| c19 | `sequence_enrollments_org_isolation` RLS policy | ✅ |
+| c20 | `email_drafts.sequence_enrollment_id` column | ✅ |
+| c21 | `email_drafts.sequence_step_number` column | ✅ |
+| c22 | `email_drafts_sequence_enrollment_idx` partial index | ✅ |
+
+Note on c17: The migration originally created `sequence_enrollments_seq_contact_active_idx` (active-only). PR #53 (`20260514120000_sequence_enrollments_active_paused_unique.sql`, BE-P1-02, merged earlier today) explicitly drops that index and replaces it with the broader `sequence_enrollments_contact_seq_unique` covering both `active` and `paused`. c17=false is the correct post-PR-#53 state; c17b=true confirms the superseding index is in place. Nothing missing.
+
+### 20260427000002 activities_intent_idx.sql
+
+| # | Component | Live state |
+|---|---|---|
+| m2 | `idx_activities_intent ON activities ((metadata ->> 'intent'))` | ✅ |
+
+### 20260427000003 users_public_slug.sql
+
+| # | Component | Live state |
+|---|---|---|
+| m3a | `users.public_slug` column | ✅ |
+| m3b | UNIQUE constraint on `users.public_slug` | ✅ |
+| m3c | `public_user_profiles` view | ✅ |
+| m3d | `GRANT SELECT ON public_user_profiles TO anon` | ✅ |
+
+### 20260511102600 oauth_state_nonces_rls.sql
+
+| # | Component | Live state |
+|---|---|---|
+| m4 | `service_role_full_access` policy on `oauth_state_nonces` | ✅ |
+
+### 20260511103200 normalise_suppression_emails.sql
+
+| # | Component | Live state |
+|---|---|---|
+| m5a | `normalise_suppression_email()` function | ✅ |
+| m5b | `suppression_list_normalise_email` trigger | ✅ |
+| m5c | `email_drafts_suppression_guard()` patched (references `v_norm` introduced in this migration) | ✅ |
+| m5d | Zero `+alias` rows lingering in `suppression_list` | ✅ (0 rows) |
+
+### 20260427000001 salesforce_csv_import.sql + 20260428000001 calendly_setup_state.sql
+
+Both pre-backfill: see "DDL backfill executed" section below. Post-backfill probe returned `metadata_ok=true, webhook_ok=true, booking_ok=true`.
+
+### 20260427000005 sequence_tick_cron.sql
+
+| # | Component | Live state |
+|---|---|---|
+| m7 | `cron.job` row `leadflow-sequence-tick` schedule `15 * * * *` active=true | ✅ |
+
+Total: 31 DDL components verified live across the 8 repaired versions (+ 1 known-superseded by PR #53). Tracker repair is now backed by per-component evidence, not "tables exist".
 
 ## DDL backfill executed
 
