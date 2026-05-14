@@ -6,16 +6,15 @@
 // been password-rotated by Morty directly via the Supabase Auth admin API
 // (see CLAUDE.md "Demo password drift" L1 incident, 2026-04-21).
 //
-// Security note: this function embeds the literal Week-1 demo password.
-// Repo is private so this is acceptable, but the live demo password no longer
-// matches this literal — invoking would either:
-//   (a) skip the create (user already exists, returns `already_exists`), or
-//   (b) attempt to create with a stale password, which Supabase would reject
-//       on the unique-email constraint after the auth row already exists.
-// Either way it cannot reach a "creates user with old credentials" path. Safe to
-// keep deployed, but the next time this is touched it should be deleted from
-// the dashboard and replaced with a direct CLI invocation against the Auth
-// admin API rather than a public-ish edge function.
+// Security: password is read from DEMO_USER_PASSWORD at invocation time.
+// No repo literal. If the env var is missing or shorter than 12 chars the
+// function 400s. DR operator should set the env var just-in-time, invoke
+// once, then unset.
+//
+// The original Week-1 deployment embedded a literal password directly in
+// source. That literal is no longer in this file — Codex round-2 P2 caught
+// the DR-rebuild risk. The live deployed version was NOT rotated to this
+// safer source (audit recommendation is dashboard deletion); see PR body.
 //
 // Recommendation (follow-up, P2): `supabase functions delete create-demo-user`
 // once Jordan is past the demo phase and onto live Apollo data.
@@ -63,9 +62,20 @@ Deno.serve(async (req: Request) => {
     })
   }
 
+  // Closes Codex round-2 P2: password must come from env at invocation time,
+  // never a repo literal. DR rebuild operator sets DEMO_USER_PASSWORD just-in-
+  // time, invokes the function once, then unsets it. If the env var is missing
+  // we hard-fail rather than silently creating with a default.
+  const demoPassword = Deno.env.get('DEMO_USER_PASSWORD') ?? ''
+  if (!demoPassword || demoPassword.length < 12) {
+    return new Response(JSON.stringify({
+      error: 'DEMO_USER_PASSWORD env var missing or too short (need >=12 chars). Set it just-in-time and retry.'
+    }), { status: 400, headers: { 'Content-Type': 'application/json' } })
+  }
+
   const { data, error } = await supabase.auth.admin.createUser({
     email: 'demo@jordan-sales-agent.test',
-    password: 'DemoLogin2026!',
+    password: demoPassword,
     email_confirm: true,
   })
 
