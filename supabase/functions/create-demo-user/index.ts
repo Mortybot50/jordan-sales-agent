@@ -22,7 +22,33 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-Deno.serve(async (_req: Request) => {
+// Constant-time bearer compare against the service-role key.
+// Closes Codex P1 (BE-P1-06 PR #58 round 1): function runs with privileged
+// credentials, so any anon-key caller would otherwise be able to spawn the
+// demo user in a fresh DR / empty-Auth project.
+function requireServiceRole(req: Request): Response | null {
+  const expected = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  const auth = req.headers.get('Authorization') ?? ''
+  const got = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  if (!expected || !got || got.length !== expected.length) {
+    return new Response(JSON.stringify({ error: 'unauthorized' }), {
+      status: 401, headers: { 'Content-Type': 'application/json' }
+    })
+  }
+  let diff = 0
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ got.charCodeAt(i)
+  if (diff !== 0) {
+    return new Response(JSON.stringify({ error: 'unauthorized' }), {
+      status: 401, headers: { 'Content-Type': 'application/json' }
+    })
+  }
+  return null
+}
+
+Deno.serve(async (req: Request) => {
+  const denied = requireServiceRole(req)
+  if (denied) return denied
+
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!

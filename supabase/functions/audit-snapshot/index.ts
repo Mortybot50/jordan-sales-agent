@@ -20,7 +20,33 @@
 
 import postgres from 'https://deno.land/x/postgresjs@v3.4.5/mod.js'
 const DB_URL = Deno.env.get('SUPABASE_DB_URL')!
-Deno.serve(async (req) => {
+
+// Constant-time bearer compare against the service-role key.
+// Closes Codex P1 (BE-P1-06 PR #58 round 1): function exposes schema/cron
+// metadata; an anon-key caller would otherwise be able to harvest it.
+function requireServiceRole(req: Request): Response | null {
+  const expected = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  const auth = req.headers.get('Authorization') ?? ''
+  const got = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  if (!expected || !got || got.length !== expected.length) {
+    return new Response(JSON.stringify({ error: 'unauthorized' }), {
+      status: 401, headers: { 'Content-Type': 'application/json' }
+    })
+  }
+  let diff = 0
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ got.charCodeAt(i)
+  if (diff !== 0) {
+    return new Response(JSON.stringify({ error: 'unauthorized' }), {
+      status: 401, headers: { 'Content-Type': 'application/json' }
+    })
+  }
+  return null
+}
+
+Deno.serve(async (req: Request) => {
+  const denied = requireServiceRole(req)
+  if (denied) return denied
+
   const sql = postgres(DB_URL)
   try {
     const cron_jobs = await sql`SELECT jobname, schedule, active, command FROM cron.job ORDER BY jobname`
@@ -29,7 +55,10 @@ Deno.serve(async (req) => {
     const rls_policies = await sql`SELECT tablename, count(*) as policy_count FROM pg_policies WHERE schemaname='public' GROUP BY tablename ORDER BY tablename`
     const indexes = await sql`SELECT tablename, indexname FROM pg_indexes WHERE schemaname='public' ORDER BY tablename, indexname`
     const counts: Record<string, number> = {}
-    for (const t of ['users', 'organizations', 'contacts', 'deals', 'activities', 'sequences', 'sequence_steps', 'sequence_enrolments', 'email_drafts', 'pipeline_stages', 'voice_rules', 'suppression_list', 'worker_runs']) {
+    // Fixed Codex P2: canonical table is `sequence_enrollments` (double-l) per
+    // 20260427000004_sequence_engine.sql; the typo in the original live version
+    // always returned -1 for this entry, defeating the DR sanity check.
+    for (const t of ['users', 'organizations', 'contacts', 'deals', 'activities', 'sequences', 'sequence_steps', 'sequence_enrollments', 'email_drafts', 'pipeline_stages', 'voice_rules', 'suppression_list', 'worker_runs']) {
       try { const r = await sql`SELECT count(*) FROM ${sql(t)}`; counts[t] = Number(r[0].count) } catch { counts[t] = -1 }
     }
     await sql.end()
