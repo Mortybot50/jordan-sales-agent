@@ -14,6 +14,7 @@ import {
 } from '@/components/primitives'
 import {
   useContacts,
+  useContactsPaginated,
   useDistinctContactTags,
   scoreToTier,
   type Contact,
@@ -31,14 +32,37 @@ const PAGE_SIZE = 50
 export function ContactsPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { data: contacts, isLoading, error, refetch } = useContacts()
+  // Legacy unbounded fetch (capped at 2000 — see `useContacts` JSDoc). Used
+  // ONLY for facet-option counts + bulk-action selected-row name lookup —
+  // the rendered table reads from `useContactsPaginated` below to keep
+  // bandwidth bounded at Apollo scale (FE-P1-04).
+  const { data: contacts } = useContacts()
 
   const [search, setSearch] = useState('')
+  // Server `.ilike` runs against this debounced value so each keystroke
+  // doesn't issue a Supabase round-trip. 300ms matches the audit
+  // recommendation in FE-P2-02 (subsumed under FE-P1-04).
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(t)
+  }, [search])
+
   const [sortField, setSortField] = useState<SortField>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [selection, setSelection] = useState<SelectionState>({})
   const [page, setPage] = useState(0)
   const [voiceOpen, setVoiceOpen] = useState(false)
+
+  // Server-paginated page rows (FE-P1-04). Only this query hits the
+  // contacts table for the visible rows — facets + tag chips stay on the
+  // legacy capped fetch so they keep working at small org size.
+  const {
+    data: contactsPage,
+    isLoading,
+    error,
+    refetch,
+  } = useContactsPaginated({ page, pageSize: PAGE_SIZE, search: debouncedSearch })
 
   // Bulk-action selection — page-local; clears when paginating, filtering,
   // or sorting (the underlying row set changes, selection IDs no longer line
@@ -109,20 +133,14 @@ export function ContactsPage() {
       : []),
   ]
 
+  // The current page rows come pre-windowed + pre-searched server-side.
+  // Tier/venue_type/suburb/tag filters narrow the visible page client-side
+  // (page-local — known limitation accepted by audit FE-P1-04 under
+  // "windowed page + lazy-load search"). Sort is also page-local since the
+  // server already orders by full_name; non-name sorts re-order the page.
   const filtered = useMemo(() => {
-    if (!contacts) return []
-    let rows = contacts
-
-    const q = search.trim().toLowerCase()
-    if (q) {
-      rows = rows.filter(
-        (c) =>
-          c.full_name.toLowerCase().includes(q) ||
-          (c.email ?? '').toLowerCase().includes(q) ||
-          (c.venue?.name ?? '').toLowerCase().includes(q) ||
-          (c.venue?.suburb ?? '').toLowerCase().includes(q),
-      )
-    }
+    const pageRows = contactsPage?.rows ?? []
+    let rows = pageRows
 
     const tier = selection.tier?.[0]
     if (tier) {
@@ -163,10 +181,14 @@ export function ContactsPage() {
     })
 
     return rows
-  }, [contacts, search, selection, sortField, sortDir, activeTag])
+  }, [contactsPage, selection, sortField, sortDir, activeTag])
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+  // Total rows on the server matching the current search. Used for the
+  // page indicator + pager bounds; client-side filters narrow what's
+  // visible on screen but don't change `serverTotal`.
+  const serverTotal = contactsPage?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(serverTotal / PAGE_SIZE))
+  const paginated = filtered
 
   // Page-local selection — never carries across pages, filters, sorts.
   function clearSelection() {
@@ -200,9 +222,13 @@ export function ContactsPage() {
     })
   }
 
+  // Selection is page-local (clears on paginate/filter/sort), so the
+  // selected IDs are guaranteed to be in the current page rows. Resolve
+  // names from `contactsPage.rows` rather than the legacy capped fetch
+  // so this still works correctly once Apollo lands >2000 contacts.
   const selectedContacts = useMemo(
-    () => (contacts ?? []).filter((c) => selectedIds.has(c.id)),
-    [contacts, selectedIds],
+    () => (contactsPage?.rows ?? []).filter((c) => selectedIds.has(c.id)),
+    [contactsPage, selectedIds],
   )
 
   function toggleSort(field: string) {
@@ -322,10 +348,14 @@ export function ContactsPage() {
     },
   ]
 
-  const totalCount = contacts?.length ?? 0
+  // Server-reported total matching the current search (no client filters
+  // applied). The page header uses this so it reflects the underlying
+  // table, not just the loaded page window.
+  const totalCount = serverTotal
   const anyFilters =
     search.trim().length > 0 ||
-    Object.values(selection).some((v) => v && v.length > 0)
+    Object.values(selection).some((v) => v && v.length > 0) ||
+    !!activeTag
 
   return (
     <div className="p-4 sm:p-6 space-y-5 max-w-[1200px]">
@@ -338,6 +368,9 @@ export function ContactsPage() {
             : totalCount === 0
               ? 'No contacts yet — import a CSV or add your first.'
               : `${totalCount} contact${totalCount === 1 ? '' : 's'} across ${
+                  // Venue count is from the legacy capped fetch (≤2000) — at
+                  // Apollo scale this becomes a soft cap on the displayed
+                  // figure, not an actual constraint on the data.
                   new Set((contacts ?? []).map((c) => c.venue?.name).filter(Boolean)).size
                 } venues`
         }
@@ -393,7 +426,7 @@ export function ContactsPage() {
         }}
         summary={
           <span>
-            {filtered.length} <span className="text-ink-disabled">of</span> {totalCount}
+            {filtered.length} <span className="text-ink-disabled">of</span> {serverTotal}
           </span>
         }
       />
@@ -487,8 +520,8 @@ export function ContactsPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-[12px] text-ink-faint">
           <span className="jordan-tnum">
-            {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} of{' '}
-            {filtered.length}
+            {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, serverTotal)} of{' '}
+            {serverTotal}
           </span>
           <div className="flex gap-2">
             <Button
