@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from '@/components/ui/sonner'
 import { useAuth } from '@/hooks/useAuth'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { LoginPage } from '@/pages/LoginPage'
 import { AppShell } from '@/components/layout/AppShell'
 import { DashboardPage } from '@/pages/DashboardPage'
@@ -48,13 +49,41 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/login"
+          element={
+            <ErrorBoundary label="Login page">
+              <LoginPage />
+            </ErrorBoundary>
+          }
+        />
         {/* Public booking page — no auth required */}
-        <Route path="/book/:slug" element={<BookingPage />} />
+        <Route
+          path="/book/:slug"
+          element={
+            <ErrorBoundary label="Booking page">
+              <BookingPage />
+            </ErrorBoundary>
+          }
+        />
         {/* Public privacy policy — required for Google OAuth verification */}
-        <Route path="/privacy" element={<PrivacyPolicyPage />} />
+        <Route
+          path="/privacy"
+          element={
+            <ErrorBoundary label="Privacy page">
+              <PrivacyPolicyPage />
+            </ErrorBoundary>
+          }
+        />
         {/* Public unsubscribe page — Spam Act 2003 compliance */}
-        <Route path="/unsubscribe" element={<UnsubscribePage />} />
+        <Route
+          path="/unsubscribe"
+          element={
+            <ErrorBoundary label="Unsubscribe page">
+              <UnsubscribePage />
+            </ErrorBoundary>
+          }
+        />
         {/* Phase A internal surface — not linked from the main nav. */}
         <Route path="/__primitives" element={<PrimitivesPage />} />
         <Route
