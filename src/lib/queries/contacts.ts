@@ -40,6 +40,15 @@ export function scoreToTier(score: number | null | undefined): 'hot' | 'warm' | 
   return 'cold'
 }
 
+/**
+ * Defensive ceiling for unbounded fetches. Audit FE-P1-04: post-Apollo
+ * (50k–1M imported contacts) an unbounded `from('contacts').select(...)`
+ * times out / blows browser memory. `useContacts()` is used by Pipeline's
+ * deal-add picker + VoiceNote fuzzy-match; both are unsuitable for unbounded
+ * data anyway. For the heavy Contacts table view, use `useContactsPaginated`.
+ */
+const CONTACTS_LEGACY_MAX = 2000
+
 export function useContacts() {
   return useQuery({
     queryKey: ['contacts'],
@@ -51,6 +60,7 @@ export function useContacts() {
           venue:venues(id, name, venue_type, address, suburb, website, cover_count)
         `)
         .order('full_name')
+        .limit(CONTACTS_LEGACY_MAX)
 
       if (error) throw error
 
@@ -114,6 +124,128 @@ export function useContacts() {
         lead_score: scoreMap[c.id] ?? null,
         tags: tagMap[c.id] ?? [],
       })) as Contact[]
+    },
+  })
+}
+
+/**
+ * Strip characters that would corrupt a PostgREST `.or(...)` filter literal
+ * — comma, parens, colon, asterisk, single/double quote. The remainder is
+ * safe to embed in `email.ilike.%${q}%,full_name.ilike.%${q}%`. We also
+ * cap length at 100 chars to bound the URL.
+ */
+function sanitiseIlikeTerm(raw: string): string {
+  return raw.replace(/[,()*:'"\\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100)
+}
+
+export interface ContactsPage {
+  rows: Contact[]
+  total: number
+}
+
+/**
+ * Server-paginated contacts query. Audit FE-P1-04 fix.
+ *
+ * - `.range(page * pageSize, …)` — only the visible window is fetched.
+ * - Optional `search` is sanitised then applied server-side as a case-
+ *   insensitive substring match against `full_name` OR `email`.
+ * - Returns the page's rows plus the total row count (via `count: 'exact'`)
+ *   so the page indicator and pager can reflect the underlying table size
+ *   without loading every row client-side.
+ *
+ * Other filters (tier/venue_type/suburb/tag) stay client-side on the
+ * returned page; the audit explicitly accepts "windowed page + lazy-load
+ * search" as the minimum fix. Cross-page server-side filter is a follow-up.
+ */
+export function useContactsPaginated(opts: {
+  page: number
+  pageSize: number
+  search?: string
+}) {
+  const { page, pageSize, search } = opts
+  const cleanSearch = search ? sanitiseIlikeTerm(search) : ''
+  return useQuery({
+    queryKey: ['contacts', 'paginated', { page, pageSize, search: cleanSearch }],
+    queryFn: async (): Promise<ContactsPage> => {
+      let query = supabase
+        .from('contacts')
+        .select(
+          `
+          *,
+          venue:venues(id, name, venue_type, address, suburb, website, cover_count)
+        `,
+          { count: 'exact' },
+        )
+        .order('full_name')
+        .range(page * pageSize, (page + 1) * pageSize - 1)
+
+      if (cleanSearch.length > 0) {
+        const term = `%${cleanSearch}%`
+        query = query.or(`full_name.ilike.${term},email.ilike.${term}`)
+      }
+
+      const { data, error, count } = await query
+      if (error) throw error
+
+      const contactIds = (data ?? []).map((c) => c.id)
+      let scoreMap: Record<string, { score: number; tier: 'hot' | 'warm' | 'cold' }> = {}
+      const tagMap: Record<string, string[]> = {}
+
+      if (contactIds.length > 0) {
+        const { data: deals } = await supabase
+          .from('deals')
+          .select('contact_id, id')
+          .in('contact_id', contactIds)
+
+        if (deals && deals.length > 0) {
+          const dealIds = deals.map((d) => d.id)
+          const { data: scores } = await supabase
+            .from('lead_scores')
+            .select('deal_id, score, tier, scored_at')
+            .in('deal_id', dealIds)
+            .order('scored_at', { ascending: false })
+
+          if (scores) {
+            const latestByDeal: Record<string, typeof scores[0]> = {}
+            for (const s of scores) {
+              if (s.deal_id && !latestByDeal[s.deal_id]) {
+                latestByDeal[s.deal_id] = s
+              }
+            }
+            for (const deal of deals) {
+              if (deal.contact_id && deal.id && latestByDeal[deal.id]) {
+                const s = latestByDeal[deal.id]
+                const existing = scoreMap[deal.contact_id]
+                if (!existing || s.score > existing.score) {
+                  scoreMap[deal.contact_id] = {
+                    score: s.score,
+                    tier: s.tier as 'hot' | 'warm' | 'cold',
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        const { data: tagRows } = await supabase
+          .from('contact_tags')
+          .select('contact_id, tag')
+          .in('contact_id', contactIds)
+        if (tagRows) {
+          for (const t of tagRows) {
+            const arr = tagMap[t.contact_id] ?? (tagMap[t.contact_id] = [])
+            arr.push(t.tag)
+          }
+        }
+      }
+
+      const rows = (data ?? []).map((c) => ({
+        ...c,
+        lead_score: scoreMap[c.id] ?? null,
+        tags: tagMap[c.id] ?? [],
+      })) as Contact[]
+
+      return { rows, total: count ?? 0 }
     },
   })
 }
