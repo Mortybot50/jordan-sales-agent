@@ -170,4 +170,6 @@ These remain on the broader L2 cleanup backlog. The DB-P1-01 audit-scoped fix is
 20260511103200 | 20260511103200 | 2026-05-11 10:32:00
 ```
 
-`db reset --linked` and `db push` in a fresh checkout will now correctly identify these 8 as already-applied and skip them. The remaining shared-pair drift continues to mislead `db push` for fresh checkouts pre-broader-cleanup — flagged for follow-up.
+`supabase db push` in a fresh checkout will now correctly identify these 8 versions as already-applied (their rows are in `supabase_migrations.schema_migrations`) and skip them. The remaining shared-pair drift still misleads `db push` for the rest of the history — flagged for broader L2 follow-up.
+
+(Note: `supabase db reset --linked` is destructive — it drops the linked database and reapplies all local migrations from scratch. It does **not** consult the repaired tracker. Don't run it against the live project to "verify" this repair.)
