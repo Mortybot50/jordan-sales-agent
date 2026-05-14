@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { formatDistanceToNowStrict } from 'date-fns'
+import { toast } from 'sonner'
 import {
   PageHeader,
   StatusPill,
@@ -17,7 +18,7 @@ import { Input } from '@/components/ui/input'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { WORKER_EXPECTED_INTERVALS, getWorkerMeta } from '@/lib/workersConfig'
-import { ArrowLeft, RefreshCw } from 'lucide-react'
+import { ArrowLeft, RefreshCw, Send } from 'lucide-react'
 
 interface WorkerRunRow {
   id: string
@@ -29,6 +30,16 @@ interface WorkerRunRow {
   items_processed: number | null
   error_message: string | null
   metadata: Record<string, unknown> | null
+}
+
+interface BriefingSendRow {
+  id: string
+  user_id: string
+  sent_at: string
+  sent_local_date: string
+  item_count: number | null
+  resend_message_id: string | null
+  error: string | null
 }
 
 type Health = 'healthy' | 'stale' | 'failing' | 'idle' | 'never'
@@ -130,6 +141,7 @@ export function AdminWorkersPage() {
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [search, setSearch] = useState('')
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
+  const [sendingNow, setSendingNow] = useState(false)
 
   const isOwner = user?.role === 'owner'
 
@@ -148,6 +160,62 @@ export function AdminWorkersPage() {
     refetchInterval: 30_000,
     staleTime: 10_000,
   })
+
+  const {
+    data: briefingSends,
+    isLoading: briefingLoading,
+    error: briefingError,
+    refetch: refetchBriefing,
+    isFetching: briefingFetching,
+  } = useQuery({
+    queryKey: ['briefing-sends', 30],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('briefing_sends')
+        .select('id, user_id, sent_at, sent_local_date, item_count, resend_message_id, error')
+        .order('sent_at', { ascending: false })
+        .limit(30)
+      if (error) throw error
+      return (data ?? []) as BriefingSendRow[]
+    },
+    enabled: !!user && isOwner,
+    refetchInterval: 30_000,
+    staleTime: 10_000,
+  })
+
+  async function handleSendNow() {
+    if (!user) return
+    setSendingNow(true)
+    try {
+      const { data, error } = await supabase.functions.invoke('send-morning-briefing', {
+        body: { mode: 'manual', user_id: user.id, force: true },
+      })
+      if (error) throw error
+      const result = data as {
+        sent?: number
+        skipped_already_sent_today?: number
+        errors?: string[]
+      }
+      if (result?.sent && result.sent > 0) {
+        toast.success('Briefing sent', {
+          description: 'Check your inbox.',
+        })
+      } else if (result?.skipped_already_sent_today) {
+        toast.message('Already sent today', {
+          description: 'Idempotency guard fired — clear briefing_sends to re-send.',
+        })
+      } else if (result?.errors?.length) {
+        toast.error(`Send failed: ${result.errors[0]}`)
+      } else {
+        toast.message('No briefing sent', { description: JSON.stringify(result) })
+      }
+      await refetchBriefing()
+    } catch (e) {
+      toast.error(`Manual trigger failed: ${(e as Error).message}`)
+    } finally {
+      setSendingNow(false)
+    }
+  }
 
   const summaries = useMemo<WorkerSummary[]>(() => {
     const rows = data ?? []
@@ -173,6 +241,20 @@ export function AdminWorkersPage() {
       }
     })
   }, [data])
+
+  const briefingStats = useMemo(() => {
+    const rows = briefingSends ?? []
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+    const recent7d = rows.filter((r) => new Date(r.sent_at).getTime() >= sevenDaysAgo)
+    const successes = recent7d.filter((r) => !r.error && r.resend_message_id).length
+    const errors = recent7d.filter((r) => r.error).length
+    return {
+      total7d: recent7d.length,
+      successes,
+      errors,
+      lastSentAt: rows[0]?.sent_at ?? null,
+    }
+  }, [briefingSends])
 
   const filteredRuns = useMemo<WorkerRunRow[]>(() => {
     const rows = data ?? []
@@ -375,6 +457,142 @@ export function AdminWorkersPage() {
           )
         })}
       </div>
+
+      {/* Morning briefing send history — FE-P1-02 */}
+      <Card className="bg-background border border-hairline">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CapsLabel>Morning briefing — sends</CapsLabel>
+              <div className="text-sm text-ink-muted mt-0.5">
+                Idempotent dedup table — one row per (user, Melbourne date).
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] text-ink-faint">
+                Last 7d: {briefingStats.total7d} sent · {briefingStats.errors} errors
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8"
+                onClick={() => refetchBriefing()}
+                disabled={briefingFetching}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${briefingFetching ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+              <Button
+                size="sm"
+                className="h-8"
+                onClick={handleSendNow}
+                disabled={sendingNow}
+              >
+                <Send className={`w-3.5 h-3.5 mr-1.5 ${sendingNow ? 'animate-pulse' : ''}`} />
+                {sendingNow ? 'Sending…' : 'Send now'}
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 text-[11px] pt-2 border-t border-hairline">
+            <div>
+              <div className="text-ink-faint uppercase tracking-wide">Last sent</div>
+              <div className="font-mono text-ink mt-0.5">
+                {relativeTime(briefingStats.lastSentAt)}
+              </div>
+            </div>
+            <div>
+              <div className="text-ink-faint uppercase tracking-wide">Successes 7d</div>
+              <div className="font-mono jordan-tnum text-ink mt-0.5">{briefingStats.successes}</div>
+            </div>
+            <div>
+              <div className="text-ink-faint uppercase tracking-wide">Errors 7d</div>
+              <div className="font-mono jordan-tnum text-ink mt-0.5">{briefingStats.errors}</div>
+            </div>
+          </div>
+
+          <DataTable<BriefingSendRow>
+            rows={briefingSends ?? []}
+            columns={[
+              {
+                id: 'sent_at',
+                header: 'Sent',
+                width: '170px',
+                cell: (r) => (
+                  <span className="text-ink-muted">
+                    {new Date(r.sent_at).toLocaleString('en-AU', {
+                      timeZone: 'Australia/Melbourne',
+                      day: '2-digit',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                ),
+              },
+              {
+                id: 'sent_local_date',
+                header: 'Local date',
+                width: '110px',
+                cell: (r) => (
+                  <span className="font-mono text-xs text-ink-muted">{r.sent_local_date}</span>
+                ),
+              },
+              {
+                id: 'user_id',
+                header: 'User',
+                width: '110px',
+                cell: (r) => (
+                  <span className="font-mono text-[11px] text-ink-muted">
+                    {r.user_id.slice(0, 8)}…
+                  </span>
+                ),
+              },
+              {
+                id: 'item_count',
+                header: 'Items',
+                width: '70px',
+                align: 'right',
+                numeric: true,
+                cell: (r) => (
+                  <span className="font-mono jordan-tnum">{r.item_count ?? 0}</span>
+                ),
+              },
+              {
+                id: 'resend_message_id',
+                header: 'Resend ID',
+                width: '160px',
+                cell: (r) => (
+                  <span className="font-mono text-[10px] text-ink-faint">
+                    {r.resend_message_id ? `${r.resend_message_id.slice(0, 18)}…` : '—'}
+                  </span>
+                ),
+              },
+              {
+                id: 'error',
+                header: 'Error',
+                cell: (r) =>
+                  r.error ? (
+                    <span className="text-xs text-[var(--jordan-danger-text)] whitespace-pre-wrap break-words">
+                      {r.error}
+                    </span>
+                  ) : (
+                    <span className="text-ink-faint">—</span>
+                  ),
+              },
+            ]}
+            rowKey={(r) => r.id}
+            loading={briefingLoading}
+            error={briefingError instanceof Error ? briefingError.message : null}
+            onRetry={() => refetchBriefing()}
+            empty={{
+              title: 'No briefing sends yet',
+              body: 'Rows appear after the first morning briefing fires.',
+            }}
+            ariaLabel="Morning briefing sends"
+          />
+        </CardContent>
+      </Card>
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
