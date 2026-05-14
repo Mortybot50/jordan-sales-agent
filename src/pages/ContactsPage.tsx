@@ -409,7 +409,7 @@ export function ContactsPage() {
           setPage(0)
           clearSelection()
         }}
-        searchPlaceholder="Search name, email, venue, suburb…"
+        searchPlaceholder="Search name or email…"
         facets={facets}
         selection={selection}
         onSelectionChange={(facetId, values) => {
