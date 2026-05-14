@@ -170,11 +170,19 @@ Deno.serve(async (req) => {
     const domain = at >= 0 ? rawEmail.slice(at + 1) : ''
     const normalisedEmail = at >= 0 ? `${local}@${domain}` : rawEmail
 
+    // Audit BE-P1-07: PostgREST `.or()` treats commas as separators, so any
+    // comma in the email/domain literal (mangled CSV import, RFC-5322 group
+    // syntax, attacker-controlled input) would corrupt the filter shape and
+    // could over-/under-match. Switch to parameterised `.in('email', [...])`
+    // — supabase-js will URL-encode each element safely.
+    const suppressionLookups = domain
+      ? [normalisedEmail, domain]
+      : [normalisedEmail]
     const { data: suppressionHits } = await supabase
       .from('suppression_list')
       .select('email, reason, domain_suppression')
       .eq('org_id', userProfile.org_id)
-      .or(`email.eq.${normalisedEmail},email.eq.${domain}`)
+      .in('email', suppressionLookups)
 
     const matched = (suppressionHits ?? []).find((row: {
       email: string
