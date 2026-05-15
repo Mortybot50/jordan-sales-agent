@@ -57,9 +57,14 @@ Phase B (export or drop into `.env.local`):
 `scripts/smoke-api.sh`. The drift check will fail first deploy after the
 change, prompting the update.
 
-**Exit codes:** `0` = all checks passed (Phase B may have been skipped).
-`1` = at least one assertion failed or the Management API returned non-200.
-`2` = config gap (no project ref, no PAT, or Phase B login failed).
+**Phase B gating:** missing creds fail with exit `2` so CI cannot silently
+ship without PostgREST/RLS coverage. Local dev that doesn't need Phase B
+can bypass with `SMOKE_ALLOW_PHASE_B_SKIP=1`.
+
+**Exit codes:** `0` = all checks passed. `1` = at least one assertion failed
+or the Management API returned non-200. `2` = config gap (no project ref,
+no PAT, Phase B creds missing without the explicit skip override, or Phase B
+login failed).
 
 **When to run:** before every deploy + as part of post-deploy verification per
 `~/.claude/rules/dev/frontend-smoke.md` §2.

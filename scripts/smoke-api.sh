@@ -258,8 +258,16 @@ echo ""
 echo "[Phase B] PostgREST + JWT login"
 
 if [[ -z "${VITE_SUPABASE_URL:-}" || -z "${VITE_SUPABASE_ANON_KEY:-}" || -z "${DEMO_EMAIL:-}" || -z "${DEMO_PASSWORD:-}" ]]; then
-  echo "  ⚠ skipped — VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY / DEMO_EMAIL / DEMO_PASSWORD not all set."
-  echo "    CI MUST export all four for full coverage. Phase A still ran."
+  # Codex review v2 round-2 — silent Phase B skip means CI could ship without
+  # any PostgREST/RLS coverage. Require an explicit opt-in for local dev.
+  if [[ "${SMOKE_ALLOW_PHASE_B_SKIP:-}" =~ ^(1|true|yes)$ ]]; then
+    echo "  ⚠ skipped (SMOKE_ALLOW_PHASE_B_SKIP set) — Phase A still ran."
+  else
+    echo "  ✗ Phase B creds missing — set VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY," >&2
+    echo "    DEMO_EMAIL, DEMO_PASSWORD (or drop into .env.local). Local dev can" >&2
+    echo "    bypass with SMOKE_ALLOW_PHASE_B_SKIP=1; CI MUST export all four." >&2
+    exit 2
+  fi
 else
   SUPA_URL="${VITE_SUPABASE_URL%/}"
   ANON="${VITE_SUPABASE_ANON_KEY}"
