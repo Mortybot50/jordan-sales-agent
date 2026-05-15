@@ -40,21 +40,24 @@
         if(r&&r.stack)L.push('  stack: '+r.stack.substring(0,800));
         show();
       });
-      // 5s is a deliberate trade-off: too short → false positives on slow
-      // networks (Codex review v2 12/05/2026 [P2]); too long → real blackscreen
-      // cases go undetected longer. TUNE-LATER candidates: move timer into
-      // src/main.tsx so it doesn't include bundle download time, OR add a
-      // "React mounted" signal that clears the overlay when App renders.
-      // Strip overlay entirely once project has had a successful prod session.
+      // Mount-detection timer. The primary signal is the
+      // `window.__leadflow_react_mounted__` flag set by src/main.tsx
+      // immediately after createRoot().render() returns. The DOM check
+      // (root has children) is kept as a belt-and-braces fallback in case
+      // the flag fails to set (e.g. module never loaded, render threw
+      // pre-flag). Network-padded 8s ceiling — fast networks still see the
+      // overlay hide instantly via the flag, slow 3G gets more room before
+      // a false positive (Codex review v2 PR #45 [P2]).
       setTimeout(function(){
+        if(window.__leadflow_react_mounted__===true) return;
         var root=document.getElementById('root');
-        if(root&&root.children.length===0&&L.length===0){
-          L.push('TIMEOUT: React did not mount within 5 seconds.');
-          L.push('userAgent: '+navigator.userAgent);
-          L.push('localStorage keys: '+Object.keys(localStorage).join(', '));
-          show();
-        }
-      },5000);
+        if(root&&root.children.length>0) return;
+        if(L.length>0) return;
+        L.push('TIMEOUT: React did not mount within 8 seconds.');
+        L.push('userAgent: '+navigator.userAgent);
+        L.push('localStorage keys: '+Object.keys(localStorage).join(', '));
+        show();
+      },8000);
     })();
     </script>
     <script type="module" src="/src/main.tsx"></script>
