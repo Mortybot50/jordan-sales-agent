@@ -3,11 +3,13 @@
 Operational scripts for the LeadFlow build. None of these run as part of the
 Vite app — they're invoked by hand or via npm scripts.
 
-## `smoke-api.sh` — API contract guard
+## `smoke-api.sh` — Edge Function deploy guard (v2)
 
-Verifies the deployed Supabase REST + Edge Function surface returns the
-response shapes the SPA depends on. Catches API/frontend contract drift
-between Vercel and Supabase Edge deploys before it ships.
+Reads the live Edge Function roster from the Supabase Management API
+(`GET /v1/projects/{ref}/functions`) and asserts every function is `ACTIVE`
+with the expected `verify_jwt` flag. **Zero HTTP calls to function handlers**
+— no risk of triggering side effects (emails sent, drafts created, cron
+handlers fired). Closes Codex review v2 residuals on PR #46.
 
 **Run:**
 
@@ -17,28 +19,27 @@ npm run smoke
 bash scripts/smoke-api.sh
 ```
 
-**Required env (export or drop into `.env.local`):**
+**Required env / setup:**
 
-| Var | Value |
+| Var | Source |
 |---|---|
-| `VITE_SUPABASE_URL` | e.g. `https://bsevgxhnxlkzkcalevbb.supabase.co` |
-| `VITE_SUPABASE_ANON_KEY` | anon JWT from Supabase dashboard |
-| `DEMO_EMAIL` | demo user email (PostgREST + JWT login) |
-| `DEMO_PASSWORD` | demo user password |
+| `SUPABASE_PROJECT_REF` | Optional. Falls back to `supabase/.temp/project-ref`. |
+| `SUPABASE_ACCESS_TOKEN` | Optional. Falls back to macOS Keychain entries `Supabase CLI`/`supabase` (account `supabase`). `go-keyring-base64:` envelope is auto-decoded. If neither present, the script tells you the `security add-generic-password` command to provision it. |
 
 **What it checks:**
 
-- Login as demo user → JWT mint
-- 7 PostgREST GETs against the tables the SPA reads (`worker_runs`,
-  `briefing_sends`, `route_days`, `deals`, `contacts`, `email_drafts`,
-  `suppression_list`) — each must return a 200 + JSON array.
-- 11 Edge Function unauthed POSTs → each must return 401/403 (proves the
-  function is deployed and `verify_jwt` is on).
-- Authed `generate-draft` with empty body → must return 400/404/503 (validates
-  input without firing the LLM).
+- Every function in `EXPECTED_JWT_TRUE` is `ACTIVE` with `verify_jwt=true`.
+- Every function in `EXPECTED_JWT_FALSE` is `ACTIVE` with `verify_jwt=false`.
+- Drift detection: any deployed function not in either roster fails the smoke.
 
-**Exit codes:** `0` = all checks passed. `1` = at least one endpoint failed.
-`2` = login failed (couldn't get a JWT — usually wrong creds or wrong URL).
+**Updating the truth table:** when a function is added, removed, or has its
+`verify_jwt` flag flipped, edit `EXPECTED_JWT_TRUE` / `EXPECTED_JWT_FALSE` in
+`scripts/smoke-api.sh`. The drift check will fail first deploy after the
+change, prompting the update.
+
+**Exit codes:** `0` = all checks passed. `1` = at least one assertion failed
+or the Management API returned non-200. `2` = config gap (no project ref or
+no PAT).
 
 **When to run:** before every deploy + as part of post-deploy verification per
 `~/.claude/rules/dev/frontend-smoke.md` §2.

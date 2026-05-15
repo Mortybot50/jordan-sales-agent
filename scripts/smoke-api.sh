@@ -1,44 +1,32 @@
 #!/usr/bin/env bash
-# LeadFlow API smoke test — verifies the deployed Supabase REST + Edge Function
-# surface returns the response shapes the SPA depends on. Catches the
-# field-name-drift class of bug (e.g. PPB suggestions vs suppliers) BEFORE
-# deploy. Run as part of every deploy pre-flight + post-deploy verification.
+# LeadFlow API smoke v2 — Supabase Management API rewrite (Wave 3A-A).
 #
-# KNOWN LIMITATIONS (Codex review v2 12/05/2026 — accepted for now, follow-up tracked):
+# Zero HTTP calls to function handlers. Pure metadata read against
+#   GET https://api.supabase.com/v1/projects/{ref}/functions
+# Returns per-function status + version + verify_jwt flag. No side effects.
 #
-# 1. [P1, residual] OPTIONS probes against Edge Functions assume each handler
-#    short-circuits on req.method === 'OPTIONS' and returns the CORS preflight
-#    response WITHOUT running business logic. If a handler doesn't include that
-#    guard (especially cron-callable: send-morning-briefing, sequence-tick,
-#    reopening-radar-poll), OPTIONS can still trigger side effects.
-#
-# 2. [P2, residual] verify_jwt enforcement is only verified for generate-draft.
-#    Other functions could have verify_jwt off and this smoke wouldn't catch it.
-#
-# Both limitations have the same fix: switch from HTTP probes to the Supabase
-# Management API (GET /v1/projects/{ref}/functions returns each function's
-# verify_jwt flag + deployment status, zero HTTP calls to function handlers).
-# Requires SUPABASE_ACCESS_TOKEN (Supabase CLI Personal Access Token) — Morty
-# has this in Keychain (`security find-generic-password -s "Supabase CLI" -a supabase`).
-#
-# Follow-up PR: rewrite reachability + auth probes to use Management API,
-# keep only the end-to-end generate-draft probe as the HTTP layer check.
+# Closes Codex review v2 residuals on PR #46 (12/05/2026):
+#   [P1] OPTIONS could trigger handlers without a method-guard.
+#   [P2] Only one function's verify_jwt was being checked.
 #
 # Run:   bash scripts/smoke-api.sh
 # Alias: npm run smoke
 #
-# Exit 0 = all checks passed. Non-zero = at least one endpoint has a wrong
-# shape, an unexpected status code, or is unreachable.
+# Exit 0 = every function in the expected roster is ACTIVE and the verify_jwt
+# truth table matches. Non-zero = at least one mismatch, missing function, or
+# Management API failure.
 #
-# Environment (one of):
-#   1. Export VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, DEMO_EMAIL, DEMO_PASSWORD
-#   2. Drop them into .env.local (gitignored) — auto-sourced if present
+# Auth: SUPABASE_ACCESS_TOKEN (Supabase CLI Personal Access Token). Resolved
+# in order:
+#   1. Environment variable SUPABASE_ACCESS_TOKEN (CI-friendly).
+#   2. macOS Keychain — `security find-generic-password -s "Supabase CLI" -a supabase -w`
+#   3. macOS Keychain — `security find-generic-password -s supabase -a supabase -w`
+# If none resolve, the script fails loudly with the `security add-generic-password`
+# command needed to provision it.
 #
-# Required:
-#   VITE_SUPABASE_URL        e.g. https://bsevgxhnxlkzkcalevbb.supabase.co
-#   VITE_SUPABASE_ANON_KEY   anon JWT from Supabase dashboard
-#   DEMO_EMAIL               demo user email (PostgREST + JWT login)
-#   DEMO_PASSWORD            demo user password
+# Truth table source: verified 2026-05-15 against live project bsevgxhnxlkzkcalevbb
+# via `mcp__supabase__list_edge_functions`. Update EXPECTED_* arrays when
+# functions are added/removed/flipped; the script will FAIL on first drift.
 #
 # Reference: ~/.openclaw/roles/dev/ppb-ops-hub/scripts/smoke-api.sh
 # Discipline: ~/.claude/rules/dev/frontend-smoke.md §2
@@ -51,178 +39,169 @@ PY=/usr/bin/python3
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-# Source .env.local if present (gitignored)
+# Source .env.local if present (gitignored). Optional for the v2 smoke — the
+# Management API path doesn't need anon/JWT/demo creds — but kept for the
+# script's previous callers who may export SUPABASE_PROJECT_REF here.
 if [[ -f "${REPO_DIR}/.env.local" ]]; then
   # shellcheck disable=SC1091
   set -a; . "${REPO_DIR}/.env.local"; set +a
 fi
 
-: "${VITE_SUPABASE_URL:?missing — export it or set in .env.local}"
-: "${VITE_SUPABASE_ANON_KEY:?missing — export it or set in .env.local}"
-: "${DEMO_EMAIL:?missing — export it or set in .env.local}"
-: "${DEMO_PASSWORD:?missing — export it or set in .env.local}"
+# ---------- Project ref ----------
+PROJECT_REF="${SUPABASE_PROJECT_REF:-}"
+if [[ -z "$PROJECT_REF" ]]; then
+  if [[ -f "${REPO_DIR}/supabase/.temp/project-ref" ]]; then
+    PROJECT_REF="$(tr -d '[:space:]' < "${REPO_DIR}/supabase/.temp/project-ref")"
+  fi
+fi
+if [[ -z "$PROJECT_REF" ]]; then
+  echo "✗ project ref not set — export SUPABASE_PROJECT_REF or run 'supabase link --project-ref <ref>'" >&2
+  exit 2
+fi
 
-SUPA_URL="${VITE_SUPABASE_URL%/}"
-ANON="${VITE_SUPABASE_ANON_KEY}"
-REST="${SUPA_URL}/rest/v1"
-FUNCS="${SUPA_URL}/functions/v1"
-AUTH="${SUPA_URL}/auth/v1"
+# ---------- Access token ----------
+# Resolution order:
+#   1. SUPABASE_ACCESS_TOKEN env var (CI-friendly).
+#   2. Keychain entry written by the Supabase CLI. The CLI uses go-keyring,
+#      which wraps the secret as `go-keyring-base64:<base64>`. We detect that
+#      envelope and decode it.
+SUPABASE_ACCESS_TOKEN="${SUPABASE_ACCESS_TOKEN:-}"
+if [[ -z "$SUPABASE_ACCESS_TOKEN" ]]; then
+  SUPABASE_ACCESS_TOKEN="$(security find-generic-password -s 'Supabase CLI' -a supabase -w 2>/dev/null || true)"
+fi
+if [[ -z "$SUPABASE_ACCESS_TOKEN" ]]; then
+  SUPABASE_ACCESS_TOKEN="$(security find-generic-password -s supabase -a supabase -w 2>/dev/null || true)"
+fi
+if [[ -z "$SUPABASE_ACCESS_TOKEN" ]]; then
+  echo "✗ Supabase PAT not found in Keychain — set with:" >&2
+  echo "    security add-generic-password -s 'Supabase CLI' -a supabase -w <PAT>" >&2
+  exit 2
+fi
+if [[ "$SUPABASE_ACCESS_TOKEN" == go-keyring-base64:* ]]; then
+  SUPABASE_ACCESS_TOKEN="$(printf '%s' "${SUPABASE_ACCESS_TOKEN#go-keyring-base64:}" | base64 -d 2>/dev/null || true)"
+fi
+if [[ -z "$SUPABASE_ACCESS_TOKEN" ]]; then
+  echo "✗ Supabase PAT resolved but empty after decode" >&2
+  exit 2
+fi
 
+echo "=== LeadFlow API smoke v2 (Management API) ==="
+echo "Project: ${PROJECT_REF}"
+echo ""
+
+# ---------- Fetch function metadata ----------
+RESP_BODY="$(mktemp)"
+trap 'rm -f "$RESP_BODY"' EXIT
+
+HTTP=$("$CURL" -sS -o "$RESP_BODY" -w "%{http_code}" \
+  "https://api.supabase.com/v1/projects/${PROJECT_REF}/functions" \
+  -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+  -H "Accept: application/json")
+
+if [[ "$HTTP" != "200" ]]; then
+  BODY_PREVIEW="$(head -c 200 "$RESP_BODY")"
+  echo "✗ Management API returned HTTP ${HTTP}: ${BODY_PREVIEW}" >&2
+  exit 1
+fi
+
+# ---------- Expected truth table ----------
+# verified 2026-05-15 against live project bsevgxhnxlkzkcalevbb.
+# Update both arrays when the roster changes.
+EXPECTED_JWT_TRUE=(
+  generate-draft
+  reopening-radar-poll
+  reopening-radar-manual
+  geocode-batch
+  field-route-optimize
+  voice-transcribe
+  sequence-tick
+  classify-reply-intent
+  audit-snapshot
+  geocode-venues-batch
+  gmail-inbound
+)
+EXPECTED_JWT_FALSE=(
+  create-demo-user
+  send-morning-briefing
+  generate-learning-digest
+  ensure-intent-idx
+)
+
+# ---------- Assert ----------
 PASS=0
 FAIL=0
 
-echo "=== LeadFlow API smoke ==="
-echo "Target: ${SUPA_URL}"
-echo ""
-
-# ---------- Step 1: login → JWT ----------
-LOGIN_RESP=$($CURL -s -X POST "${AUTH}/token?grant_type=password" \
-  -H "apikey: ${ANON}" \
-  -H "Content-Type: application/json" \
-  -d "$(printf '{"email":"%s","password":"%s"}' "${DEMO_EMAIL}" "${DEMO_PASSWORD}")")
-
-JWT=$(echo "$LOGIN_RESP" | $PY -c "import sys,json;d=json.load(sys.stdin);print(d.get('access_token',''))" 2>/dev/null || echo "")
-
-if [[ -z "$JWT" ]]; then
-  echo "✗ login failed for ${DEMO_EMAIL}: ${LOGIN_RESP:0:200}" >&2
-  exit 2
-fi
-echo "✓ login (${DEMO_EMAIL}) → JWT minted"
-
-AUTH_HDR=(-H "Authorization: Bearer ${JWT}" -H "apikey: ${ANON}")
-
-# ---------- Step 2: PostgREST GETs ----------
-# Each row: name|path|expected_array (the response must be a JSON array)
-REST_TESTS=(
-  "worker_runs (latest 5)|worker_runs?select=id,worker_name,status,started_at&order=started_at.desc&limit=5|yes"
-  "briefing_sends (latest 5)|briefing_sends?select=id,user_id,sent_at,item_count&order=sent_at.desc&limit=5|yes"
-  "route_days (sample)|route_days?select=id,day_of_week,anchor_venue_id&limit=5|yes"
-  "deals (sample)|deals?select=id,title,stage_id&limit=5|yes"
-  "contacts (sample)|contacts?select=id,full_name,email&limit=5|yes"
-  "email_drafts (latest 5)|email_drafts?select=id,subject,status,generated_at&order=generated_at.desc&limit=5|yes"
-  "suppression_list (sample)|suppression_list?select=id,email,reason&limit=5|yes"
-)
-
-echo ""
-echo "--- PostgREST reads ---"
-for t in "${REST_TESTS[@]}"; do
-  IFS='|' read -r NAME PATHQ EXPECT_ARRAY <<< "$t"
-  HTTP=$($CURL -s -o /tmp/leadflow-smoke-body.txt -w "%{http_code}" \
-    -X GET "${REST}/${PATHQ}" "${AUTH_HDR[@]}")
-  BODY=$(cat /tmp/leadflow-smoke-body.txt)
-  if [[ "$HTTP" != "200" ]]; then
-    echo "✗ ${NAME} — HTTP ${HTTP}: ${BODY:0:160}"
-    FAIL=$((FAIL + 1))
-    continue
-  fi
-  RESULT=$($PY - "$BODY" "$EXPECT_ARRAY" <<'PYEOF'
+assert_fn() {
+  local NAME="$1"
+  local EXPECTED_JWT="$2"   # "true" or "false"
+  RESULT=$("$PY" - "$NAME" "$EXPECTED_JWT" "$RESP_BODY" <<'PYEOF'
 import json, sys
-body, expect_array = sys.argv[1], sys.argv[2]
-try:
-    data = json.loads(body)
-except Exception as e:
-    print(f"FAIL|not JSON: {e}"); sys.exit(0)
-if expect_array == "yes" and not isinstance(data, list):
-    print(f"FAIL|expected array, got {type(data).__name__}"); sys.exit(0)
-print("OK")
+name, expected_jwt, body_path = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(body_path) as f:
+    try:
+        fns = json.load(f)
+    except Exception as e:
+        print(f"FAIL|not JSON: {e}"); sys.exit(0)
+if not isinstance(fns, list):
+    print(f"FAIL|expected array, got {type(fns).__name__}"); sys.exit(0)
+match = next((f for f in fns if f.get("slug") == name or f.get("name") == name), None)
+if not match:
+    print("FAIL|missing from project"); sys.exit(0)
+status = match.get("status", "?")
+version = match.get("version", "?")
+verify_jwt = bool(match.get("verify_jwt", False))
+expected = expected_jwt == "true"
+if status != "ACTIVE":
+    print(f"FAIL|status={status} (expected ACTIVE) v{version} verify_jwt={verify_jwt}"); sys.exit(0)
+if verify_jwt != expected:
+    print(f"FAIL|verify_jwt={verify_jwt} (expected {expected}) v{version} status={status}"); sys.exit(0)
+print(f"OK|v{version} verify_jwt={verify_jwt} {status}")
 PYEOF
 )
-  if [[ "$RESULT" == "OK" ]]; then
-    echo "✓ ${NAME}"
-    PASS=$((PASS + 1))
-  else
-    echo "✗ ${NAME} — ${RESULT#FAIL|}"
-    FAIL=$((FAIL + 1))
-  fi
-done
-
-# ---------- Step 3: Edge Function negative tests ----------
-# Verify each function is deployed + reachable + auth-gated, without firing
-# real side effects (no emails sent, no drafts created, no routes mutated).
-#
-# Each row: name|method|path|body|expected_http (regex)
-#
-# 401 = verify_jwt rejected unauth or auth missing
-# 400 = function reachable, validates input, rejected our minimal body
-# 200 = function reachable + accepted (for read-only health-style calls)
-# 409 = function reachable, business-rule guard fired (acceptable for generate-draft)
-# 503 = function reachable, env-config gap (e.g. BE-P0-03 hard-fail)
-
-echo ""
-echo "--- Edge Functions (negative / probe) ---"
-
-# A) Function deployed + reachable. We use OPTIONS (CORS preflight) instead of
-#    POST {} so the function's business logic NEVER runs during smoke. The
-#    previous POST {} version could trigger real side effects (emails sent,
-#    drafts created, cron handlers fired) if `verify_jwt` was off for cron
-#    functions like send-morning-briefing or sequence-tick — Codex review
-#    12/05/2026 [P1] flagged this as a production-safety hole.
-for fn in generate-draft send-morning-briefing classify-reply-intent field-route-optimize sequence-tick generate-learning-digest voice-transcribe geocode-batch geocode-venues-batch reopening-radar-manual reopening-radar-poll; do
-  HTTP=$($CURL -s -o /dev/null -w "%{http_code}" \
-    -X OPTIONS "${FUNCS}/${fn}" \
-    -H "Origin: https://smoke-test.local" \
-    -H "Access-Control-Request-Method: POST")
-  case "$HTTP" in
-    200|204)
-      echo "✓ ${fn} (deployed, CORS preflight) → ${HTTP}"
+  case "$RESULT" in
+    OK\|*)
+      echo "✓ ${NAME} ${RESULT#OK|}"
       PASS=$((PASS + 1))
       ;;
     *)
-      echo "✗ ${fn} (deployed?) → ${HTTP} (expected 200/204 from CORS preflight)"
+      echo "✗ ${NAME} — ${RESULT#FAIL|}"
       FAIL=$((FAIL + 1))
       ;;
   esac
+}
+
+echo "--- verify_jwt = true (Supabase JWT enforced) ---"
+for fn in "${EXPECTED_JWT_TRUE[@]}"; do
+  assert_fn "$fn" "true"
 done
 
-# A.2) Auth enforcement — verify `verify_jwt` is on for at least one
-# representative function. We use generate-draft because it's input-validating
-# (empty body → 400 from the handler, NOT a side effect). If `verify_jwt` is on,
-# the platform 401s before the handler ever runs. Side-effect-free either way.
-HTTP_NOAUTH=$($CURL -s -o /dev/null -w "%{http_code}" \
-  -X POST "${FUNCS}/generate-draft" \
-  -H "Content-Type: application/json" \
-  -d '{}')
-case "$HTTP_NOAUTH" in
-  401|403)
-    echo "✓ verify_jwt enforced (generate-draft no-auth → ${HTTP_NOAUTH})"
-    PASS=$((PASS + 1))
-    ;;
-  *)
-    echo "✗ verify_jwt NOT enforced (generate-draft no-auth → ${HTTP_NOAUTH}, expected 401)"
-    FAIL=$((FAIL + 1))
-    ;;
-esac
+echo ""
+echo "--- verify_jwt = false (external webhook / cron / public) ---"
+for fn in "${EXPECTED_JWT_FALSE[@]}"; do
+  assert_fn "$fn" "false"
+done
 
-# B) Authed generate-draft with missing body must hit input validation (400).
-# 503 = ANTHROPIC_API_KEY missing (config gap, NOT a healthy deploy).
-# 404 = demo user has no profile (env not seeded, NOT a healthy deploy).
-# Previously these were treated as PASS — Codex review 12/05/2026 [P2] flagged
-# that as masking broken deploys. Now they FAIL.
-HTTP=$($CURL -s -o /tmp/leadflow-smoke-gd.txt -w "%{http_code}" \
-  -X POST "${FUNCS}/generate-draft" \
-  "${AUTH_HDR[@]}" \
-  -H "Content-Type: application/json" \
-  -d '{}')
-case "$HTTP" in
-  400)
-    echo "✓ generate-draft (authed, empty body) → 400 (input validation)"
-    PASS=$((PASS + 1))
-    ;;
-  503)
-    echo "✗ generate-draft (authed, empty body) → 503 (ANTHROPIC_API_KEY missing — config gap)"
-    FAIL=$((FAIL + 1))
-    ;;
-  404)
-    echo "✗ generate-draft (authed, empty body) → 404 (demo user has no profile — env not seeded)"
-    FAIL=$((FAIL + 1))
-    ;;
-  *)
-    echo "✗ generate-draft (authed, empty body) → ${HTTP} (expected 400): $(cat /tmp/leadflow-smoke-gd.txt | head -c 160)"
-    FAIL=$((FAIL + 1))
-    ;;
-esac
-
-rm -f /tmp/leadflow-smoke-body.txt /tmp/leadflow-smoke-gd.txt
+# ---------- Drift detection: unexpected functions in project ----------
+echo ""
+echo "--- Drift check ---"
+UNEXPECTED=$("$PY" - "$RESP_BODY" "${EXPECTED_JWT_TRUE[*]}" "${EXPECTED_JWT_FALSE[*]}" <<'PYEOF'
+import json, sys
+body_path, t, f = sys.argv[1], sys.argv[2].split(), sys.argv[3].split()
+known = set(t) | set(f)
+with open(body_path) as fp:
+    fns = json.load(fp)
+unexpected = sorted(fn.get("slug") or fn.get("name") for fn in fns if (fn.get("slug") or fn.get("name")) not in known)
+print(",".join(unexpected))
+PYEOF
+)
+if [[ -n "$UNEXPECTED" ]]; then
+  echo "✗ unexpected function(s) deployed but not in smoke roster: ${UNEXPECTED}"
+  echo "  → add to EXPECTED_JWT_TRUE or EXPECTED_JWT_FALSE in scripts/smoke-api.sh"
+  FAIL=$((FAIL + 1))
+else
+  echo "✓ no drift — every deployed function is accounted for in the smoke roster"
+  PASS=$((PASS + 1))
+fi
 
 echo ""
 echo "=== ${PASS} passed, ${FAIL} failed ==="
