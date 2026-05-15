@@ -38,6 +38,15 @@ Current prod bundle: `index-FfsK5snX.js` on `https://jordan-sales-agent.vercel.a
 - Deploys are Vercel (production at the apex alias). After merging, verify the served bundle hash and grep for new feature strings.
 - Edge Functions deploy to Supabase project `bsevgxhnxlkzkcalevbb`.
 
+## Latest session handoff
+
+**Wave 3A — 15/05/2026.** Closed the two Codex review v2 residuals from Wave 1A.
+
+- **PR #60 — smoke v2 (Management API rewrite)** — SHIPPED to main as `4007352`. `scripts/smoke-api.sh` rewritten as a two-phase guard: Phase A reads the Edge Function roster via `GET /v1/projects/{ref}/functions` (zero handler calls, no side-effect risk) and asserts every function is `ACTIVE` with the expected `verify_jwt` flag; Phase B keeps the original PostgREST + JWT login coverage but now exits 2 if creds are missing (CI cannot silently skip). Codex review: PASS at round 3 after addressing round-1 (lost coverage / coerced bool / JSON error handling) and round-2 (silent Phase B skip).
+- **PR #61 — overlay React-mounted signal** — OPEN, NOT MERGED. `src/main.tsx` sets `window.__leadflow_react_mounted__ = true` after `createRoot().render()`; `index.html` overlay timer reads it first, DOM children second, with the ceiling raised from 5s → 8s. Build green; flag baked into bundle (`grep -c` returns 1 in JS, 2 in index.html). **Blocked at the Codex review gate: OpenAI quota exceeded — Codex returned `ERROR: Quota exceeded` on both attempts.** Holding the merge per `~/.claude/rules/dev/codex-review.md` ("Codex unavailable / timeout → ask Morty whether to ship without review; don't silently skip"). Awaiting human-in-the-loop call.
+
+Summary file: `/tmp/gstack-jordan-wave3a-summary.md`.
+
 ## What's next
 
 Nothing scoped yet — this is a checkpoint, not a queue.
