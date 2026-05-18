@@ -39,8 +39,13 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? Deno.env.get('VITE_SUPABASE_URL')!
 // @ts-expect-error Deno globals
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+// Tracking pixel URL: must point at the Supabase Functions origin, NOT the
+// SPA host. Vercel only excludes /api/* from the SPA rewrite, so a path under
+// /functions/v1/* on jordan-sales-agent.vercel.app would serve index.html.
+// PIXEL_BASE_URL lets us override at deploy time (e.g. a CNAMEd functions
+// origin); SUPABASE_URL is the safe default.
 // @ts-expect-error Deno globals
-const PUBLIC_APP_URL = Deno.env.get('PUBLIC_APP_URL') ?? 'https://jordan-sales-agent.vercel.app'
+const PIXEL_BASE_URL = Deno.env.get('PIXEL_BASE_URL') ?? SUPABASE_URL
 
 interface SendRequest {
   mode: 'test' | 'manual'
@@ -60,7 +65,7 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 function buildTrackingPixel(sendQueueId: string): string {
-  const url = `${PUBLIC_APP_URL.replace(/\/$/, '')}/functions/v1/pixel-track/${sendQueueId}`
+  const url = `${PIXEL_BASE_URL.replace(/\/$/, '')}/functions/v1/pixel-track/${sendQueueId}`
   // 1×1 transparent gif served by pixel-track. Inline-styled to dodge image-block
   // heuristics; max-width set so it never visually intrudes.
   return `<img src="${url}" width="1" height="1" alt="" style="display:block;max-width:1px;max-height:1px;border:0;outline:none;" />`
