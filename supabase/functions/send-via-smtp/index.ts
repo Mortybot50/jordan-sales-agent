@@ -26,6 +26,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 // denomailer — Deno-native SMTP client used here for STARTTLS + auth.
 // Pinned to a known-good tag.
 // @ts-expect-error Deno remote import
+// denomailer 1.6.0 — use port 465 (implicit TLS) for Gmail, NOT 587/STARTTLS.
+// Supabase Edge's TCP runtime is flaky with STARTTLS upgrades — both 1.5.3 and 1.6.0
+// produce 'Bad resource ID' / 'TCP stream is currently in use' on 587 against Gmail.
+// Port 465 implicit TLS avoids the STARTTLS upgrade dance and works reliably.
 import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts'
 import { decryptToken } from '../_shared/token-crypto.ts'
 
@@ -201,12 +205,19 @@ Deno.serve(async (req: Request) => {
     ? `${baseHtml}\n${buildTrackingPixel(body.send_queue_id)}`
     : baseHtml
 
-  // Build the SMTP client. Gmail's recommended config: STARTTLS on 587.
+  // Build the SMTP client.
+  // EDGE-RUNTIME WORKAROUND: Supabase Edge cannot reliably STARTTLS on 587 against Gmail
+  // (event loop fights with denomailer's TCP upgrade). Force port 465 (implicit TLS) for
+  // gmail.com regardless of what's stored on the account row — we keep the stored value
+  // for analytics/display but only the connection actually uses 465.
+  const isGmail = account.smtp_host?.toLowerCase().endsWith('gmail.com') ?? false
+  const effectivePort = isGmail ? 465 : account.smtp_port
+  const effectiveTls = isGmail ? true : (account.smtp_port === 465)
   const client = new SMTPClient({
     connection: {
       hostname: account.smtp_host,
-      port: account.smtp_port,
-      tls: account.smtp_port === 465, // implicit TLS only on 465
+      port: effectivePort,
+      tls: effectiveTls,
       auth: {
         username: account.smtp_username,
         password: smtpPassword,
