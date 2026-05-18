@@ -20,6 +20,7 @@ import { FieldPage } from '@/pages/FieldPage'
 import { RoutePage } from '@/pages/RoutePage'
 import { BriefingPage } from '@/pages/BriefingPage'
 import { SettingsPage } from '@/pages/SettingsPage'
+import { EmailAccountsPage } from '@/pages/Settings/EmailAccountsPage'
 import { SuppressionListPage } from '@/pages/SuppressionListPage'
 import { AdminWorkersPage } from '@/pages/AdminWorkersPage'
 import PrimitivesPage from '@/pages/_primitives'
@@ -111,6 +112,7 @@ export default function App() {
           <Route path="sequences/:id" element={<SequenceEditPage />} />
           <Route path="briefing" element={<BriefingPage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="settings/email-accounts" element={<EmailAccountsPage />} />
           <Route path="settings/suppression-list" element={<SuppressionListPage />} />
           <Route path="admin/workers" element={<AdminWorkersPage />} />
         </Route>
