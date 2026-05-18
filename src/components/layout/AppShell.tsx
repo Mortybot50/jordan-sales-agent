@@ -6,6 +6,7 @@ import {
   KanbanSquare,
   Users,
   Mail,
+  Send,
   Sun,
   Settings,
   LogOut,
@@ -62,7 +63,10 @@ const NAV_SECTIONS: { id: string; label: string; items: NavItem[] }[] = [
   {
     id: 'settings',
     label: 'Settings',
-    items: [{ to: '/settings', label: 'Settings', icon: Settings }],
+    items: [
+      { to: '/settings', label: 'Settings', icon: Settings },
+      { to: '/settings/email-accounts', label: 'Email inboxes', icon: Send },
+    ],
   },
 ]
 
