@@ -135,6 +135,28 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(409, { success: false, error: 'SMTP password not set for this account' })
   }
 
+  // If a send_queue_id was supplied, verify the queue row belongs to the same
+  // org AND the same email_account_id as the caller's. Without this check a
+  // user who owns inbox A could pass another tenant's queue_id and we'd mark
+  // their row 'sent' on behalf of inbox A — a cross-tenant data-integrity bug.
+  if (body.send_queue_id) {
+    const { data: queueRow, error: queueErr } = await supabase
+      .from('email_send_queue')
+      .select('id, org_id, email_account_id')
+      .eq('id', body.send_queue_id)
+      .maybeSingle()
+    if (queueErr) {
+      console.error('queue lookup failed:', queueErr)
+      return jsonResponse(500, { success: false, error: queueErr.message })
+    }
+    if (!queueRow) {
+      return jsonResponse(404, { success: false, error: 'send_queue row not found' })
+    }
+    if (queueRow.org_id !== account.org_id || queueRow.email_account_id !== body.email_account_id) {
+      return jsonResponse(403, { success: false, error: 'send_queue does not belong to this account' })
+    }
+  }
+
   // Decrypt password using TOKEN_ENCRYPTION_KEY (Supabase secret).
   let smtpPassword: string
   try {
