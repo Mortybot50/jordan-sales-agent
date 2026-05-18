@@ -178,6 +178,12 @@ Deno.serve(async (req: Request) => {
     return json(405, { success: false, error: 'Method not allowed' })
   }
 
+  // Service-role auth gate — see enqueue-sends/index.ts for rationale.
+  const auth = req.headers.get('Authorization') ?? ''
+  if (auth !== `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`) {
+    return json(401, { success: false, error: 'unauthorized' })
+  }
+
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
   // Pull all active email_accounts. We only scan Gmail accounts in v1 (the
@@ -266,9 +272,16 @@ Deno.serve(async (req: Request) => {
             .maybeSingle()
 
           if (queueRow) {
+            // NOTE: email_send_queue.status CHECK constraint allows only
+            // queued/sending/sent/failed/cancelled — no 'bounced'. We mark
+            // the row 'failed' with a `bounce:` prefix in last_error so the
+            // bounce signal is unambiguous in queries; the canonical bounce
+            // record is the email_send_events row inserted below
+            // (event_type='bounced').
+            const bounceMsg = (dsn.diagnostic ?? `status ${dsn.statusCode}`).slice(0, 480)
             await supabase.from('email_send_queue').update({
-              status: 'bounced',
-              last_error: (dsn.diagnostic ?? `status ${dsn.statusCode}`).slice(0, 500),
+              status: 'failed',
+              last_error: `bounce: ${bounceMsg}`,
             }).eq('id', queueRow.id)
 
             await supabase.from('email_send_events').insert({

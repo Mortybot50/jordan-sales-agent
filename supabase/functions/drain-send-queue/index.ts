@@ -56,6 +56,12 @@ Deno.serve(async (req: Request) => {
     return json(405, { success: false, error: 'Method not allowed' })
   }
 
+  // Service-role auth gate — see enqueue-sends/index.ts for rationale.
+  const auth = req.headers.get('Authorization') ?? ''
+  if (auth !== `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`) {
+    return json(401, { success: false, error: 'unauthorized' })
+  }
+
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
   // Claim a batch atomically via the RPC.

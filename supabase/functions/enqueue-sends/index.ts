@@ -164,6 +164,15 @@ Deno.serve(async (req: Request) => {
     return json(405, { success: false, error: 'Method not allowed' })
   }
 
+  // Service-role auth gate. verify_jwt=true at the Edge only proves the
+  // caller has *some* valid JWT (anon key included). pg_cron posts with the
+  // service-role bearer; reject anything else so a leaked anon key can't
+  // trigger the send pipeline.
+  const auth = req.headers.get('Authorization') ?? ''
+  if (auth !== `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`) {
+    return json(401, { success: false, error: 'unauthorized' })
+  }
+
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
   // 1. Pull approved drafts that aren't already in the queue.
