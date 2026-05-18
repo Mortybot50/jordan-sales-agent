@@ -1,12 +1,16 @@
 /**
  * unsubscribe-post — RFC 8058 one-click List-Unsubscribe endpoint.
  *
- * Accepts POST (and GET for human-clickable fallback) at:
+ * Endpoint:
  *   /functions/v1/unsubscribe-post?c=<contact_id>&s=<send_queue_id>&t=<hmac_hex>
  *
- * Verifies the HMAC tuple (contact_id, send_queue_id) against UNSUBSCRIBE_SIGNING_KEY,
- * inserts a suppression_list row scoped to the contact's org_id (reason='unsubscribe',
- * source='leadflow_unsubscribe_post'), and returns 204 No Content (the spec).
+ * Only POST mutates state. Per RFC 8058 §3.1 the one-click flow MUST be
+ * triggered by a POST; GET requests are used by mail-security scanners and
+ * link-preview prefetchers and must NOT auto-unsubscribe (otherwise any
+ * inbox-scanner that follows the URL silently kills the contact).
+ *
+ * GET   → renders a tiny HTML confirmation page with a POST form.
+ * POST  → verifies HMAC tuple, inserts suppression row, returns 204.
  *
  * Idempotent — already-suppressed addresses still return 204.
  *
@@ -37,11 +41,33 @@ function noContent(): Response {
   return new Response(null, { status: 204, headers: corsHeaders })
 }
 
+function confirmationPage(qs: string): Response {
+  // GET fallback for humans (and for mail-security URL scanners). Never mutates.
+  // Mail clients implementing RFC 8058 send POST and never see this page.
+  const html = `<!doctype html><meta charset="utf-8"><title>Unsubscribe</title>
+<style>body{font:16px/1.5 system-ui,sans-serif;max-width:480px;margin:48px auto;padding:0 16px;color:#0f172a}button{font:inherit;padding:10px 20px;background:#0f172a;color:#fff;border:0;border-radius:8px;cursor:pointer}p{color:#475569}</style>
+<h1>Confirm unsubscribe</h1>
+<p>Click the button below to remove yourself from future emails from this sender.</p>
+<form method="POST" action="?${qs}"><button type="submit">Unsubscribe</button></form>`
+  return new Response(html, {
+    status: 200,
+    headers: { ...corsHeaders, 'Content-Type': 'text/html; charset=utf-8' },
+  })
+}
+
 // @ts-expect-error Deno serve
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST' && req.method !== 'GET') {
     return new Response('Method not allowed', { status: 405, headers: corsHeaders })
+  }
+
+  const url = new URL(req.url)
+
+  // RFC 8058: only POST may unsubscribe. GET is for human confirmation only —
+  // mail-security scanners pre-fetch URLs and would otherwise auto-suppress.
+  if (req.method === 'GET') {
+    return confirmationPage(url.searchParams.toString())
   }
 
   if (UNSUBSCRIBE_SIGNING_KEY.length < 32) {
@@ -50,7 +76,6 @@ Deno.serve(async (req: Request) => {
     return noContent()
   }
 
-  const url = new URL(req.url)
   const contactId = url.searchParams.get('c') ?? ''
   const sendQueueId = url.searchParams.get('s') ?? ''
   const token = url.searchParams.get('t') ?? ''

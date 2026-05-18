@@ -227,6 +227,30 @@ Deno.serve(async (req: Request) => {
     accountsByUser.set(a.user_id, list)
   }
 
+  // 3b. Pre-compute today's send count per account so we can enforce
+  // email_accounts.daily_send_cap. Counts any row scheduled today UTC in
+  // {queued,sending,sent} — failed/cancelled don't burn cap. Used 24h sliding
+  // window for v1; a per-user-tz day boundary is a Week 3 followup.
+  const allAccountIds = (accounts ?? []).map((a) => a.id)
+  const dayWindowStart = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const usedTodayByAccount = new Map<string, number>()
+  if (allAccountIds.length > 0) {
+    const { data: todayRows } = await supabase
+      .from('email_send_queue')
+      .select('email_account_id, status')
+      .in('email_account_id', allAccountIds)
+      .gte('scheduled_for', dayWindowStart)
+      .in('status', ['queued', 'sending', 'sent'])
+    for (const r of (todayRows ?? [])) {
+      usedTodayByAccount.set(r.email_account_id, (usedTodayByAccount.get(r.email_account_id) ?? 0) + 1)
+    }
+  }
+  // Helper — returns true when account still has cap headroom for one more send.
+  function hasCap(accountId: string, cap: number | null | undefined): boolean {
+    if (cap == null || cap <= 0) return true  // null cap = unlimited
+    return (usedTodayByAccount.get(accountId) ?? 0) < cap
+  }
+
   // 4. Per-user working window config.
   const { data: users } = await supabase
     .from('users')
@@ -309,13 +333,17 @@ Deno.serve(async (req: Request) => {
     }
 
     // Pick a sending account. Prefer the draft's pinned sender_inbox_id when active.
-    const userAccounts = (accountsByUser.get(draft.created_by ?? '') ?? []).filter(Boolean)
+    // Filter out accounts that have hit daily_send_cap.
+    const userAccountsAll = (accountsByUser.get(draft.created_by ?? '') ?? []).filter(Boolean)
+    const userAccounts = userAccountsAll.filter((a) => hasCap(a.id, a.daily_send_cap))
     if (!userAccounts || userAccounts.length === 0) {
+      // No account has headroom today — skip this draft, leave it 'approved'
+      // so the next cron tick (after midnight UTC reset) picks it up.
       skipped++
       continue
     }
-    let chosen = userAccounts.find((a) => a.id === draft.sender_inbox_id)
-      ?? userAccounts[Math.floor(Math.random() * userAccounts.length)]
+    const pinned = userAccounts.find((a) => a.id === draft.sender_inbox_id)
+    let chosen = pinned ?? userAccounts[Math.floor(Math.random() * userAccounts.length)]
 
     // Anti-clustering: rotate if the same recipient domain just received from
     // this sender's domain (within this tick). Try at most N rotations.
@@ -380,6 +408,9 @@ Deno.serve(async (req: Request) => {
 
     // Mark draft 'queued' so we don't re-pick it next tick.
     await supabase.from('email_drafts').update({ status: 'queued' }).eq('id', draft.id)
+
+    // Bump today's usage count so subsequent iterations in this tick respect the cap.
+    usedTodayByAccount.set(chosenAccount.id, (usedTodayByAccount.get(chosenAccount.id) ?? 0) + 1)
 
     // Update pacing maps
     nextSlotByAccount.set(chosenAccount.id, new Date(scheduledFor).getTime())
