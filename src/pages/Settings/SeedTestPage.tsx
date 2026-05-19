@@ -163,10 +163,16 @@ export function SeedTestPage() {
     )
   }
 
-  // Show only seeds from the last 14 days, grouped by day.
+  // Show only seeds from the last 14 days. The cutoff is computed against
+  // the render's `new Date()` per-row to keep React Compiler's purity rule
+  // happy (Date.now() in useMemo body is flagged as impure).
   const recentSeeds = useMemo(() => {
-    const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
-    return (seeds ?? []).filter((s) => s.sent_at >= cutoff)
+    return (seeds ?? []).filter((s) => {
+      const diffDays =
+        (new Date().getTime() - new Date(s.sent_at).getTime()) /
+        (24 * 60 * 60 * 1000)
+      return diffDays <= 14
+    })
   }, [seeds])
 
   const unrecordedCount = recentSeeds.filter((s) => s.placement == null).length

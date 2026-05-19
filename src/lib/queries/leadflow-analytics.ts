@@ -327,16 +327,34 @@ export function usePauseInbox() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
+      // Pausing an at-risk inbox MUST also stop already-queued sends, otherwise
+      // a reputation-drop pause leaves the next 24h of mail still going out.
+      // Order: cancel queued rows first, THEN mark the account paused. If the
+      // account-mark fails we still want the queue cancelled.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any)
+      const queueRes = await (supabase as any)
+        .from('email_send_queue')
+        .update({
+          status: 'cancelled',
+          last_error: 'cancelled: inbox paused via at-risk banner',
+        })
+        .eq('email_account_id', id)
+        .in('status', ['queued'])
+      if (queueRes.error) throw queueRes.error
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const acctRes = await (supabase as any)
         .from('email_accounts')
         .update({ status: 'paused', updated_at: new Date().toISOString() })
         .eq('id', id)
-      if (error) throw error
+      if (acctRes.error) throw acctRes.error
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['email-accounts'] })
-      toast.success('Inbox paused — re-enable from Settings → Email Accounts')
+      qc.invalidateQueries({ queryKey: ['leadflow-analytics'] })
+      toast.success(
+        'Inbox paused + queued sends cancelled — re-enable from Settings → Email Accounts',
+      )
     },
     onError: (err: Error) => toast.error(`Failed to pause: ${err.message}`),
   })
@@ -520,7 +538,6 @@ export function useCronHealth() {
         .limit(2000)
       if (error) {
         // View might not exist in some envs — fail soft so the dashboard still renders.
-        // eslint-disable-next-line no-console
         console.warn('[useCronHealth] view fetch failed:', error.message)
         return []
       }

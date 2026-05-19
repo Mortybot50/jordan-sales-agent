@@ -292,9 +292,15 @@ export function SendingPage() {
   const totalBouncedToday = inboxStats.reduce((acc, s) => acc + s.bounced_today, 0)
 
   // ---- Seed placement summary (last 7 days)
+  // Cutoff is computed in seeds-dependent memo via a stable derivation —
+  // Date.now() can't be called in useMemo deps (React Compiler purity rule).
   const seedSummary = useMemo(() => {
-    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-    const recent = (seeds ?? []).filter((s) => s.sent_at >= cutoff)
+    const recent = (seeds ?? []).filter((s) => {
+      const diffDays =
+        (new Date().getTime() - new Date(s.sent_at).getTime()) /
+        (24 * 60 * 60 * 1000)
+      return diffDays <= 7
+    })
     const total = recent.length
     const inboxCount = recent.filter((s) => s.placement === 'inbox').length
     const promos = recent.filter((s) => s.placement === 'promotions').length

@@ -23,7 +23,7 @@ Do these BEFORE the cutover begins. None of them are reversible later without ef
 - [ ] **Seed addresses set up.** Settings → Daily seed test. Add at least one of: Hotmail, Outlook, Gmail-personal, Proton, Yahoo. Five is the minimum. These are throwaway addresses you control.
 - [ ] **Connect inboxes.** Settings → Email accounts. All sending inboxes connected. Each has `status='warming'` or `status='active'`. Daily cap set realistically (start 30, ramp to 50 over the warmup).
 - [ ] **Spam Act sender block filled in.** Settings → Profile → "Spam Act sender block". This is the legally required physical address / ABN footer. Anything sent without it is illegal under Australian Spam Act 2003 s17.
-- [ ] **Export Instantly data.** Run `npx tsx scripts/instantly-export.ts` (dry-run). Inspect the export dir under `/tmp/instantly-export-<timestamp>/`. Confirm suppression count matches what you see in Instantly's UI.
+- [ ] **Export Instantly data.** Run `deno run --allow-env --allow-net --allow-read --allow-write scripts/instantly-export.ts` (dry-run). Inspect the export dir under `/tmp/instantly-export-<timestamp>/`. Confirm suppression count matches what you see in Instantly's UI.
 - [ ] **Import Instantly suppressions.** Re-run with `--confirm`. Verify count in Settings → Suppression list. This MUST happen before Day 0 — Day 0 starts re-emailing contacts that Instantly already had blocked, which kills deliverability instantly.
 - [ ] **Backup access to Instantly.** Don't cancel the subscription yet. You'll need it as a fallback through Day 14.
 
