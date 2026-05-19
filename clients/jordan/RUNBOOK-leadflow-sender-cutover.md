@@ -111,7 +111,7 @@ Halfway. From here on you're moving warmer contacts. Be more careful.
 ### Day 13 — 100% LeadFlow
 
 - [ ] Move the final batch. Instantly campaigns should now have 0 active contacts.
-- [ ] Re-run `scripts/instantly-export.ts --confirm` to capture any new suppressions Instantly recorded during the cutover (people who unsubscribed via Instantly's links in the last 14 days).
+- [ ] Re-run `deno run --allow-env --allow-net --allow-read --allow-write scripts/instantly-export.ts --confirm` to capture any new suppressions Instantly recorded during the cutover (people who unsubscribed via Instantly's links in the last 14 days).
 - [ ] Confirm the new rows landed in LeadFlow Settings → Suppression list.
 
 ### Day 14 — 100% LeadFlow, Instantly still on standby

@@ -38,9 +38,18 @@ begin
     return null;
   end if;
 
-  -- Service role bypasses the guard (the hourly cron uses service_role).
-  -- For everyone else, require an org-membership match.
-  if current_setting('request.jwt.claim.role', true) is distinct from 'service_role' then
+  -- Bypass cases (no caller-scope check):
+  --   1. service_role HTTP caller (Edge Functions / REST API w/ service key)
+  --   2. direct-SQL caller WITHOUT an end-user JWT context (pg_cron job,
+  --      psql session, migration). These run as the cron role and have NO
+  --      `request.jwt.claim.role` setting AND NO `request.jwt.claim.sub` —
+  --      `auth.uid()` returns null. We detect that and treat them as trusted.
+  --
+  -- For authenticated end-user callers (Supabase Auth JWT), require an
+  -- org-membership match against the account's org.
+  if current_setting('request.jwt.claim.role', true) is distinct from 'service_role'
+     and auth.uid() is not null
+  then
     v_caller_org := public.auth_org_id();
     if v_caller_org is null or v_caller_org <> v_account_org then
       return null;

@@ -153,7 +153,6 @@ export function SeedTestPage() {
           recorded++
         } catch (err) {
           // toast.error fires in the mutation onError; just keep counting
-          // eslint-disable-next-line no-console
           console.error('[SeedTestPage] insert failed:', err)
         }
       }
