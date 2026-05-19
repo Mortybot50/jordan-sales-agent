@@ -165,11 +165,13 @@ Deno.serve(async (req: Request) => {
     return json(405, { success: false, error: 'Method not allowed' })
   }
 
-  // Service-role auth gate. verify_jwt=true at the Edge only proves the
-  // caller has *some* valid Supabase-signed JWT (anon key included). The
-  // helper additionally verifies the JWT signature with SUPABASE_JWT_SECRET
-  // and requires `role` claim == 'service_role' so a leaked anon key can't
-  // trigger the send pipeline. See ../_shared/auth.ts for the rationale.
+  // Service-role auth gate. verify_jwt=true at the Edge gateway is REQUIRED —
+  // it's the layer that verifies the JWT's HS256 signature. The helper below
+  // decodes the (gateway-verified) JWT and requires `role` claim ==
+  // 'service_role' so a leaked anon-key JWT cannot trigger the send pipeline.
+  // Do NOT disable verify_jwt on this function — without the gateway check
+  // the role claim alone is unsigned and trivially forgeable. See
+  // ../_shared/auth.ts for the rationale.
   const unauthorizedResp = await requireServiceRoleAuth(req)
   if (unauthorizedResp) return unauthorizedResp
 
