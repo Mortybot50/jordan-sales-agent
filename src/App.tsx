@@ -21,6 +21,9 @@ import { RoutePage } from '@/pages/RoutePage'
 import { BriefingPage } from '@/pages/BriefingPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { EmailAccountsPage } from '@/pages/Settings/EmailAccountsPage'
+import { SeedTestPage } from '@/pages/Settings/SeedTestPage'
+import { PostmasterToolsPage } from '@/pages/Settings/PostmasterToolsPage'
+import { SendingPage } from '@/pages/Analytics/SendingPage'
 import { SuppressionListPage } from '@/pages/SuppressionListPage'
 import { AdminWorkersPage } from '@/pages/AdminWorkersPage'
 import PrimitivesPage from '@/pages/_primitives'
@@ -113,6 +116,9 @@ export default function App() {
           <Route path="briefing" element={<BriefingPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="settings/email-accounts" element={<EmailAccountsPage />} />
+          <Route path="settings/seed-test" element={<SeedTestPage />} />
+          <Route path="settings/postmaster-tools" element={<PostmasterToolsPage />} />
+          <Route path="analytics/sending" element={<SendingPage />} />
           <Route path="settings/suppression-list" element={<SuppressionListPage />} />
           <Route path="admin/workers" element={<AdminWorkersPage />} />
         </Route>

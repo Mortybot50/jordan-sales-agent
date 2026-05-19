@@ -1562,6 +1562,57 @@ export function SettingsPage() {
           <PublicBookingLinkCard />
 
           <SendingInfrastructureCard />
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">LeadFlow native sender</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Inboxes, deliverability monitoring, and the cutover prep tools.
+              </p>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <Link
+                to="/settings/email-accounts"
+                className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 hover:bg-accent transition-colors"
+              >
+                <div>
+                  <p className="text-sm font-medium">Email accounts</p>
+                  <p className="text-xs text-muted-foreground">Inboxes + SMTP credentials</p>
+                </div>
+                <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />
+              </Link>
+              <Link
+                to="/analytics/sending"
+                className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 hover:bg-accent transition-colors"
+              >
+                <div>
+                  <p className="text-sm font-medium">Sending analytics</p>
+                  <p className="text-xs text-muted-foreground">Per-inbox + per-domain health</p>
+                </div>
+                <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />
+              </Link>
+              <Link
+                to="/settings/seed-test"
+                className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 hover:bg-accent transition-colors"
+              >
+                <div>
+                  <p className="text-sm font-medium">Daily seed test</p>
+                  <p className="text-xs text-muted-foreground">Inbox placement check</p>
+                </div>
+                <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />
+              </Link>
+              <Link
+                to="/settings/postmaster-tools"
+                className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 hover:bg-accent transition-colors"
+              >
+                <div>
+                  <p className="text-sm font-medium">Postmaster Tools</p>
+                  <p className="text-xs text-muted-foreground">Weekly grade per domain</p>
+                </div>
+                <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />
+              </Link>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="stages">
