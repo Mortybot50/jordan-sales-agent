@@ -30,6 +30,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { decryptToken } from '../_shared/token-crypto.ts'
 import { redactEmail } from '../_shared/pii.ts'
+import { requireServiceRoleAuth } from '../_shared/auth.ts'
 
 // @ts-expect-error Deno globals
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? Deno.env.get('VITE_SUPABASE_URL')!
@@ -178,11 +179,9 @@ Deno.serve(async (req: Request) => {
     return json(405, { success: false, error: 'Method not allowed' })
   }
 
-  // Service-role auth gate — see enqueue-sends/index.ts for rationale.
-  const auth = req.headers.get('Authorization') ?? ''
-  if (auth !== `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`) {
-    return json(401, { success: false, error: 'unauthorized' })
-  }
+  // Service-role auth gate — see _shared/auth.ts for rationale.
+  const unauthorizedResp = await requireServiceRoleAuth(req)
+  if (unauthorizedResp) return unauthorizedResp
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 

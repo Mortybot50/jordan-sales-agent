@@ -35,6 +35,7 @@
 // @ts-expect-error Deno edge runtime import
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { redactEmail } from '../_shared/pii.ts'
+import { requireServiceRoleAuth } from '../_shared/auth.ts'
 
 // @ts-expect-error Deno globals
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? Deno.env.get('VITE_SUPABASE_URL')!
@@ -164,14 +165,15 @@ Deno.serve(async (req: Request) => {
     return json(405, { success: false, error: 'Method not allowed' })
   }
 
-  // Service-role auth gate. verify_jwt=true at the Edge only proves the
-  // caller has *some* valid JWT (anon key included). pg_cron posts with the
-  // service-role bearer; reject anything else so a leaked anon key can't
-  // trigger the send pipeline.
-  const auth = req.headers.get('Authorization') ?? ''
-  if (auth !== `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`) {
-    return json(401, { success: false, error: 'unauthorized' })
-  }
+  // Service-role auth gate. verify_jwt=true at the Edge gateway is REQUIRED —
+  // it's the layer that verifies the JWT's HS256 signature. The helper below
+  // decodes the (gateway-verified) JWT and requires `role` claim ==
+  // 'service_role' so a leaked anon-key JWT cannot trigger the send pipeline.
+  // Do NOT disable verify_jwt on this function — without the gateway check
+  // the role claim alone is unsigned and trivially forgeable. See
+  // ../_shared/auth.ts for the rationale.
+  const unauthorizedResp = await requireServiceRoleAuth(req)
+  if (unauthorizedResp) return unauthorizedResp
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
