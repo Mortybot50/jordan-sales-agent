@@ -258,8 +258,9 @@ export function SendingPage() {
   const { data: cronHealth } = useCronHealth()
   const pauseInbox = usePauseInbox()
 
-  const accountList = accounts ?? []
-  const eventsList = events ?? []
+  // Memoise the fallbacks so downstream useMemo dependencies are stable.
+  const accountList = useMemo(() => accounts ?? [], [accounts])
+  const eventsList = useMemo(() => events ?? [], [events])
 
   const inboxStats: InboxDailyStats[] = useMemo(
     () => computeInboxDailyStats(eventsList, accountList),
