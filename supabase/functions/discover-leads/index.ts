@@ -20,6 +20,8 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 // @ts-expect-error Deno globals
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 // @ts-expect-error Deno globals
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
+// @ts-expect-error Deno globals
 const OUTSCRAPER_API_KEY = Deno.env.get('OUTSCRAPER_API_KEY') ?? ''
 // @ts-expect-error Deno globals
 const GOOGLE_PLACES_API_KEY = Deno.env.get('GOOGLE_PLACES_API_KEY') ?? ''
@@ -32,7 +34,8 @@ async function getCallerOrgId(req: Request): Promise<string | null> {
   const auth = req.headers.get('Authorization') ?? ''
   if (!auth.startsWith('Bearer ')) return null
 
-  const userClient = createClient(SUPABASE_URL, auth.slice('Bearer '.length).trim(), {
+  // Second arg must be the anon key (apikey header); user's JWT goes in Authorization
+  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: auth } },
   })
 
