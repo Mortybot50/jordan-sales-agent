@@ -24,6 +24,30 @@ const OUTSCRAPER_API_KEY = Deno.env.get('OUTSCRAPER_API_KEY') ?? ''
 // @ts-expect-error Deno globals
 const GOOGLE_PLACES_API_KEY = Deno.env.get('GOOGLE_PLACES_API_KEY') ?? ''
 
+/**
+ * Validate the caller's JWT using a user-scoped Supabase client.
+ * Returns the user's org_id if authenticated, null otherwise.
+ */
+async function getCallerOrgId(req: Request): Promise<string | null> {
+  const auth = req.headers.get('Authorization') ?? ''
+  if (!auth.startsWith('Bearer ')) return null
+
+  const userClient = createClient(SUPABASE_URL, auth.slice('Bearer '.length).trim(), {
+    global: { headers: { Authorization: auth } },
+  })
+
+  const { data: { user }, error } = await userClient.auth.getUser()
+  if (error || !user) return null
+
+  const { data: profile } = await userClient
+    .from('users')
+    .select('org_id')
+    .eq('id', user.id)
+    .single()
+
+  return profile?.org_id ?? null
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -334,6 +358,10 @@ Deno.serve(async (req: Request) => {
   const { search_id } = body
   if (!search_id) return jsonResp({ error: 'search_id required' }, 400)
 
+  // Validate caller's org before using service role key
+  const callerOrgId = await getCallerOrgId(req)
+  if (!callerOrgId) return jsonResp({ error: 'unauthorized' }, 401)
+
   // Load search config
   const { data: search, error: searchErr } = await supabase
     .from('lead_searches')
@@ -343,6 +371,11 @@ Deno.serve(async (req: Request) => {
 
   if (searchErr || !search) {
     return jsonResp({ error: searchErr?.message ?? 'search not found' }, 404)
+  }
+
+  // Confirm caller's org owns this search (defence in depth against IDOR)
+  if (search.org_id !== callerOrgId) {
+    return jsonResp({ error: 'forbidden' }, 403)
   }
 
   // Create run record
@@ -405,9 +438,11 @@ Deno.serve(async (req: Request) => {
       let venueId: string | null = null
 
       if (placeId) {
+        // Scope dedup by org_id — place_id unique index is (org_id, place_id)
         const { data: existing } = await supabase
           .from('venues')
           .select('id')
+          .eq('org_id', search.org_id)
           .eq('place_id', placeId)
           .maybeSingle()
 
@@ -470,15 +505,27 @@ Deno.serve(async (req: Request) => {
       for (const c of contacts) {
         if (!c.email) continue
 
-        const tier = classifyEmailTier(c.email)
+        const normalizedEmail = c.email.toLowerCase().trim()
+        const tier = classifyEmailTier(normalizedEmail)
+
+        // Skip if this email already exists on this venue (dedup on repeated runs)
+        const { data: dupContact } = await supabase
+          .from('contacts')
+          .select('id')
+          .eq('org_id', search.org_id)
+          .eq('venue_id', venueId)
+          .eq('email', normalizedEmail)
+          .maybeSingle()
+
+        if (dupContact) continue
 
         const { error: contactErr } = await supabase
           .from('contacts')
           .insert({
             org_id: search.org_id,
             venue_id: venueId,
-            full_name: c.full_name ?? c.email.split('@')[0],
-            email: c.email.toLowerCase().trim(),
+            full_name: c.full_name ?? normalizedEmail.split('@')[0],
+            email: normalizedEmail,
             phone: c.phone ?? null,
             email_tier: tier,
             source: search.source_engine,

@@ -177,10 +177,16 @@ async function linkMultiSite(
   const siblingIds = (siblings ?? []).map((v: { id: string }) => v.id)
 
   if (siblingIds.length === 0) {
-    // Store ABN on this venue for future sibling detection
+    // Merge ABN into existing source_details (don't overwrite other metadata)
+    const { data: existing } = await supabase
+      .from('venues')
+      .select('source_details')
+      .eq('id', venueId)
+      .single()
+    const merged = { ...(existing?.source_details as Record<string, unknown> ?? {}), abn }
     await supabase
       .from('venues')
-      .update({ source_details: { abn }, multi_site_flag: false })
+      .update({ source_details: merged, multi_site_flag: false })
       .eq('id', venueId)
     return { linked_venue_ids: [], group_id: null }
   }
@@ -215,15 +221,24 @@ async function linkMultiSite(
     groupId = newGroup.id
   }
 
-  // Link all venues (this one + siblings) to the group
+  // Link all venues (this one + siblings) to the group, merging source_details
   const allIds = [venueId, ...siblingIds]
   for (const id of allIds) {
+    const { data: existingVenue } = await supabase
+      .from('venues')
+      .select('source_details')
+      .eq('id', id)
+      .single()
+    const mergedDetails = {
+      ...(existingVenue?.source_details as Record<string, unknown> ?? {}),
+      abn,
+    }
     await supabase
       .from('venues')
       .update({
         group_id: groupId,
         multi_site_flag: true,
-        source_details: { abn },
+        source_details: mergedDetails,
       })
       .eq('id', id)
   }
