@@ -280,9 +280,12 @@ export type Database = {
       }
       contacts: {
         Row: {
+          catch_all_flag: boolean | null
+          catch_all_send_separately: boolean | null
           created_at: string | null
           do_not_contact: boolean
           email: string | null
+          email_tier: number | null
           full_name: string
           geocoded_at: string | null
           id: string
@@ -297,13 +300,19 @@ export type Database = {
           phone: string | null
           role: string | null
           signal_reopening: Json | null
+          source: string | null
           updated_at: string | null
           venue_id: string | null
+          verification_status: string | null
+          verified_at: string | null
         }
         Insert: {
+          catch_all_flag?: boolean | null
+          catch_all_send_separately?: boolean | null
           created_at?: string | null
           do_not_contact?: boolean
           email?: string | null
+          email_tier?: number | null
           full_name: string
           geocoded_at?: string | null
           id?: string
@@ -318,13 +327,19 @@ export type Database = {
           phone?: string | null
           role?: string | null
           signal_reopening?: Json | null
+          source?: string | null
           updated_at?: string | null
           venue_id?: string | null
+          verification_status?: string | null
+          verified_at?: string | null
         }
         Update: {
+          catch_all_flag?: boolean | null
+          catch_all_send_separately?: boolean | null
           created_at?: string | null
           do_not_contact?: boolean
           email?: string | null
+          email_tier?: number | null
           full_name?: string
           geocoded_at?: string | null
           id?: string
@@ -339,8 +354,11 @@ export type Database = {
           phone?: string | null
           role?: string | null
           signal_reopening?: Json | null
+          source?: string | null
           updated_at?: string | null
           venue_id?: string | null
+          verification_status?: string | null
+          verified_at?: string | null
         }
         Relationships: [
           {
@@ -545,6 +563,96 @@ export type Database = {
           },
         ]
       }
+      email_accounts: {
+        Row: {
+          brand: string | null
+          created_at: string
+          daily_send_cap: number
+          display_name: string | null
+          domain: string | null
+          email_address: string
+          icp_segment: string | null
+          id: string
+          last_bounce_at: string | null
+          last_send_at: string | null
+          last_warmup_send_at: string | null
+          org_id: string
+          reply_to_address: string | null
+          reputation_score: number | null
+          send_signature: string | null
+          smtp_host: string
+          smtp_password_encrypted: string | null
+          smtp_port: number
+          smtp_username: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          brand?: string | null
+          created_at?: string
+          daily_send_cap?: number
+          display_name?: string | null
+          domain?: string | null
+          email_address: string
+          icp_segment?: string | null
+          id?: string
+          last_bounce_at?: string | null
+          last_send_at?: string | null
+          last_warmup_send_at?: string | null
+          org_id: string
+          reply_to_address?: string | null
+          reputation_score?: number | null
+          send_signature?: string | null
+          smtp_host?: string
+          smtp_password_encrypted?: string | null
+          smtp_port?: number
+          smtp_username: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          brand?: string | null
+          created_at?: string
+          daily_send_cap?: number
+          display_name?: string | null
+          domain?: string | null
+          email_address?: string
+          icp_segment?: string | null
+          id?: string
+          last_bounce_at?: string | null
+          last_send_at?: string | null
+          last_warmup_send_at?: string | null
+          org_id?: string
+          reply_to_address?: string | null
+          reputation_score?: number | null
+          send_signature?: string | null
+          smtp_host?: string
+          smtp_password_encrypted?: string | null
+          smtp_port?: number
+          smtp_username?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_accounts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_accounts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_drafts: {
         Row: {
           approved_at: string | null
@@ -565,11 +673,11 @@ export type Database = {
           org_id: string
           original_body: string | null
           original_subject: string | null
+          sender_inbox_id: string | null
           sendgrid_msg_id: string | null
           sent_at: string | null
           sequence_enrollment_id: string | null
           sequence_step_number: number | null
-          sender_inbox_id: string | null
           status: string | null
           subject: string | null
           suppression_reason: string | null
@@ -593,11 +701,11 @@ export type Database = {
           org_id: string
           original_body?: string | null
           original_subject?: string | null
+          sender_inbox_id?: string | null
           sendgrid_msg_id?: string | null
           sent_at?: string | null
           sequence_enrollment_id?: string | null
           sequence_step_number?: number | null
-          sender_inbox_id?: string | null
           status?: string | null
           subject?: string | null
           suppression_reason?: string | null
@@ -621,11 +729,11 @@ export type Database = {
           org_id?: string
           original_body?: string | null
           original_subject?: string | null
+          sender_inbox_id?: string | null
           sendgrid_msg_id?: string | null
           sent_at?: string | null
           sequence_enrollment_id?: string | null
           sequence_step_number?: number | null
-          sender_inbox_id?: string | null
           status?: string | null
           subject?: string | null
           suppression_reason?: string | null
@@ -653,10 +761,209 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "email_drafts_sender_inbox_id_fkey"
+            columns: ["sender_inbox_id"]
+            isOneToOne: false
+            referencedRelation: "email_accounts"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "email_drafts_sequence_enrollment_id_fkey"
             columns: ["sequence_enrollment_id"]
             isOneToOne: false
             referencedRelation: "sequence_enrollments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_pixel_hits: {
+        Row: {
+          created_at: string
+          hit_at: string
+          id: string
+          ip_address: unknown
+          is_apple_mpp: boolean
+          send_queue_id: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string
+          hit_at?: string
+          id?: string
+          ip_address?: unknown
+          is_apple_mpp?: boolean
+          send_queue_id?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string
+          hit_at?: string
+          id?: string
+          ip_address?: unknown
+          is_apple_mpp?: boolean
+          send_queue_id?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_pixel_hits_send_queue_id_fkey"
+            columns: ["send_queue_id"]
+            isOneToOne: false
+            referencedRelation: "email_send_queue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_send_events: {
+        Row: {
+          created_at: string
+          draft_id: string | null
+          email_account_id: string | null
+          event_at: string
+          event_type: string
+          id: string
+          metadata: Json | null
+          org_id: string
+          send_queue_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          draft_id?: string | null
+          email_account_id?: string | null
+          event_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json | null
+          org_id: string
+          send_queue_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          draft_id?: string | null
+          email_account_id?: string | null
+          event_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+          org_id?: string
+          send_queue_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_send_events_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "email_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_send_events_email_account_id_fkey"
+            columns: ["email_account_id"]
+            isOneToOne: false
+            referencedRelation: "email_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_send_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_send_events_send_queue_id_fkey"
+            columns: ["send_queue_id"]
+            isOneToOne: false
+            referencedRelation: "email_send_queue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_send_queue: {
+        Row: {
+          attempt_count: number
+          body: string | null
+          created_at: string
+          draft_id: string | null
+          email_account_id: string
+          id: string
+          last_error: string | null
+          org_id: string
+          scheduled_for: string
+          sent_at: string | null
+          smtp_message_id: string | null
+          smtp_response: string | null
+          status: string
+          subject: string | null
+          to_email: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attempt_count?: number
+          body?: string | null
+          created_at?: string
+          draft_id?: string | null
+          email_account_id: string
+          id?: string
+          last_error?: string | null
+          org_id: string
+          scheduled_for: string
+          sent_at?: string | null
+          smtp_message_id?: string | null
+          smtp_response?: string | null
+          status?: string
+          subject?: string | null
+          to_email: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attempt_count?: number
+          body?: string | null
+          created_at?: string
+          draft_id?: string | null
+          email_account_id?: string
+          id?: string
+          last_error?: string | null
+          org_id?: string
+          scheduled_for?: string
+          sent_at?: string | null
+          smtp_message_id?: string | null
+          smtp_response?: string | null
+          status?: string
+          subject?: string | null
+          to_email?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_send_queue_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "email_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_send_queue_email_account_id_fkey"
+            columns: ["email_account_id"]
+            isOneToOne: false
+            referencedRelation: "email_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_send_queue_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_send_queue_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -672,6 +979,7 @@ export type Database = {
           org_id: string
           outcome: string
           user_id: string
+          venue_id: string | null
           venue_observation_id: string | null
           visited_at: string
           voice_audio_path: string | null
@@ -687,6 +995,7 @@ export type Database = {
           org_id: string
           outcome: string
           user_id: string
+          venue_id?: string | null
           venue_observation_id?: string | null
           visited_at?: string
           voice_audio_path?: string | null
@@ -702,6 +1011,7 @@ export type Database = {
           org_id?: string
           outcome?: string
           user_id?: string
+          venue_id?: string | null
           venue_observation_id?: string | null
           visited_at?: string
           voice_audio_path?: string | null
@@ -720,6 +1030,13 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_visits_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
             referencedColumns: ["id"]
           },
           {
@@ -781,6 +1098,60 @@ export type Database = {
           },
         ]
       }
+      inbox_placement_seeds: {
+        Row: {
+          created_at: string
+          domain: string
+          id: string
+          org_id: string
+          placement: string | null
+          placement_recorded_at: string | null
+          seed_address: string
+          seed_provider: string
+          sent_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          domain: string
+          id?: string
+          org_id: string
+          placement?: string | null
+          placement_recorded_at?: string | null
+          seed_address: string
+          seed_provider: string
+          sent_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          domain?: string
+          id?: string
+          org_id?: string
+          placement?: string | null
+          placement_recorded_at?: string | null
+          seed_address?: string
+          seed_provider?: string
+          sent_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inbox_placement_seeds_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inbox_placement_seeds_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_scores: {
         Row: {
           deal_id: string | null
@@ -819,6 +1190,125 @@ export type Database = {
           },
           {
             foreignKeyName: "lead_scores_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_search_runs: {
+        Row: {
+          cost_usd: number | null
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          new_venue_count: number | null
+          org_id: string
+          result_count: number | null
+          search_id: string
+          started_at: string
+          status: string
+        }
+        Insert: {
+          cost_usd?: number | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          new_venue_count?: number | null
+          org_id: string
+          result_count?: number | null
+          search_id: string
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          cost_usd?: number | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          new_venue_count?: number | null
+          org_id?: string
+          result_count?: number | null
+          search_id?: string
+          started_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_search_runs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_search_runs_search_id_fkey"
+            columns: ["search_id"]
+            isOneToOne: false
+            referencedRelation: "lead_searches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_searches: {
+        Row: {
+          categories: string[]
+          created_at: string | null
+          email_extraction: boolean
+          id: string
+          last_run_at: string | null
+          last_run_cost_usd: number | null
+          last_run_result_count: number | null
+          limit_per_run: number
+          name: string
+          org_id: string
+          region: string
+          schedule_cron: string | null
+          source_engine: string
+          suburb: string | null
+          total_runs: number
+          user_id: string
+        }
+        Insert: {
+          categories: string[]
+          created_at?: string | null
+          email_extraction?: boolean
+          id?: string
+          last_run_at?: string | null
+          last_run_cost_usd?: number | null
+          last_run_result_count?: number | null
+          limit_per_run?: number
+          name: string
+          org_id: string
+          region?: string
+          schedule_cron?: string | null
+          source_engine: string
+          suburb?: string | null
+          total_runs?: number
+          user_id: string
+        }
+        Update: {
+          categories?: string[]
+          created_at?: string | null
+          email_extraction?: boolean
+          id?: string
+          last_run_at?: string | null
+          last_run_cost_usd?: number | null
+          last_run_result_count?: number | null
+          limit_per_run?: number
+          name?: string
+          org_id?: string
+          region?: string
+          schedule_cron?: string | null
+          source_engine?: string
+          suburb?: string | null
+          total_runs?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_searches_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
@@ -1026,6 +1516,54 @@ export type Database = {
           },
         ]
       }
+      postmaster_grades: {
+        Row: {
+          created_at: string
+          domain: string
+          grade: string
+          id: string
+          notes: string | null
+          org_id: string
+          recorded_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          domain: string
+          grade: string
+          id?: string
+          notes?: string | null
+          org_id: string
+          recorded_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          domain?: string
+          grade?: string
+          id?: string
+          notes?: string | null
+          org_id?: string
+          recorded_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "postmaster_grades_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "postmaster_grades_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           active: boolean
@@ -1135,6 +1673,205 @@ export type Database = {
             columns: ["venue_observation_prior"]
             isOneToOne: false
             referencedRelation: "venue_observations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      route_days: {
+        Row: {
+          anchor_lat: number | null
+          anchor_lng: number | null
+          anchor_venue_id: string | null
+          created_at: string
+          day_of_week: number
+          generated_at: string | null
+          id: string
+          notes: string | null
+          org_id: string
+          prospect_share: number
+          radius_km: number
+          suburb_focus: string | null
+          target_stops: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          anchor_lat?: number | null
+          anchor_lng?: number | null
+          anchor_venue_id?: string | null
+          created_at?: string
+          day_of_week: number
+          generated_at?: string | null
+          id?: string
+          notes?: string | null
+          org_id: string
+          prospect_share?: number
+          radius_km?: number
+          suburb_focus?: string | null
+          target_stops?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          anchor_lat?: number | null
+          anchor_lng?: number | null
+          anchor_venue_id?: string | null
+          created_at?: string
+          day_of_week?: number
+          generated_at?: string | null
+          id?: string
+          notes?: string | null
+          org_id?: string
+          prospect_share?: number
+          radius_km?: number
+          suburb_focus?: string | null
+          target_stops?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_days_anchor_venue_id_fkey"
+            columns: ["anchor_venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_days_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      route_stops: {
+        Row: {
+          created_at: string
+          est_arrival_min: number | null
+          est_drive_km: number | null
+          field_visit_id: string | null
+          id: string
+          lead_score_cached: number | null
+          org_id: string
+          route_day_id: string
+          stop_kind: string
+          stop_order: number
+          suburb_cached: string | null
+          venue_id: string
+          venue_name_cached: string
+        }
+        Insert: {
+          created_at?: string
+          est_arrival_min?: number | null
+          est_drive_km?: number | null
+          field_visit_id?: string | null
+          id?: string
+          lead_score_cached?: number | null
+          org_id: string
+          route_day_id: string
+          stop_kind: string
+          stop_order: number
+          suburb_cached?: string | null
+          venue_id: string
+          venue_name_cached: string
+        }
+        Update: {
+          created_at?: string
+          est_arrival_min?: number | null
+          est_drive_km?: number | null
+          field_visit_id?: string | null
+          id?: string
+          lead_score_cached?: number | null
+          org_id?: string
+          route_day_id?: string
+          stop_kind?: string
+          stop_order?: number
+          suburb_cached?: string | null
+          venue_id?: string
+          venue_name_cached?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_stops_field_visit_id_fkey"
+            columns: ["field_visit_id"]
+            isOneToOne: false
+            referencedRelation: "field_visits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_stops_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_stops_route_day_id_fkey"
+            columns: ["route_day_id"]
+            isOneToOne: false
+            referencedRelation: "route_days"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_stops_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sender_inboxes: {
+        Row: {
+          created_at: string
+          daily_cap: number
+          display_name: string | null
+          email: string
+          enabled: boolean
+          id: string
+          instantly_account_id: string | null
+          last_send_at: string | null
+          notes: string | null
+          org_id: string
+          updated_at: string
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          daily_cap?: number
+          display_name?: string | null
+          email: string
+          enabled?: boolean
+          id?: string
+          instantly_account_id?: string | null
+          last_send_at?: string | null
+          notes?: string | null
+          org_id: string
+          updated_at?: string
+          weight?: number
+        }
+        Update: {
+          created_at?: string
+          daily_cap?: number
+          display_name?: string | null
+          email?: string
+          enabled?: boolean
+          id?: string
+          instantly_account_id?: string | null
+          last_send_at?: string | null
+          notes?: string | null
+          org_id?: string
+          updated_at?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sender_inboxes_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
             referencedColumns: ["id"]
           },
         ]
@@ -1420,12 +2157,14 @@ export type Database = {
           contact_id: string | null
           detail: Json | null
           detected_at: string | null
+          evidence_url: string | null
           headline: string | null
           id: string
           is_actioned: boolean | null
           org_id: string
           signal_source: string
           signal_type: string
+          suburb: string | null
           venue_id: string | null
         }
         Insert: {
@@ -1433,12 +2172,14 @@ export type Database = {
           contact_id?: string | null
           detail?: Json | null
           detected_at?: string | null
+          evidence_url?: string | null
           headline?: string | null
           id?: string
           is_actioned?: boolean | null
           org_id: string
           signal_source: string
           signal_type: string
+          suburb?: string | null
           venue_id?: string | null
         }
         Update: {
@@ -1446,12 +2187,14 @@ export type Database = {
           contact_id?: string | null
           detail?: Json | null
           detected_at?: string | null
+          evidence_url?: string | null
           headline?: string | null
           id?: string
           is_actioned?: boolean | null
           org_id?: string
           signal_source?: string
           signal_type?: string
+          suburb?: string | null
           venue_id?: string | null
         }
         Relationships: [
@@ -1601,7 +2344,11 @@ export type Database = {
           org_id: string
           public_slug: string | null
           role: string | null
+          send_timezone: string
+          spam_act_sender_block: string | null
           voice_rules: string | null
+          working_hours_end_local: number
+          working_hours_start_local: number
         }
         Insert: {
           calendly_account_email?: string | null
@@ -1620,7 +2367,11 @@ export type Database = {
           org_id: string
           public_slug?: string | null
           role?: string | null
+          send_timezone?: string
+          spam_act_sender_block?: string | null
           voice_rules?: string | null
+          working_hours_end_local?: number
+          working_hours_start_local?: number
         }
         Update: {
           calendly_account_email?: string | null
@@ -1639,11 +2390,50 @@ export type Database = {
           org_id?: string
           public_slug?: string | null
           role?: string | null
+          send_timezone?: string
+          spam_act_sender_block?: string | null
           voice_rules?: string | null
+          working_hours_end_local?: number
+          working_hours_start_local?: number
         }
         Relationships: [
           {
             foreignKeyName: "users_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      venue_groups: {
+        Row: {
+          abn: string | null
+          created_at: string | null
+          id: string
+          name: string
+          notes: string | null
+          org_id: string
+        }
+        Insert: {
+          abn?: string | null
+          created_at?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          org_id: string
+        }
+        Update: {
+          abn?: string | null
+          created_at?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_groups_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
@@ -1724,98 +2514,262 @@ export type Database = {
       }
       venues: {
         Row: {
+          about_blob: Json | null
           address: string | null
+          archived: boolean
           avg_spend_tier: string | null
+          business_status: string | null
+          cid: string | null
           competitor_water_usage: string | null
           cover_count: number | null
           created_at: string | null
+          geocoded_at: string | null
           google_place_id: string | null
+          group_id: string | null
           icp_score: number | null
           id: string
           is_excluded: boolean | null
+          kgmid: string | null
           kitchen_type: string | null
+          last_visited_at: string | null
+          lat: number | null
           licence_type: string | null
           licensing_status: string | null
+          lng: number | null
+          multi_site_flag: boolean
           name: string
           neighbourhood: string | null
           notes: string | null
           org_id: string
           phone: string | null
+          place_id: string | null
           postcode: string | null
+          rating: number | null
+          review_count: number | null
           seasonality_window: string | null
           service_style: string | null
+          social_facebook: string | null
+          social_instagram: string | null
+          social_linkedin: string | null
+          social_twitter: string | null
           source: string | null
           source_details: Json | null
           state: string | null
           suburb: string | null
           updated_at: string | null
           venue_type: string | null
+          verified: boolean | null
           website: string | null
+          working_hours: Json | null
         }
         Insert: {
+          about_blob?: Json | null
           address?: string | null
+          archived?: boolean
           avg_spend_tier?: string | null
+          business_status?: string | null
+          cid?: string | null
           competitor_water_usage?: string | null
           cover_count?: number | null
           created_at?: string | null
+          geocoded_at?: string | null
           google_place_id?: string | null
+          group_id?: string | null
           icp_score?: number | null
           id?: string
           is_excluded?: boolean | null
+          kgmid?: string | null
           kitchen_type?: string | null
+          last_visited_at?: string | null
+          lat?: number | null
           licence_type?: string | null
           licensing_status?: string | null
+          lng?: number | null
+          multi_site_flag?: boolean
           name: string
           neighbourhood?: string | null
           notes?: string | null
           org_id: string
           phone?: string | null
+          place_id?: string | null
           postcode?: string | null
+          rating?: number | null
+          review_count?: number | null
           seasonality_window?: string | null
           service_style?: string | null
+          social_facebook?: string | null
+          social_instagram?: string | null
+          social_linkedin?: string | null
+          social_twitter?: string | null
           source?: string | null
           source_details?: Json | null
           state?: string | null
           suburb?: string | null
           updated_at?: string | null
           venue_type?: string | null
+          verified?: boolean | null
           website?: string | null
+          working_hours?: Json | null
         }
         Update: {
+          about_blob?: Json | null
           address?: string | null
+          archived?: boolean
           avg_spend_tier?: string | null
+          business_status?: string | null
+          cid?: string | null
           competitor_water_usage?: string | null
           cover_count?: number | null
           created_at?: string | null
+          geocoded_at?: string | null
           google_place_id?: string | null
+          group_id?: string | null
           icp_score?: number | null
           id?: string
           is_excluded?: boolean | null
+          kgmid?: string | null
           kitchen_type?: string | null
+          last_visited_at?: string | null
+          lat?: number | null
           licence_type?: string | null
           licensing_status?: string | null
+          lng?: number | null
+          multi_site_flag?: boolean
           name?: string
           neighbourhood?: string | null
           notes?: string | null
           org_id?: string
           phone?: string | null
+          place_id?: string | null
           postcode?: string | null
+          rating?: number | null
+          review_count?: number | null
           seasonality_window?: string | null
           service_style?: string | null
+          social_facebook?: string | null
+          social_instagram?: string | null
+          social_linkedin?: string | null
+          social_twitter?: string | null
           source?: string | null
           source_details?: Json | null
           state?: string | null
           suburb?: string | null
           updated_at?: string | null
           venue_type?: string | null
+          verified?: boolean | null
           website?: string | null
+          working_hours?: Json | null
         }
         Relationships: [
+          {
+            foreignKeyName: "venues_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "venue_groups"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "venues_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      warmup_messages: {
+        Row: {
+          active: boolean
+          body: string
+          created_at: string
+          id: string
+          kind: string
+          language: string
+          subject: string | null
+          weight: number
+        }
+        Insert: {
+          active?: boolean
+          body: string
+          created_at?: string
+          id?: string
+          kind: string
+          language?: string
+          subject?: string | null
+          weight?: number
+        }
+        Update: {
+          active?: boolean
+          body?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          language?: string
+          subject?: string | null
+          weight?: number
+        }
+        Relationships: []
+      }
+      warmup_threads: {
+        Row: {
+          created_at: string
+          id: string
+          last_send_at: string | null
+          org_id: string
+          recipient_account_id: string
+          reply_count: number
+          send_count: number
+          sender_account_id: string
+          status: string
+          thread_subject: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_send_at?: string | null
+          org_id: string
+          recipient_account_id: string
+          reply_count?: number
+          send_count?: number
+          sender_account_id: string
+          status?: string
+          thread_subject?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_send_at?: string | null
+          org_id?: string
+          recipient_account_id?: string
+          reply_count?: number
+          send_count?: number
+          sender_account_id?: string
+          status?: string
+          thread_subject?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warmup_threads_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warmup_threads_recipient_account_id_fkey"
+            columns: ["recipient_account_id"]
+            isOneToOne: false
+            referencedRelation: "email_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warmup_threads_sender_account_id_fkey"
+            columns: ["sender_account_id"]
+            isOneToOne: false
+            referencedRelation: "email_accounts"
             referencedColumns: ["id"]
           },
         ]
@@ -1866,17 +2820,119 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      cron_job_run_status: {
+        Row: {
+          end_time: string | null
+          http_content_type: string | null
+          http_error: string | null
+          http_status: number | null
+          jobid: number | null
+          jobname: string | null
+          pg_cron_status: string | null
+          runid: number | null
+          start_time: string | null
+        }
+        Relationships: []
+      }
+      public_user_profiles: {
+        Row: {
+          calendly_url: string | null
+          email: string | null
+          full_name: string | null
+          public_slug: string | null
+        }
+        Insert: {
+          calendly_url?: string | null
+          email?: string | null
+          full_name?: string | null
+          public_slug?: string | null
+        }
+        Update: {
+          calendly_url?: string | null
+          email?: string | null
+          full_name?: string | null
+          public_slug?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       auth_org_id: { Args: never; Returns: string }
+      claim_send_queue_batch: {
+        Args: { p_batch?: number }
+        Returns: {
+          body: string
+          draft_id: string
+          email_account_id: string
+          id: string
+          org_id: string
+          subject: string
+          to_email: string
+        }[]
+      }
+      compute_inbox_reputation: {
+        Args: { p_account_id: string }
+        Returns: number
+      }
       compute_lead_score: { Args: { p_contact_id: string }; Returns: number }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      generate_route_stops: {
+        Args: { p_route_day_id: string; p_visited_lookback_days?: number }
+        Returns: undefined
+      }
+      get_email_account_smtp: {
+        Args: { p_account_id: string }
+        Returns: {
+          daily_send_cap: number
+          display_name: string
+          email_address: string
+          org_id: string
+          reply_to_address: string
+          send_signature: string
+          smtp_host: string
+          smtp_password_encrypted: string
+          smtp_port: number
+          smtp_username: string
+          status: string
+          user_id: string
+        }[]
+      }
+      haversine_km: {
+        Args: { lat1: number; lat2: number; lng1: number; lng2: number }
+        Returns: number
+      }
+      is_suppressed: {
+        Args: { p_email: string; p_org_id: string }
+        Returns: boolean
+      }
       recompute_monthly_gate: {
         Args: { p_month: string; p_org_id: string; p_user_id: string }
         Returns: undefined
       }
       run_monthly_gate_forfeits: { Args: never; Returns: undefined }
+      select_next_sender: {
+        Args: { p_org_id: string }
+        Returns: {
+          created_at: string
+          daily_cap: number
+          display_name: string | null
+          email: string
+          enabled: boolean
+          id: string
+          instantly_account_id: string | null
+          last_send_at: string | null
+          notes: string | null
+          org_id: string
+          updated_at: string
+          weight: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "sender_inboxes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       [_ in never]: never
