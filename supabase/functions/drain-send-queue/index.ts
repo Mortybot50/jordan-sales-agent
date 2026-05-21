@@ -301,9 +301,24 @@ async function dispatchOne(supabase: SupabaseClient, row: ClaimedRow, contactId:
     smtp_message_id: smtpMessageId,
   }).eq('id', row.id)
 
+  const nowIso = new Date().toISOString()
   await supabase.from('email_accounts').update({
-    last_send_at: new Date().toISOString(),
+    last_send_at: nowIso,
   }).eq('id', row.email_account_id)
+
+  // Mirror to sender_inboxes (legacy pool table still used by reputation +
+  // weighted-rotation paths). Linked by (org_id, lower(email)) since there
+  // is no direct FK between email_accounts and sender_inboxes.
+  if (account.email_address) {
+    const { error: siErr } = await supabase
+      .from('sender_inboxes')
+      .update({ last_send_at: nowIso })
+      .eq('org_id', row.org_id)
+      .ilike('email', account.email_address)
+    if (siErr) {
+      console.warn('sender_inboxes last_send_at update failed:', siErr.message)
+    }
+  }
 
   const safeTo = await redactEmail(row.to_email)
   await supabase.from('email_send_events').insert({
