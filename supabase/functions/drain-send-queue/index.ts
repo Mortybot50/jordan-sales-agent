@@ -309,12 +309,18 @@ async function dispatchOne(supabase: SupabaseClient, row: ClaimedRow, contactId:
   // Mirror to sender_inboxes (legacy pool table still used by reputation +
   // weighted-rotation paths). Linked by (org_id, lower(email)) since there
   // is no direct FK between email_accounts and sender_inboxes.
+  //
+  // Codex review v3 [P2]: escape LIKE metacharacters (`_`, `%`, `\`) in the
+  // email value before passing to .ilike() — otherwise a legitimate local-part
+  // like `john_doe@x.com` would match siblings (`johnXdoe@x.com`) in the same
+  // org. Escape uses the default Postgres LIKE escape character (`\`).
   if (account.email_address) {
+    const escapedEmail = account.email_address.replace(/[\\%_]/g, '\\$&')
     const { error: siErr } = await supabase
       .from('sender_inboxes')
       .update({ last_send_at: nowIso })
       .eq('org_id', row.org_id)
-      .ilike('email', account.email_address)
+      .ilike('email', escapedEmail)
     if (siErr) {
       console.warn('sender_inboxes last_send_at update failed:', siErr.message)
     }
