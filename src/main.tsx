@@ -1,4 +1,4 @@
-import { StrictMode } from 'react'
+import { StrictMode, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import './index.css'
@@ -14,29 +14,51 @@ const queryClient = new QueryClient({
   },
 })
 
+// Mount-detection timer (Wave 3A-B v2, Codex review v2 PR #45 [P2] residual).
+//
+// v1 of this lived in index.html and started the 8s clock when the script tag
+// executed — which on slow networks included bundle download time, firing
+// false-positive red overlays even though React eventually mounted fine.
+//
+// v2 (this file): the timer starts AFTER the bundle has executed and
+// createRoot().render() has been called. A useEffect inside the React tree
+// clears the timer on first commit, so any successful first render hides
+// the overlay path entirely. 5s is the cap measured from render-attempt,
+// not from network start.
+let mountTimer: number | undefined
+
+function MountWatcher() {
+  useEffect(() => {
+    if (mountTimer !== undefined) {
+      window.clearTimeout(mountTimer)
+      mountTimer = undefined
+    }
+  }, [])
+  return null
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary label="App">
       <QueryClientProvider client={queryClient}>
+        <MountWatcher />
         <App />
       </QueryClientProvider>
     </ErrorBoundary>
   </StrictMode>,
 )
 
-// React-mounted signal for the index.html error overlay (Wave 3A-B, Codex
-// review v2 PR #45 [P2] residual). The overlay's 5s timer previously fired
-// false positives on slow networks because the window included bundle
-// download time. The flag lets the overlay hide instantly the moment React
-// commits its first render, regardless of network speed.
-//
-// Set AFTER createRoot().render() returns. React 18 schedules render
-// synchronously inside microtasks, so by the time this line executes the
-// first commit is queued — index.html's timer is the one that observes the
-// flag, and it only fires after the bundle has already executed.
-declare global {
-  interface Window {
-    __leadflow_react_mounted__?: boolean
-  }
-}
-window.__leadflow_react_mounted__ = true
+mountTimer = window.setTimeout(() => {
+  const root = document.getElementById('root')
+  if (root && root.children.length > 0) return
+  const overlay = document.getElementById('ppb-error')
+  const text = document.getElementById('ppb-error-text')
+  if (!overlay || !text) return
+  const lines = [
+    'TIMEOUT: React did not mount within 5 seconds of bundle execution.',
+    'userAgent: ' + navigator.userAgent,
+    'localStorage keys: ' + Object.keys(localStorage).join(', '),
+  ]
+  text.textContent = lines.join('\n\n')
+  overlay.style.display = 'block'
+}, 5000)

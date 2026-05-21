@@ -20,6 +20,13 @@
       <pre id="ppb-error-text" style="white-space:pre-wrap;margin:0"></pre>
     </div>
     <script>
+    // Synchronous error capture — runs before src/main.tsx loads so we catch
+    // bundle-load errors, parse errors, and pre-render exceptions. The
+    // mount-detection timer is NOT here anymore (Codex v2 PR #45 [P2]
+    // residual): it ran during bundle download on slow networks and fired
+    // false positives. The timer has been moved to src/main.tsx where it
+    // only starts AFTER the bundle has executed createRoot().render(), and
+    // a React useEffect clears it on first commit. See main.tsx.
     (function(){
       var el=document.getElementById('ppb-error'), t=document.getElementById('ppb-error-text'), L=[];
       function show(){t.textContent=L.join('\n\n');el.style.display='block';}
@@ -40,24 +47,6 @@
         if(r&&r.stack)L.push('  stack: '+r.stack.substring(0,800));
         show();
       });
-      // Mount-detection timer. The primary signal is the
-      // `window.__leadflow_react_mounted__` flag set by src/main.tsx
-      // immediately after createRoot().render() returns. The DOM check
-      // (root has children) is kept as a belt-and-braces fallback in case
-      // the flag fails to set (e.g. module never loaded, render threw
-      // pre-flag). Network-padded 8s ceiling — fast networks still see the
-      // overlay hide instantly via the flag, slow 3G gets more room before
-      // a false positive (Codex review v2 PR #45 [P2]).
-      setTimeout(function(){
-        if(window.__leadflow_react_mounted__===true) return;
-        var root=document.getElementById('root');
-        if(root&&root.children.length>0) return;
-        if(L.length>0) return;
-        L.push('TIMEOUT: React did not mount within 8 seconds.');
-        L.push('userAgent: '+navigator.userAgent);
-        L.push('localStorage keys: '+Object.keys(localStorage).join(', '));
-        show();
-      },8000);
     })();
     </script>
     <script type="module" src="/src/main.tsx"></script>

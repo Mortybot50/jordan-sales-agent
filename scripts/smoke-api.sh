@@ -134,27 +134,47 @@ if [[ "$SHAPE_CHECK" != "OK" ]]; then
   exit 1
 fi
 
-# Expected truth table — verified 2026-05-15 against live project
+# Expected truth table — verified 2026-05-21 against live project
 # bsevgxhnxlkzkcalevbb. Update both arrays when the roster changes; the drift
 # check will fail first deploy after the change.
+#
+# Note on verify_jwt=false entries: these are either (a) public-by-design
+# (click-redirect, pixel-track, unsubscribe-post — outbound tracking links),
+# (b) internal-helper invocations from other Edge Functions / crons that
+# pass service-role bearer (abr-lookup, discover-leads, publication-poll,
+# vcglr-poll, ensure-intent-idx, generate-learning-digest, send-morning-
+# briefing), or (c) explicit demo bootstrap (create-demo-user). Internal-
+# helper functions perform their own auth via the Authorization header +
+# SUPABASE_ANON_KEY user client OR service-role guard — see _shared/auth.ts.
 EXPECTED_JWT_TRUE=(
-  generate-draft
-  reopening-radar-poll
-  reopening-radar-manual
-  geocode-batch
-  field-route-optimize
-  voice-transcribe
-  sequence-tick
-  classify-reply-intent
   audit-snapshot
+  classify-reply-intent
+  drain-send-queue
+  enqueue-sends
+  field-route-optimize
+  generate-draft
+  geocode-batch
   geocode-venues-batch
   gmail-inbound
+  process-bounces
+  reopening-radar-manual
+  reopening-radar-poll
+  send-via-smtp
+  sequence-tick
+  voice-transcribe
 )
 EXPECTED_JWT_FALSE=(
+  abr-lookup
+  click-redirect
   create-demo-user
-  send-morning-briefing
-  generate-learning-digest
+  discover-leads
   ensure-intent-idx
+  generate-learning-digest
+  pixel-track
+  publication-poll
+  send-morning-briefing
+  unsubscribe-post
+  vcglr-poll
 )
 
 assert_fn() {
