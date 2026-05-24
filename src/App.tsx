@@ -27,6 +27,7 @@ import { SendingPage } from '@/pages/Analytics/SendingPage'
 import { SuppressionListPage } from '@/pages/SuppressionListPage'
 import { AdminWorkersPage } from '@/pages/AdminWorkersPage'
 import PrimitivesPage from '@/pages/_primitives'
+import { BookingPage } from '@/pages/BookingPage'
 import { PrivacyPolicyPage } from '@/pages/PrivacyPolicyPage'
 import { UnsubscribePage } from '@/pages/UnsubscribePage'
 
@@ -57,6 +58,15 @@ export default function App() {
           element={
             <ErrorBoundary label="Login page">
               <LoginPage />
+            </ErrorBoundary>
+          }
+        />
+        {/* Public booking page — no auth required */}
+        <Route
+          path="/book/:slug"
+          element={
+            <ErrorBoundary label="Booking page">
+              <BookingPage />
             </ErrorBoundary>
           }
         />
