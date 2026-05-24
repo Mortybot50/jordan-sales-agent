@@ -115,3 +115,34 @@ discovery engines). At that point, distinguish `failed_transient`
 contacts into that pattern. Until then, accept that a rare transient
 upsert error will leave a venue at `crawled_found` with zero contacts and
 require manual re-trigger via the `leadflow_drain_crawl_queue()` SQL probe.
+
+### crawler-preserve-nested-hrefs (Codex P2)
+
+**Source:** Codex review round 3 on PR `feat/crawl-venue-contacts`, finding
+triaged P2 at gate close.
+
+**Finding (verbatim):**
+> [P2] Preserve discovered contact hrefs — supabase/functions/crawl-venue-contacts/index.ts:256-259
+> When a homepage links to a contact page below a nested path, such as
+> `/locations/carlton/contact-us` or `/venues/foo/team`, this code collapses
+> the link to only the matched slug and then fetches `${base}/${path}`.
+> Those venues will have their real contact page skipped and can be marked
+> `crawled_empty` even though the email is on the linked page; keep and
+> resolve the actual href instead of rebuilding a root-level URL.
+
+**Why P2:**
+The POC + first-cohort smoke (Carlton venues) consistently published
+contact pages at root-level slugs (`/contact-us`, `/about`, etc.). The
+nested-href case Codex describes is a real but rarer pattern — typically
+multi-location franchises (`/melbourne/contact`, `/locations/<x>/contact`).
+None of the current discovery-engine inputs (Outscraper / Google Places /
+VCGLR) bias toward franchise sites, so the hit rate is bounded.
+
+**Action:** revisit when the crawler hit rate for franchise venues
+specifically drops below 30% (currently unmeasured; baseline metric to
+collect during the Phase 3 sourcing observability rework). Fix shape:
+preserve the full `href` from the `findLinkedPaths` match alongside the
+slug, resolve it via `new URL(href, base).toString()`, and dedup against
+already-visited URLs before fetching. Until then, root-level fallbacks
+(`/contact`, `/contact-us`) still hit for franchise sites whose corporate
+brand publishes a parallel root contact page.
