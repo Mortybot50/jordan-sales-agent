@@ -49,14 +49,12 @@ const STOP_KIND_TONE: Record<RouteStop['stop_kind'], PillTone> = {
   anchor: 'accent',
   follow_up: 'warning',
   prospect: 'neutral',
-  calendly: 'success',
 }
 
 const STOP_KIND_LABEL: Record<RouteStop['stop_kind'], string> = {
   anchor: 'Anchor',
   follow_up: 'Follow-up',
   prospect: 'Prospect',
-  calendly: 'Calendly',
 }
 
 interface DayState {

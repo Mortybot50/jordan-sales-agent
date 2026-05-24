@@ -97,7 +97,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // S1: signature verification HARD-FAILS in prod when the signing key is unset.
-  // Mirror the Calendly webhook — no silent fallthrough.
+  // No silent fallthrough — refuse to process unsigned events in production.
   if (!INSTANTLY_SIGNING_KEY) {
     if (IS_PRODUCTION) {
       console.error('INSTANTLY_WEBHOOK_SIGNING_KEY missing — webhook disabled')

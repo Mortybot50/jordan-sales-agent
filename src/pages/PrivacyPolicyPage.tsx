@@ -84,28 +84,21 @@ export function PrivacyPolicyPage() {
             the reply in the pipeline. See section&nbsp;6 for our Google API Limited Use commitment.
           </p>
 
-          <h3 className="font-semibold mt-4">3.4 Calendar events (Calendly)</h3>
-          <p>
-            When a contact books a meeting via your Calendly link, Calendly sends LeadFlow a webhook containing the
-            invitee's name, email, and event time. LeadFlow uses this to advance the matching deal stage and create an
-            activity record.
-          </p>
-
-          <h3 className="font-semibold mt-4">3.5 AI-generated drafts</h3>
+          <h3 className="font-semibold mt-4">3.4 AI-generated drafts</h3>
           <p>
             LeadFlow uses Anthropic Claude to draft outbound emails on the operator's behalf. Drafts are based on
             contact metadata (name, role, venue, recent activity) and the operator's voice rules. Generated text is
             stored in LeadFlow until the operator approves, edits, or rejects the draft.
           </p>
 
-          <h3 className="font-semibold mt-4">3.6 Voice notes (optional)</h3>
+          <h3 className="font-semibold mt-4">3.5 Voice notes (optional)</h3>
           <p>
             If the operator uses Field Mode to capture voice notes, audio is sent to OpenAI's Whisper API for
             transcription. The audio file is not retained by OpenAI beyond the transcription call. The transcript is
             stored in LeadFlow as a contact note.
           </p>
 
-          <h3 className="font-semibold mt-4">3.7 Operational logs</h3>
+          <h3 className="font-semibold mt-4">3.6 Operational logs</h3>
           <p>
             We log application errors, API call timings, and security events (sign-ins, OAuth exchanges, webhook
             verifications) for debugging and intrusion detection. Logs are retained for up to 90 days.
@@ -118,7 +111,6 @@ export function PrivacyPolicyPage() {
             <li>To display contacts, deals, and activity history in the LeadFlow user interface.</li>
             <li>To generate AI-drafted outbound emails for operator review.</li>
             <li>To match inbound email replies to existing deals and contacts.</li>
-            <li>To advance pipeline stages when meetings are booked via Calendly.</li>
             <li>To send the operator a daily 7 a.m. AEST briefing email summarising pipeline state.</li>
             <li>To classify the intent of inbound replies (positive, objection, out of office, unsubscribe).</li>
             <li>To detect and respond to security incidents, abuse, and service errors.</li>
@@ -139,7 +131,6 @@ export function PrivacyPolicyPage() {
             <li><strong>Anthropic</strong> (Claude API for AI draft generation).</li>
             <li><strong>OpenAI</strong> (Whisper API for voice-note transcription).</li>
             <li><strong>Resend</strong> (transactional email delivery — morning briefing, learning digest).</li>
-            <li><strong>Calendly</strong> (meeting booking webhooks).</li>
             <li><strong>Instantly.ai</strong> (cold email sending and warmup) — once configured.</li>
             <li><strong>Proxycurl</strong> (LinkedIn data enrichment) — only when the operator requests enrichment for a specific contact.</li>
           </ul>
@@ -189,7 +180,6 @@ export function PrivacyPolicyPage() {
             <li><strong>Contact records and activity logs:</strong> retained for the life of the LeadFlow account, until the operator deletes them.</li>
             <li><strong>Gmail message bodies:</strong> retained for up to 12 months after the last related deal activity, then automatically purged from our database. Message metadata (sender, subject, thread ID) may be retained longer for pipeline reporting.</li>
             <li><strong>Encrypted Gmail refresh tokens:</strong> retained for as long as the connection is active. Deleted within 24 hours of the operator revoking the connection.</li>
-            <li><strong>Calendly events:</strong> retained for the life of the matching deal record.</li>
             <li><strong>Operational logs:</strong> retained for up to 90 days.</li>
           </ul>
           <p>
@@ -206,7 +196,7 @@ export function PrivacyPolicyPage() {
             <li>All network traffic is encrypted in transit (HTTPS / TLS).</li>
             <li>Database access is protected by per-tenant row-level security (PostgreSQL RLS).</li>
             <li>Gmail OAuth refresh tokens are encrypted at rest using AES-256-GCM with a key held in our secrets manager (not in the database).</li>
-            <li>Webhook endpoints verify cryptographic signatures (Calendly HMAC, Google Pub/Sub OIDC JWT).</li>
+            <li>Webhook endpoints verify cryptographic signatures (Instantly HMAC, Google Pub/Sub OIDC JWT).</li>
             <li>OAuth state parameters are HMAC-signed and time-bound to prevent CSRF and account-binding attacks.</li>
           </ul>
           <p>

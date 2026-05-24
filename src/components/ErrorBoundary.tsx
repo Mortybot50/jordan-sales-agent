@@ -25,10 +25,9 @@ interface ErrorBoundaryState {
  * Route-level React error boundary.
  *
  * Per audit FE-P1-05, the previous root-only boundary blanked the whole app
- * — including /login and the public /book, /privacy, /unsubscribe pages —
- * when any single screen threw. This boundary is designed to be mounted
- * per top-level route or per public page so a Dashboard crash never takes
- * down /book/:slug.
+ * — including /login and the public /privacy, /unsubscribe pages — when any
+ * single screen threw. This boundary is designed to be mounted per top-level
+ * route or per public page so a Dashboard crash never takes down /privacy.
  *
  * Implements componentDidCatch so the React-supplied componentStack is
  * captured (previous root boundary dropped it).
