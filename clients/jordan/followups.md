@@ -144,3 +144,54 @@ slug, resolve it via `new URL(href, base).toString()`, and dedup against
 already-visited URLs before fetching. Until then, root-level fallbacks
 (`/contact`, `/contact-us`) still hit for franchise sites whose corporate
 brand publishes a parallel root contact page.
+
+---
+
+## calendly-rip — 25/05/2026
+
+### book-slug-fallback-route (Codex P2)
+
+**Source:** Codex review round 1 on PR #70 (chore/rip-calendly), finding triaged P2 at gate close.
+
+**Finding (verbatim):**
+> [P2] Preserve old booking URLs with a fallback — src/App.tsx:63
+> If any prospects follow `/book/:slug` URLs that were already sent by previous drafts or copied from Settings, removing this public route makes React Router fall through to `*`, redirect to `/dashboard`, then send unauthenticated users to login. If booking is being retired, keep a public fallback route that explains meetings are booked manually or asks them to reply, otherwise existing CTAs become broken login links.
+
+**Why P2:**
+Theoretical legacy scenario. The Calendly card and booking page were
+never promoted to Jordan's day-to-day workflow — voice rules explicitly
+told the AI NOT to include booking links, so the universe of already-
+sent `/book/:slug` URLs in the wild is near zero. Recipients clicking
+the rare stray link land on `/login` (after the `*` redirect), which is
+mildly confusing but not a customer-visible failure path. Adding a
+public fallback page is reasonable polish but expands the scope beyond
+"rip Calendly".
+
+**Action:** revisit if Jordan reports any prospect emailing back asking
+"why is your booking page broken". Otherwise leave open.
+
+---
+
+### legacy-voice-rules-public-booking-url (Codex P2)
+
+**Source:** Codex review round 1 on PR #70 (chore/rip-calendly), finding triaged P2 at gate close.
+
+**Finding (verbatim):**
+> [P2] Block legacy voice rules from emitting booking links — supabase/functions/generate-draft/index.ts:269
+> For users who already saved voice rules based on the previous placeholder, such as `Always reference {{public_booking_url}}`, this new no-booking instruction can still be overridden by the user-configured rules appended below while `public_booking_url` is no longer supplied. In that scenario drafts can emit a literal or dead booking token/link, so scrub or ignore legacy booking rules, or make the no-booking rule non-overridable.
+
+**Why P2:**
+Jordan is the only operator on this tenant. His current `voice_rules`
+do not reference `{{public_booking_url}}` (placeholder text in
+SettingsPage was the only place that token appeared, and it was just
+example placeholder copy, not Jordan's actual saved value). The new
+system-prompt sentence ("Do not include any external booking,
+scheduling, or calendar links. Jordan books meetings manually…") gives
+Claude an unambiguous directive even if a stale rule slipped through.
+Auditing every tenant's voice_rules for the literal `{{public_booking_url}}`
+token is reasonable hygiene but defensive.
+
+**Action:** revisit if Jordan reports an outbound draft containing a
+literal `{{public_booking_url}}` token or a dead `/book/...` URL.
+Mitigation if it happens: edit Jordan's saved voice rules in Settings
+to remove the offending instruction. Otherwise leave open.
