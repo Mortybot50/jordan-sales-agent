@@ -14,6 +14,7 @@
 
 // @ts-expect-error Deno edge runtime
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { classifyEmailTier } from '../_shared/email-tier.ts'
 
 // @ts-expect-error Deno globals
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -54,58 +55,6 @@ async function getCallerOrgId(req: Request): Promise<string | null> {
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
-// ---------------------------------------------------------------------------
-// Tier classification
-// ---------------------------------------------------------------------------
-
-const FREEMAIL_DOMAINS = new Set([
-  'gmail.com', 'hotmail.com', 'hotmail.com.au', 'yahoo.com', 'yahoo.com.au',
-  'outlook.com', 'outlook.com.au', 'live.com', 'live.com.au', 'msn.com',
-  'bigpond.com', 'bigpond.net.au', 'optusnet.com.au', 'iinet.net.au',
-  'xtra.co.nz', 'me.com', 'icloud.com',
-])
-
-const TIER2_PREFIXES = new Set([
-  'gm', 'manager', 'owner', 'operations', 'functions', 'events', 'reception',
-])
-
-const TIER3_PREFIXES = new Set([
-  'info', 'hello', 'enquiries', 'enquiry', 'reservations', 'contact',
-  'admin', 'bookings', 'booking', 'sales', 'office', 'welcome', 'general',
-])
-
-function classifyEmailTier(email: string): 1 | 2 | 3 {
-  const lower = email.toLowerCase().trim()
-  const atIdx = lower.indexOf('@')
-  if (atIdx < 0) return 3
-
-  const local = lower.slice(0, atIdx)
-  const domain = lower.slice(atIdx + 1)
-
-  // Freemail = probably personal/owner address → Tier 1
-  if (FREEMAIL_DOMAINS.has(domain)) return 1
-
-  // Check Tier 2 role prefixes (exact or starts-with to handle gm@, gm2@, etc.)
-  for (const prefix of TIER2_PREFIXES) {
-    if (local === prefix || local.startsWith(prefix + '.') || local.startsWith(prefix + '_')) {
-      return 2
-    }
-  }
-
-  // Check Tier 3 generic prefixes
-  for (const prefix of TIER3_PREFIXES) {
-    if (local === prefix || local.startsWith(prefix + '.') || local.startsWith(prefix + '_')) {
-      return 3
-    }
-  }
-
-  // Has a dot suggesting firstname.lastname pattern → Tier 1
-  if (local.includes('.') && !local.includes('@')) return 1
-
-  // Single word non-generic local-part → likely personal address → Tier 1
-  return 1
 }
 
 // ---------------------------------------------------------------------------
