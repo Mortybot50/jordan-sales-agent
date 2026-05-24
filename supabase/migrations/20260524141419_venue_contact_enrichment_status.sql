@@ -40,10 +40,10 @@ CREATE INDEX IF NOT EXISTS venues_enrichment_status_idx
 -- 2. Unique key for idempotent contact upserts
 -- ---------------------------------------------------------------------------
 -- Allow (org_id, venue_id, email) re-runs to be no-ops via ON CONFLICT.
--- venue_id is nullable on contacts so we scope the unique index to NOT NULL
--- venue_id only; loose contacts (venue_id IS NULL) keep their current laxer
--- shape.
+-- Plain unique index (no partial WHERE) — supabase-js's `.upsert({onConflict})`
+-- does NOT emit the WHERE predicate, so a partial index is not match-able from
+-- the client. PG's default NULL distinctness already lets loose-contact rows
+-- (NULL venue_id or NULL email) coexist without colliding.
 
 CREATE UNIQUE INDEX IF NOT EXISTS contacts_org_venue_email_uniq
-  ON contacts(org_id, venue_id, email)
-  WHERE venue_id IS NOT NULL AND email IS NOT NULL;
+  ON contacts(org_id, venue_id, email);

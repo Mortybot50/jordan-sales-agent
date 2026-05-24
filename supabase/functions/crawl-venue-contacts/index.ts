@@ -30,6 +30,7 @@
 // @ts-expect-error Deno edge runtime
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { classifyEmailTier } from '../_shared/email-tier.ts'
+import { requireServiceRoleAuth } from '../_shared/auth.ts'
 
 // @ts-expect-error Deno globals
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -67,6 +68,30 @@ const TRACKING_DOMAINS = [
 // ---------------------------------------------------------------------------
 // URL + domain helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Normalise the venue website URL before crawling.
+ * - Decode percent-encoded query separators (Brunetti's GBP-tracked URL
+ *   stores the `?` as %3F so the path becomes `/carlton/%3Futm_source=...`
+ *   which 404s when fetched literally).
+ * - Strip query string + fragment — they don't help us find contact pages
+ *   and only inflate path-comparison noise.
+ * Returns '' if the URL cannot be parsed at all.
+ */
+function normaliseWebsite(raw: string): string {
+  try {
+    const decoded = decodeURIComponent(raw)
+    const u = new URL(decoded)
+    return `${u.protocol}//${u.host}${u.pathname}`
+  } catch {
+    try {
+      const u = new URL(raw)
+      return `${u.protocol}//${u.host}${u.pathname}`
+    } catch {
+      return ''
+    }
+  }
+}
 
 function apexDomain(url: string): string {
   try {
@@ -192,8 +217,11 @@ interface CrawlResult {
   homepageOk: boolean
 }
 
-async function crawlVenue(website: string): Promise<CrawlResult> {
+async function crawlVenue(rawWebsite: string): Promise<CrawlResult> {
   const result: CrawlResult = { emails: new Map(), pagesChecked: 0, homepageOk: false }
+
+  const website = normaliseWebsite(rawWebsite)
+  if (!website) return result
 
   const apex = apexDomain(website)
   const base = baseUrl(website)
@@ -251,23 +279,15 @@ function jsonResp(body: unknown, status: number): Response {
   })
 }
 
-/**
- * Guard: require a service-role bearer token. Cron drainer + internal
- * fire-and-forget callers pass it; nothing else should reach this function.
- */
-function assertServiceRole(req: Request): boolean {
-  const auth = req.headers.get('Authorization') ?? ''
-  if (!auth.startsWith('Bearer ')) return false
-  const token = auth.slice('Bearer '.length).trim()
-  return token === SUPABASE_SERVICE_ROLE_KEY && token.length > 0
-}
-
 // @ts-expect-error Deno serve
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
   if (req.method !== 'POST') return jsonResp({ error: 'method not allowed' }, 405)
 
-  if (!assertServiceRole(req)) return jsonResp({ error: 'unauthorized' }, 401)
+  // Gateway has verify_jwt=true; this re-checks the role claim is service_role
+  // (so a leaked anon JWT cannot trigger crawls).
+  const unauthorized = await requireServiceRoleAuth(req)
+  if (unauthorized) return unauthorized
 
   let body: { venue_id?: string } = {}
   try {
