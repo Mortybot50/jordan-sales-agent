@@ -107,12 +107,11 @@ Deno.serve(async (req) => {
     })
   }
 
-  // Get caller's profile — public_slug is used to build {{public_booking_url}}
-  // which is passed to the system prompt as a documented variable so Claude can
-  // include Jordan's booking page as a soft CTA when contextually appropriate.
+  // Get caller's profile. No booking-tool integration — Jordan books meetings
+  // manually in his calendar, so the system prompt does not expose a booking URL.
   const { data: userProfile } = await supabase
     .from('users')
-    .select('org_id, full_name, email_signature, calendly_url, voice_rules, public_slug')
+    .select('org_id, full_name, email_signature, voice_rules')
     .eq('id', user.id)
     .single()
 
@@ -122,12 +121,6 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
-
-  // Build booking URL if slug is set; empty string otherwise. Claude decides
-  // whether to include it based on voice rules + email context.
-  const public_booking_url = userProfile.public_slug
-    ? `https://jordan-sales-agent.vercel.app/book/${userProfile.public_slug}`
-    : ''
 
   const { contact_id, draft_type, context_hint } = await req.json()
 
@@ -271,10 +264,9 @@ Deno.serve(async (req) => {
 
 You write to Australian hospitality and commercial prospects — venue type ranges from cafés through to factories, offices, gyms, schools, and residential. Match register and brand selection to the segment.
 
-One ask per email — a call, a meeting, a question, or a yes/no. Never two.${public_booking_url ? `
+One ask per email — a call, a meeting, a question, or a yes/no. Never two.
 
-AVAILABLE VARIABLES:
-- {{public_booking_url}} = ${public_booking_url} — Jordan's personal booking page. Include as a soft CTA when the voice rules and email context call for it.` : ''}`
+Do not include any external booking, scheduling, or calendar links. Jordan books meetings manually — when a meeting is appropriate, ask for it in plain English and let the contact reply with their availability.`
 
   const userVoiceRules = (userProfile.voice_rules ?? '').trim()
   const systemPrompt = userVoiceRules

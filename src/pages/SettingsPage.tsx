@@ -32,7 +32,7 @@ import { useDeals } from '@/lib/queries/deals'
 import { profileFormSchema, icpFormSchema, type ProfileFormValues, type IcpFormValues } from '@/lib/schemas/user'
 import { venueTypeLabel, cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
-import { Plus, Trash2, ChevronUp, ChevronDown, CheckCircle2, XCircle, CheckCircle, ExternalLink, ShieldAlert, ArrowRight, Link2, Copy, Calendar, Circle } from 'lucide-react'
+import { Plus, Trash2, ChevronUp, ChevronDown, CheckCircle2, XCircle, CheckCircle, ExternalLink, ShieldAlert, ArrowRight } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSuppressionList } from '@/lib/queries/suppression'
 import { SendingInfrastructureCard } from '@/components/settings/SendingInfrastructureCard'
@@ -81,8 +81,6 @@ function ProfileTab() {
     resolver: zodResolver(profileFormSchema),
     defaultValues: {
       full_name: user?.full_name ?? '',
-      calendly_url: user?.calendly_url ?? '',
-      calendly_account_email: user?.calendly_account_email ?? '',
       email_signature: user?.email_signature ?? '',
       default_commission_pct: user?.default_commission_pct ?? null,
     },
@@ -93,10 +91,6 @@ function ProfileTab() {
     await updateProfile.mutateAsync({
       id: user.id,
       full_name: values.full_name,
-      calendly_url: values.calendly_url || undefined,
-      calendly_account_email: values.calendly_account_email
-        ? values.calendly_account_email.toLowerCase().trim()
-        : null,
       email_signature: values.email_signature || undefined,
       default_commission_pct:
         values.default_commission_pct == null || Number.isNaN(values.default_commission_pct)
@@ -191,40 +185,6 @@ function ProfileTab() {
       </div>
 
       <div className="space-y-1">
-        <Label htmlFor="calendly_url">Calendly URL</Label>
-        <Input
-          id="calendly_url"
-          type="url"
-          placeholder="https://calendly.com/yourname"
-          {...form.register('calendly_url')}
-          className={cn(form.formState.errors.calendly_url && 'border-destructive')}
-        />
-        {form.formState.errors.calendly_url && (
-          <p className="text-xs text-destructive">{form.formState.errors.calendly_url.message}</p>
-        )}
-      </div>
-
-      <div className="space-y-1">
-        <Label htmlFor="calendly_account_email">Calendly account email</Label>
-        <Input
-          id="calendly_account_email"
-          type="email"
-          placeholder="you@example.com"
-          {...form.register('calendly_account_email')}
-          className={cn(form.formState.errors.calendly_account_email && 'border-destructive')}
-        />
-        <p className="text-xs text-muted-foreground">
-          The email on your Calendly account (the one Calendly sends bookings from).
-          Used to route incoming webhook events to your account.
-        </p>
-        {form.formState.errors.calendly_account_email && (
-          <p className="text-xs text-destructive">
-            {form.formState.errors.calendly_account_email.message}
-          </p>
-        )}
-      </div>
-
-      <div className="space-y-1">
         <Label htmlFor="email_signature">Email signature</Label>
         <Textarea
           id="email_signature"
@@ -265,38 +225,6 @@ function ProfileTab() {
             {form.formState.errors.default_commission_pct.message}
           </p>
         )}
-      </div>
-
-      <Separator />
-
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground uppercase tracking-wide">Calendly Webhook URL</Label>
-        <p className="text-xs text-muted-foreground">
-          Register this URL in Calendly → Integrations → Webhooks to auto-log bookings:
-        </p>
-        <div className="flex items-center gap-2">
-          <Input
-            readOnly
-            value={`${window.location.origin}/api/webhooks/calendly`}
-            className="font-mono text-xs bg-muted"
-          />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="shrink-0"
-            onClick={() => {
-              navigator.clipboard.writeText(`${window.location.origin}/api/webhooks/calendly`)
-              toast.success('Copied')
-            }}
-          >
-            Copy
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Events: <code className="text-xs bg-muted px-1 rounded">invitee.created</code> and{' '}
-          <code className="text-xs bg-muted px-1 rounded">invitee.canceled</code>
-        </p>
       </div>
 
       <Separator />
@@ -418,7 +346,7 @@ function VoiceRulesSection() {
       <Textarea
         rows={8}
         className="font-mono text-xs"
-        placeholder={'- Never use oddly specific times like "1:48pm"\n- Stay under 80 words for cold outreach\n- Don\'t include a Calendly link unless the venue has explicitly asked to chat\n- Always reference {{public_booking_url}} in follow-up emails (not openers)'}
+        placeholder={'- Never use oddly specific times like "1:48pm"\n- Stay under 80 words for cold outreach\n- Don\'t include a booking link — Jordan books meetings manually'}
         value={value}
         onChange={(e) => setValue(e.target.value)}
       />
@@ -1013,20 +941,6 @@ function IntegrationsTab() {
         </CardContent>
       </Card>
 
-      {/* Calendly */}
-      <Card>
-        <CardContent className="flex items-center justify-between gap-3 py-3 px-4">
-          <div>
-            <p className="text-sm font-medium">Calendly</p>
-            <p className="text-xs text-muted-foreground">Auto-log meeting bookings as activities</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Set your token in Profile to activate</p>
-          </div>
-          <Badge variant="outline" className="text-xs shrink-0 text-muted-foreground">
-            Not connected
-          </Badge>
-        </CardContent>
-      </Card>
-
       {/* Instantly.ai */}
       <Card>
         <CardContent className="flex items-center justify-between gap-3 py-3 px-4">
@@ -1114,381 +1028,6 @@ function SuppressionTab() {
     </div>
   )
 }
-
-// --- Connect Calendly walkthrough card ---
-function CalendlyStepIcon({ done }: { done: boolean }) {
-  return done ? (
-    <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
-  ) : (
-    <Circle className="w-4 h-4 text-muted-foreground shrink-0" />
-  )
-}
-
-function ConnectCalendlyCard() {
-  const { user } = useAuth()
-  const updateProfile = useUpdateUserProfile()
-  const webhookUrl = `${window.location.origin}/api/webhooks/calendly`
-
-  // Step 4 derives from a live probe of the deployed env var.
-  const { data: webhookStatus, isLoading: statusLoading } = useQuery({
-    queryKey: ['calendly-webhook-status'],
-    queryFn: async () => {
-      const res = await fetch('/api/webhooks/calendly/status', {
-        headers: { 'cache-control': 'no-store' },
-      })
-      if (!res.ok) return { configured: false }
-      return (await res.json()) as { configured: boolean }
-    },
-    staleTime: 30_000,
-  })
-
-  const step1Done = !!user?.calendly_account_email
-  const step2Done = !!user?.calendly_url
-  const step3Done = !!user?.calendly_webhook_registered_at
-  const step4Done = !!webhookStatus?.configured
-  const step5Done = !!user?.calendly_test_booking_at
-
-  async function toggleStep3() {
-    if (!user) return
-    await updateProfile.mutateAsync({
-      id: user.id,
-      calendly_webhook_registered_at: step3Done ? null : new Date().toISOString(),
-    })
-  }
-
-  async function toggleStep5() {
-    if (!user) return
-    await updateProfile.mutateAsync({
-      id: user.id,
-      calendly_test_booking_at: step5Done ? null : new Date().toISOString(),
-    })
-  }
-
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center gap-2">
-          <Calendar className="w-4 h-4" />
-          Connect Calendly
-        </CardTitle>
-        <div className="flex items-center gap-2 pt-1">
-          <span className="text-xs text-muted-foreground">Webhook status:</span>
-          {statusLoading ? (
-            <Badge variant="outline" className="text-xs">Checking…</Badge>
-          ) : step4Done ? (
-            <Badge className="bg-green-100 text-green-700 border-0 text-xs">
-              <CheckCircle className="w-3 h-3 mr-1" />
-              Connected
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="text-xs text-amber-600 border-amber-200">
-              Not configured
-            </Badge>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <ol className="space-y-3 text-sm">
-          {/* Step 1 */}
-          <li className="flex items-start gap-3">
-            <CalendlyStepIcon done={step1Done} />
-            <div className="flex-1 min-w-0">
-              <p className="font-medium">1. Copy your Calendly account email</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Calendly → Account Settings → copy your account email → paste it
-                into the <em>Calendly account email</em> field above.
-              </p>
-            </div>
-          </li>
-
-          {/* Step 2 */}
-          <li className="flex items-start gap-3">
-            <CalendlyStepIcon done={step2Done} />
-            <div className="flex-1 min-w-0">
-              <p className="font-medium">2. Set up your scheduling link</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Calendly → create / copy the URL of your event type
-                (e.g.{' '}
-                <code className="text-xs bg-muted px-1 rounded">
-                  https://calendly.com/jordan-leadflow/30min
-                </code>
-                ) → paste into the <em>Calendly URL</em> field above.
-              </p>
-            </div>
-          </li>
-
-          {/* Step 3 */}
-          <li className="flex items-start gap-3">
-            <button
-              type="button"
-              onClick={toggleStep3}
-              disabled={updateProfile.isPending}
-              className="mt-0.5 cursor-pointer disabled:cursor-default"
-              aria-label={step3Done ? 'Mark step 3 incomplete' : 'Mark step 3 complete'}
-            >
-              <CalendlyStepIcon done={step3Done} />
-            </button>
-            <div className="flex-1 min-w-0">
-              <p className="font-medium">3. Register the webhook in Calendly</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Calendly → Integrations → Webhooks → Create Webhook.
-              </p>
-              <ul className="text-xs text-muted-foreground mt-1 space-y-0.5 list-disc pl-4">
-                <li>
-                  URL:{' '}
-                  <code className="text-xs bg-muted px-1 rounded break-all">
-                    {webhookUrl}
-                  </code>
-                </li>
-                <li>
-                  Events:{' '}
-                  <code className="text-xs bg-muted px-1 rounded">invitee.created</code>{' '}
-                  and{' '}
-                  <code className="text-xs bg-muted px-1 rounded">invitee.canceled</code>
-                </li>
-                <li>Scope: User</li>
-              </ul>
-              <p className="text-xs text-muted-foreground mt-1">
-                Tap the circle on the left when you've created the webhook in Calendly.
-              </p>
-            </div>
-          </li>
-
-          {/* Step 4 */}
-          <li className="flex items-start gap-3">
-            <CalendlyStepIcon done={step4Done} />
-            <div className="flex-1 min-w-0">
-              <p className="font-medium">4. Send the signing key to Morty</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Calendly will give you a <em>signing key</em> when you create the
-                webhook. Copy it and send it to Morty — it goes into Vercel as{' '}
-                <code className="text-xs bg-muted px-1 rounded">
-                  CALENDLY_WEBHOOK_SIGNING_KEY
-                </code>{' '}
-                and the webhook activates automatically. This step ticks itself
-                green once the key is live.
-              </p>
-            </div>
-          </li>
-
-          {/* Step 5 */}
-          <li className="flex items-start gap-3">
-            <button
-              type="button"
-              onClick={toggleStep5}
-              disabled={updateProfile.isPending}
-              className="mt-0.5 cursor-pointer disabled:cursor-default"
-              aria-label={step5Done ? 'Mark step 5 incomplete' : 'Mark step 5 complete'}
-            >
-              <CalendlyStepIcon done={step5Done} />
-            </button>
-            <div className="flex-1 min-w-0">
-              <p className="font-medium">5. Test it with a fake booking</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Open your scheduling page, book a fake event using your own email
-                (matching a contact in the CRM) — within ~5 seconds a{' '}
-                <code className="text-xs bg-muted px-1 rounded">meeting_booked</code>{' '}
-                activity should appear on that contact's timeline. Tap the circle
-                when you've confirmed it.
-              </p>
-            </div>
-          </li>
-        </ol>
-
-        <div className="space-y-1 pt-2 border-t">
-          <Label className="text-xs text-muted-foreground uppercase tracking-wide">
-            Webhook URL
-          </Label>
-          <div className="flex items-center gap-2">
-            <Input
-              readOnly
-              value={webhookUrl}
-              className="font-mono text-xs bg-muted"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0"
-              onClick={() => {
-                navigator.clipboard.writeText(webhookUrl)
-                toast.success('Copied')
-              }}
-            >
-              <Copy className="w-3.5 h-3.5 mr-1" />
-              Copy
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-// --- Public Booking Link Card ---
-function PublicBookingLinkCard() {
-  const { user } = useAuth()
-  const qc = useQueryClient()
-
-  // Fetch current public_slug from DB (not in AppUser yet)
-  const { data: slugData, isLoading } = useQuery({
-    queryKey: ['user-public-slug', user?.id],
-    queryFn: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (supabase as any)
-        .from('users')
-        .select('public_slug')
-        .eq('id', user?.id ?? '')
-        .maybeSingle()
-      return (data as { public_slug: string | null } | null)?.public_slug ?? null
-    },
-    enabled: !!user?.id,
-  })
-
-  const [editing, setEditing] = useState(false)
-  const [editValue, setEditValue] = useState('')
-  const [slugError, setSlugError] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
-
-  const slug = slugData ?? null
-  const bookingUrl = slug ? `${window.location.origin}/book/${slug}` : null
-
-  function handleStartEdit() {
-    setEditValue(slug ?? '')
-    setSlugError(null)
-    setEditing(true)
-  }
-
-  async function handleSaveSlug() {
-    const trimmed = editValue.trim().toLowerCase()
-    if (!/^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/.test(trimmed)) {
-      setSlugError('3–30 chars, lowercase letters, numbers, and hyphens only')
-      return
-    }
-    if (!user) return
-    setSaving(true)
-    setSlugError(null)
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any)
-        .from('users')
-        .update({ public_slug: trimmed })
-        .eq('id', user.id)
-      if (error) {
-        if (error.code === '23505') {
-          setSlugError('That slug is already taken — try another')
-        } else {
-          setSlugError(error.message)
-        }
-        return
-      }
-      qc.invalidateQueries({ queryKey: ['user-public-slug', user.id] })
-      setEditing(false)
-      toast.success('Booking link updated')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center gap-2">
-          <Link2 className="w-4 h-4" />
-          Public booking link
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {isLoading ? (
-          <p className="text-xs text-muted-foreground">Loading…</p>
-        ) : !slug ? (
-          <p className="text-xs text-muted-foreground">No booking slug set yet.</p>
-        ) : (
-          <div className="flex items-center gap-2">
-            <Input
-              readOnly
-              value={bookingUrl ?? ''}
-              className="font-mono text-xs bg-muted flex-1"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0"
-              onClick={() => {
-                navigator.clipboard.writeText(bookingUrl ?? '')
-                toast.success('Copied')
-              }}
-            >
-              <Copy className="w-3.5 h-3.5 mr-1" />
-              Copy
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="shrink-0"
-              asChild
-            >
-              <a href={bookingUrl ?? '#'} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            </Button>
-          </div>
-        )}
-
-        {slug && (
-          <p className="text-xs text-muted-foreground flex items-center gap-1">
-            <CheckCircle2 className="w-3 h-3 text-green-600 shrink-0" />
-            Linked into AI drafts — Claude will include this URL when contextually appropriate
-          </p>
-        )}
-
-        {editing ? (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground shrink-0">
-                {window.location.origin}/book/
-              </span>
-              <Input
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                className="h-7 text-sm flex-1"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSaveSlug()
-                  if (e.key === 'Escape') setEditing(false)
-                }}
-                placeholder="your-name"
-              />
-              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={handleSaveSlug} disabled={saving}>
-                <CheckCircle2 className="w-4 h-4 text-green-600" />
-              </Button>
-              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditing(false)}>
-                <XCircle className="w-4 h-4 text-muted-foreground" />
-              </Button>
-            </div>
-            {slugError && <p className="text-xs text-destructive">{slugError}</p>}
-            <p className="text-xs text-muted-foreground">
-              Lowercase letters, numbers, hyphens. 3–30 characters.
-            </p>
-          </div>
-        ) : (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-7 text-xs"
-            onClick={handleStartEdit}
-          >
-            Edit slug
-          </Button>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
 // --- Main Settings Page ---
 export function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -1556,10 +1095,6 @@ export function SettingsPage() {
               <VoiceRulesSection />
             </CardContent>
           </Card>
-
-          <ConnectCalendlyCard />
-
-          <PublicBookingLinkCard />
 
           <SendingInfrastructureCard />
 

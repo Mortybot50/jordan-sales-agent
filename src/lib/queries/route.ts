@@ -17,7 +17,7 @@ import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import type { FieldOutcome } from '@/lib/fieldOutcomes'
 
-export type StopKind = 'prospect' | 'follow_up' | 'anchor' | 'calendly'
+export type StopKind = 'prospect' | 'follow_up' | 'anchor'
 
 export interface RouteStop {
   id: string

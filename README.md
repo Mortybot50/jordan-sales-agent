@@ -67,7 +67,7 @@ SendGrid/Instantly bypass Gmail's standard thread IDs. Every outbound email stor
 | Transactional email | SendGrid |
 | LinkedIn enrichment | Proxycurl (~$0.01/profile) |
 | Venue sourcing | Google Places API |
-| Meeting booking | Calendly embed + webhooks |
+| Meeting booking | None — Jordan books meetings manually in his own calendar |
 
 ---
 
@@ -105,12 +105,11 @@ cp .env.local.example .env.local
 
 | Var | Required in | Purpose |
 |-----|-------------|---------|
-| `CALENDLY_WEBHOOK_SIGNING_KEY` | prod | HMAC-SHA256 secret from Calendly developer portal. Validates inbound `/api/webhooks/calendly` events. Hard-fails the webhook in production when unset. |
 | `INSTANTLY_WEBHOOK_SIGNING_KEY` | prod | HMAC-SHA256 secret shared with Instantly.ai for `/api/webhooks/instantly` (replies, bounces, unsubscribes). Hard-fails the webhook in production when unset. Generate with `openssl rand -hex 32`. |
 | `UNSUBSCRIBE_SIGNING_KEY` | prod | HMAC-SHA256 secret used to sign the `?token=` parameter on `/unsubscribe` links appended to outbound emails. Generate with `openssl rand -hex 32`. |
 | `SUPABASE_SERVICE_ROLE_KEY` | prod | Service-role key for server-side Supabase writes from webhooks. **Never** expose to the client. |
 
-To rotate any of the above: generate a fresh secret, update Vercel env, redeploy, then update the corresponding integration (Calendly/Instantly/email-template). Coordinate the cutover so in-flight webhooks aren't dropped.
+To rotate any of the above: generate a fresh secret, update Vercel env, redeploy, then update the corresponding integration (Instantly/email-template). Coordinate the cutover so in-flight webhooks aren't dropped.
 
 
 ### 3. Apply database migrations
@@ -163,7 +162,6 @@ supabase db reset       # Apply all migrations fresh
 | `draft_edits` | Jordan's edits (learning loop) |
 | `suppression_list` | Spam Act 2003 compliance |
 | `worker_runs` | Background worker observability log |
-| `calendly_events` | Meeting booking webhook events |
 
 Full schema: `supabase/migrations/`
 
@@ -202,7 +200,7 @@ Applied: 2 migrations, 19 tables, 60+ RLS policies
 | 5 | Sequence engine: builder UI, enrollments, sequence-trigger worker with concurrency control |
 | 6 | Auto-sourcing: Google Places worker, ICP scoring, candidate review queue |
 | 7 | Timing signals: VCGLR scrape worker + Proxycurl LinkedIn enrichment |
-| 8 | Morning briefing: 5-section in-app + 7am email digest, Calendly embed + webhook, CSV import |
+| 8 | Morning briefing: 5-section in-app + 7am email digest, CSV import |
 | 9 | Spam Act hardening, circuit breakers, /admin/workers health page, end-to-end QA, go-live |
 
 ---

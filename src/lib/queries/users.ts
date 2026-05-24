@@ -9,10 +9,6 @@ export function useUpdateUserProfile() {
     mutationFn: async ({ id, icp_config, email_notifications, ...rest }: {
       id: string
       full_name?: string
-      calendly_url?: string
-      calendly_account_email?: string | null
-      calendly_webhook_registered_at?: string | null
-      calendly_test_booking_at?: string | null
       email_signature?: string
       voice_rules?: string | null
       default_commission_pct?: number | null
