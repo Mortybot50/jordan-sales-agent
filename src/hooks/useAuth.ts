@@ -115,17 +115,16 @@ export function useAuth(): AuthState {
         if (!mounted) return
 
         if ('timedOut' in result) {
-          console.error(
-            '[useAuth] getSession timed out after',
+          // Timeout means getSession() is slow, not that the persisted token is corrupt.
+          // We stop the loading spinner so the app can render, then let the in-flight
+          // getSession() settle in the background — its result will flow into state via
+          // the onAuthStateChange listener below. The .catch() branch handles real failures.
+          console.warn(
+            '[useAuth] getSession exceeded',
             SESSION_RESTORE_TIMEOUT_MS,
-            'ms — clearing persisted session and redirecting to /login',
+            'ms — leaving session intact, awaiting onAuthStateChange',
           )
-          clearStaleSupabaseAuthStorage()
-          setSession(null)
-          setUser(null)
-          setLoading(false)
-          toast.error('Session expired, please log in')
-          redirectToLogin()
+          if (mounted) setLoading(false)
           return
         }
 
