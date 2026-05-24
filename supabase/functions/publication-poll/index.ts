@@ -212,13 +212,27 @@ const BROADSHEET_SITEMAP_TIMEOUT_MS = 10_000
 const BROADSHEET_ARTICLE_TIMEOUT_MS = 8_000
 const BROADSHEET_CONCURRENCY = 10
 
-async function fetchWithTimeout(url: string, timeoutMs: number, headers: HeadersInit): Promise<Response | null> {
+// Fetch + read body under a single abort deadline. We keep the abort signal
+// live across `resp.text()` so a stall mid-body still trips the timeout
+// (Codex review round 1 [P2] — body reads were previously not timed).
+async function fetchTextWithTimeout(
+  url: string,
+  timeoutMs: number,
+  headers: HeadersInit,
+): Promise<{ ok: true; status: number; text: string } | { ok: false; status: number | null }> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    return await fetch(url, { headers, signal: controller.signal })
+    const resp = await fetch(url, { headers, signal: controller.signal })
+    if (!resp.ok) {
+      // Drain and discard so the connection can return to the pool.
+      try { await resp.text() } catch { /* swallow */ }
+      return { ok: false, status: resp.status }
+    }
+    const text = await resp.text()
+    return { ok: true, status: resp.status, text }
   } catch {
-    return null
+    return { ok: false, status: null }
   } finally {
     clearTimeout(timer)
   }
@@ -230,13 +244,13 @@ async function fetchBroadsheetSitemap(source: SourceKey): Promise<Article[]> {
     'Accept': 'application/xml, text/xml, */*',
   }
 
-  const resp = await fetchWithTimeout(BROADSHEET_SITEMAP_URL, BROADSHEET_SITEMAP_TIMEOUT_MS, headers)
-  if (!resp || !resp.ok) {
-    console.warn(`[broadsheet] sitemap fetch failed: ${resp?.status ?? 'no-response'}`)
+  const result = await fetchTextWithTimeout(BROADSHEET_SITEMAP_URL, BROADSHEET_SITEMAP_TIMEOUT_MS, headers)
+  if (!result.ok) {
+    console.warn(`[broadsheet] sitemap fetch failed: ${result.status ?? 'no-response'}`)
     return []
   }
 
-  const xml = await resp.text()
+  const xml = result.text
   const cutoff = Date.now() - BROADSHEET_MAX_AGE_MS
 
   // Collect candidate URL/lastmod pairs
@@ -261,13 +275,22 @@ async function fetchBroadsheetSitemap(source: SourceKey): Promise<Article[]> {
   candidates.sort((a, b) => b.lastmodMs - a.lastmodMs)
   const selected = candidates.slice(0, BROADSHEET_MAX_ARTICLES)
 
-  // Bounded-concurrency parallel fetch
+  // Bounded-concurrency parallel fetch. allSettled so one bad article
+  // (network blip, parse error, etc.) cannot abort the whole source —
+  // matches the spec's "skip silently per article" contract. Codex review
+  // round 1 [P2 -> P1] — Promise.all rejected the batch on a single body
+  // failure.
   const articles: Article[] = []
   for (let i = 0; i < selected.length; i += BROADSHEET_CONCURRENCY) {
     const batch = selected.slice(i, i + BROADSHEET_CONCURRENCY)
-    const results = await Promise.all(batch.map((c) => fetchBroadsheetArticle(c.url, c.lastmod, source, headers)))
-    for (const r of results) {
-      if (r) articles.push(r)
+    const settled = await Promise.allSettled(
+      batch.map((c) => fetchBroadsheetArticle(c.url, c.lastmod, source, headers)),
+    )
+    for (const s of settled) {
+      if (s.status === 'fulfilled' && s.value) articles.push(s.value)
+      else if (s.status === 'rejected') {
+        console.warn(`[broadsheet] article task rejected: ${String(s.reason)}`)
+      }
     }
   }
 
@@ -280,20 +303,26 @@ async function fetchBroadsheetArticle(
   source: SourceKey,
   headers: HeadersInit,
 ): Promise<Article | null> {
-  const resp = await fetchWithTimeout(url, BROADSHEET_ARTICLE_TIMEOUT_MS, headers)
-  if (!resp || !resp.ok) {
-    console.warn(`[broadsheet] article fetch failed: ${url} (${resp?.status ?? 'no-response'})`)
+  try {
+    const result = await fetchTextWithTimeout(url, BROADSHEET_ARTICLE_TIMEOUT_MS, headers)
+    if (!result.ok) {
+      console.warn(`[broadsheet] article fetch failed: ${url} (${result.status ?? 'no-response'})`)
+      return null
+    }
+
+    const title = extractBroadsheetTitle(result.text)
+    if (!title) return null
+
+    const summary = extractBroadsheetBody(result.text)
+    const published_at = parsePubDate(lastmod)
+
+    return { title, summary, url, published_at, source }
+  } catch (e) {
+    // Belt-and-braces — even if a regex/parse helper throws, never let the
+    // batch unwind. Skip the article, log, continue.
+    console.warn(`[broadsheet] article parse failed: ${url} (${String(e)})`)
     return null
   }
-
-  const html = await resp.text()
-  const title = extractBroadsheetTitle(html)
-  if (!title) return null
-
-  const summary = extractBroadsheetBody(html)
-  const published_at = parsePubDate(lastmod)
-
-  return { title, summary, url, published_at, source }
 }
 
 function extractBroadsheetTitle(html: string): string | null {
