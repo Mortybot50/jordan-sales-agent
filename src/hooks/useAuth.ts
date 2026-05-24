@@ -116,15 +116,18 @@ export function useAuth(): AuthState {
 
         if ('timedOut' in result) {
           // Timeout means getSession() is slow, not that the persisted token is corrupt.
-          // We stop the loading spinner so the app can render, then let the in-flight
-          // getSession() settle in the background — its result will flow into state via
-          // the onAuthStateChange listener below. The .catch() branch handles real failures.
+          // We deliberately do NOT setLoading(false) here: with session still null,
+          // RequireAuth would Navigate to /login, unmounting this hook and unsubscribing
+          // the auth listener before the in-flight getSession() can settle. Instead we
+          // keep the loading spinner up and let either (a) the still-running
+          // getSession() eventually resolve, or (b) the onAuthStateChange listener below
+          // fire INITIAL_SESSION, populate state, and clear loading naturally. The
+          // .catch() branch below still handles real getSession() failures.
           console.warn(
             '[useAuth] getSession exceeded',
             SESSION_RESTORE_TIMEOUT_MS,
             'ms — leaving session intact, awaiting onAuthStateChange',
           )
-          if (mounted) setLoading(false)
           return
         }
 
@@ -168,6 +171,10 @@ export function useAuth(): AuthState {
       } else {
         setUser(null)
       }
+      // Clear the loading spinner once any auth event has been observed. Critical for
+      // the timeout branch above, which intentionally leaves loading=true and relies
+      // on Supabase's INITIAL_SESSION event (delivered here) to settle the UI.
+      if (mounted) setLoading(false)
     })
 
     return () => {
