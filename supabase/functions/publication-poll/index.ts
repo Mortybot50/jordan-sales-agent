@@ -10,7 +10,7 @@
  *   - good_food                                         → weekly
  *
  * Flow per article:
- *   1. Fetch RSS / scrape page
+ *   1. Fetch RSS / sitemap / scrape page
  *   2. Claude classifier → venue_name + suburb + signal_type + confidence
  *   3. If confidence ≥ 0.6: fuzzy match against venues table
  *   4. Create/update signals row
@@ -162,10 +162,7 @@ function parsePubDate(dateStr: string): string | null {
 async function fetchArticles(source: SourceKey): Promise<Article[]> {
   switch (source) {
     case 'broadsheet':
-      return [
-        ...await fetchRss('https://www.broadsheet.com.au/melbourne/feed', source),
-        ...await fetchRss('https://www.broadsheet.com.au/melbourne/category/first-look/feed', source),
-      ]
+      return fetchBroadsheetSitemap(source)
 
     case 'concrete_playground':
       return fetchRss('https://concreteplayground.com/melbourne/eat-drink/feed', source)
@@ -194,6 +191,131 @@ async function fetchArticles(source: SourceKey): Promise<Article[]> {
     default:
       return []
   }
+}
+
+// ---------------------------------------------------------------------------
+// Broadsheet sitemap fetcher (replaces dead RSS feeds — 24/05/2026)
+// ---------------------------------------------------------------------------
+//
+// Broadsheet killed site-wide RSS in May 2026. Their public XML sitemap
+// (https://www.broadsheet.com.au/sitemap/melbourne/articles) lists every
+// article URL with an ISO <lastmod>, sorted newest-first. We filter the
+// food-and-drink cohort, restrict to the last 14 days, cap at 30 entries,
+// then fetch each article in parallel (max 10 concurrent) to pull title +
+// body text for the classifier.
+
+const BROADSHEET_SITEMAP_URL = 'https://www.broadsheet.com.au/sitemap/melbourne/articles'
+const BROADSHEET_ARTICLE_PATH_PREFIX = '/melbourne/food-and-drink/article/'
+const BROADSHEET_MAX_ARTICLES = 30
+const BROADSHEET_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000
+const BROADSHEET_SITEMAP_TIMEOUT_MS = 10_000
+const BROADSHEET_ARTICLE_TIMEOUT_MS = 8_000
+const BROADSHEET_CONCURRENCY = 10
+
+async function fetchWithTimeout(url: string, timeoutMs: number, headers: HeadersInit): Promise<Response | null> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { headers, signal: controller.signal })
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function fetchBroadsheetSitemap(source: SourceKey): Promise<Article[]> {
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (compatible; LeadFlow/1.0; +https://leadflow.ai)',
+    'Accept': 'application/xml, text/xml, */*',
+  }
+
+  const resp = await fetchWithTimeout(BROADSHEET_SITEMAP_URL, BROADSHEET_SITEMAP_TIMEOUT_MS, headers)
+  if (!resp || !resp.ok) {
+    console.warn(`[broadsheet] sitemap fetch failed: ${resp?.status ?? 'no-response'}`)
+    return []
+  }
+
+  const xml = await resp.text()
+  const cutoff = Date.now() - BROADSHEET_MAX_AGE_MS
+
+  // Collect candidate URL/lastmod pairs
+  type Candidate = { url: string; lastmod: string; lastmodMs: number }
+  const candidates: Candidate[] = []
+
+  const urlBlocks = xml.matchAll(/<url>([\s\S]*?)<\/url>/gi)
+  for (const block of urlBlocks) {
+    const content = block[1]
+    const loc = extractXmlTag(content, 'loc')
+    const lastmod = extractXmlTag(content, 'lastmod')
+    if (!loc || !lastmod) continue
+    if (!loc.includes(BROADSHEET_ARTICLE_PATH_PREFIX)) continue
+
+    const lastmodMs = new Date(lastmod).getTime()
+    if (isNaN(lastmodMs) || lastmodMs < cutoff) continue
+
+    candidates.push({ url: loc, lastmod, lastmodMs })
+  }
+
+  // Sort newest-first and cap
+  candidates.sort((a, b) => b.lastmodMs - a.lastmodMs)
+  const selected = candidates.slice(0, BROADSHEET_MAX_ARTICLES)
+
+  // Bounded-concurrency parallel fetch
+  const articles: Article[] = []
+  for (let i = 0; i < selected.length; i += BROADSHEET_CONCURRENCY) {
+    const batch = selected.slice(i, i + BROADSHEET_CONCURRENCY)
+    const results = await Promise.all(batch.map((c) => fetchBroadsheetArticle(c.url, c.lastmod, source, headers)))
+    for (const r of results) {
+      if (r) articles.push(r)
+    }
+  }
+
+  return articles
+}
+
+async function fetchBroadsheetArticle(
+  url: string,
+  lastmod: string,
+  source: SourceKey,
+  headers: HeadersInit,
+): Promise<Article | null> {
+  const resp = await fetchWithTimeout(url, BROADSHEET_ARTICLE_TIMEOUT_MS, headers)
+  if (!resp || !resp.ok) {
+    console.warn(`[broadsheet] article fetch failed: ${url} (${resp?.status ?? 'no-response'})`)
+    return null
+  }
+
+  const html = await resp.text()
+  const title = extractBroadsheetTitle(html)
+  if (!title) return null
+
+  const summary = extractBroadsheetBody(html)
+  const published_at = parsePubDate(lastmod)
+
+  return { title, summary, url, published_at, source }
+}
+
+function extractBroadsheetTitle(html: string): string | null {
+  // Prefer og:title, fall back to <title>. Broadsheet's og:title is the
+  // headline without the " | Broadsheet" suffix.
+  const og = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)
+  if (og) return stripHtml(og[1]).trim() || null
+
+  const t = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
+  if (!t) return null
+  const raw = stripHtml(t[1]).trim()
+  // Drop trailing " | Broadsheet" if present
+  return raw.replace(/\s*\|\s*Broadsheet\s*$/i, '').trim() || null
+}
+
+function extractBroadsheetBody(html: string): string {
+  let cleaned = html
+  for (const tag of ['script', 'style', 'nav', 'header', 'footer']) {
+    cleaned = cleaned.replace(new RegExp(`<${tag}\\b[^>]*>[\\s\\S]*?<\\/${tag}>`, 'gi'), ' ')
+  }
+  const text = stripHtml(cleaned)
+  return text.slice(0, 1500)
 }
 
 async function scrapeUrbanListNewOpenings(source: SourceKey): Promise<Article[]> {
