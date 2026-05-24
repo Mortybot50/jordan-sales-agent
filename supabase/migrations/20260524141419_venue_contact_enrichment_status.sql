@@ -47,3 +47,25 @@ CREATE INDEX IF NOT EXISTS venues_enrichment_status_idx
 
 CREATE UNIQUE INDEX IF NOT EXISTS contacts_org_venue_email_uniq
   ON contacts(org_id, venue_id, email);
+
+-- ---------------------------------------------------------------------------
+-- 3. Widen contacts.source CHECK to admit 'website_crawl'
+-- ---------------------------------------------------------------------------
+-- The Edge Function inserts contacts with source='website_crawl'. The base
+-- constraint (20260520_leadflow_sourcing_phase1) did not include this value,
+-- so a fresh DB replay would reject every crawler row. Live DB was patched
+-- out-of-band 24/05; this clause makes the migration file replayable.
+
+ALTER TABLE contacts
+  DROP CONSTRAINT IF EXISTS contacts_source_check;
+
+ALTER TABLE contacts
+  ADD CONSTRAINT contacts_source_check
+  CHECK (source = ANY (ARRAY[
+    'outscraper', 'google_places', 'vcglr',
+    'broadsheet', 'timeout', 'concrete_playground', 'good_food',
+    'urban_list', 'hospitality_mag', 'general_news',
+    'fiverr_legacy', 'manual', 'salesforce_import',
+    'csv_import', 'linkedin_import',
+    'website_crawl'
+  ]));
