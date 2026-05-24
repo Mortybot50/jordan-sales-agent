@@ -27,6 +27,12 @@ interface AuthState {
 }
 
 const SESSION_RESTORE_TIMEOUT_MS = 5_000
+// Hard cap for the case where Supabase's internal session restore truly hangs
+// (no resolution and no rejection). Both getSession() and onAuthStateChange
+// INITIAL_SESSION wait on the same internal _initialize() path, so if it never
+// settles neither soft-recovery wins. After this cap we treat it as the original
+// 22/04/2026 corrupt-token failure mode: wipe storage and redirect to /login.
+const SESSION_RESTORE_HARD_CAP_MS = 25_000
 
 /** Derive the Supabase project ref from VITE_SUPABASE_URL.
  *  Supabase v2 SDK persists the session under `sb-<projectRef>-auth-token`.
@@ -101,34 +107,58 @@ export function useAuth(): AuthState {
 
   useEffect(() => {
     let mounted = true
+    let settled = false
 
-    // Race getSession() against a 5s timeout. iOS Safari PWA cold-start has
-    // been observed to hang here when the persisted session token is stale
-    // or corrupted. Without the timeout, the app sits forever on "Loading…".
+    // Race getSession() against a 5s soft timeout. iOS Safari PWA cold-start
+    // has been observed to hang on a stale/corrupt persisted token; this lets
+    // us notice slowness without redirecting on a still-recoverable session.
     const sessionPromise = supabase.auth.getSession()
     const timeoutPromise = new Promise<{ timedOut: true }>((resolve) => {
       setTimeout(() => resolve({ timedOut: true }), SESSION_RESTORE_TIMEOUT_MS)
     })
+
+    // Hard cap. If neither the in-flight getSession() nor the auth listener
+    // has settled by SESSION_RESTORE_HARD_CAP_MS, Supabase's _initialize() has
+    // truly hung and the user would otherwise sit on "Loading…" forever. At
+    // that point we fall back to the original 22/04/2026 behaviour: wipe the
+    // persisted token, redirect to /login.
+    const hardCapTimer = setTimeout(() => {
+      if (!mounted || settled) return
+      console.error(
+        '[useAuth] session restore hung past',
+        SESSION_RESTORE_HARD_CAP_MS,
+        'ms — clearing persisted session and redirecting to /login',
+      )
+      clearStaleSupabaseAuthStorage()
+      setSession(null)
+      setUser(null)
+      setLoading(false)
+      toast.error('Session expired, please log in')
+      redirectToLogin()
+    }, SESSION_RESTORE_HARD_CAP_MS)
 
     Promise.race([sessionPromise, timeoutPromise])
       .then(async (result) => {
         if (!mounted) return
 
         if ('timedOut' in result) {
-          console.error(
-            '[useAuth] getSession timed out after',
+          // Timeout means getSession() is slow, not that the persisted token is corrupt.
+          // We deliberately do NOT setLoading(false) here: with session still null,
+          // RequireAuth would Navigate to /login, unmounting this hook and unsubscribing
+          // the auth listener before the in-flight getSession() can settle. Instead we
+          // keep the loading spinner up and let either (a) the still-running
+          // getSession() eventually resolve, or (b) the onAuthStateChange listener below
+          // fire INITIAL_SESSION, populate state, and clear loading naturally. The
+          // .catch() branch below still handles real getSession() failures.
+          console.warn(
+            '[useAuth] getSession exceeded',
             SESSION_RESTORE_TIMEOUT_MS,
-            'ms — clearing persisted session and redirecting to /login',
+            'ms — leaving session intact, awaiting onAuthStateChange',
           )
-          clearStaleSupabaseAuthStorage()
-          setSession(null)
-          setUser(null)
-          setLoading(false)
-          toast.error('Session expired, please log in')
-          redirectToLogin()
           return
         }
 
+        settled = true
         const { data: { session: s } } = result
         try {
           setSession(s)
@@ -148,6 +178,7 @@ export function useAuth(): AuthState {
           err,
         )
         if (!mounted) return
+        settled = true
         clearStaleSupabaseAuthStorage()
         setSession(null)
         setUser(null)
@@ -158,6 +189,7 @@ export function useAuth(): AuthState {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, s) => {
       if (!mounted) return
+      settled = true
       setSession(s)
       if (s?.user) {
         try {
@@ -169,10 +201,15 @@ export function useAuth(): AuthState {
       } else {
         setUser(null)
       }
+      // Clear the loading spinner once any auth event has been observed. Critical for
+      // the timeout branch above, which intentionally leaves loading=true and relies
+      // on Supabase's INITIAL_SESSION event (delivered here) to settle the UI.
+      if (mounted) setLoading(false)
     })
 
     return () => {
       mounted = false
+      clearTimeout(hardCapTimer)
       subscription.unsubscribe()
     }
   }, [])
