@@ -51,8 +51,6 @@ and configure Pub/Sub OIDC bearer tokens. Update the smoke roster accordingly.
 
 ---
 
----
-
 ## broadsheet-sitemap-migration — 24/05/2026
 
 ### broadsheet-sitemap-failure-observability (Codex P2)
