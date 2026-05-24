@@ -1,5 +1,25 @@
 # jordan-sales-agent — Codex follow-ups (P2 findings filed during Pattern B gates)
 
+## useauth-timeout-no-clear — 25/05/2026
+
+### soft-timeout-detaches-sessionpromise (Codex P2)
+
+**Source:** Codex review round 3 on PR #71, finding triaged P2 at gate close.
+
+**Finding (verbatim):**
+> [P2] Keep handling getSession after the soft timeout — src/hooks/useAuth.ts:158
+> When `getSession()` exceeds the 5s soft timeout, this `return` drops the original promise outcome because `Promise.race` has already settled. If `getSession()` then rejects or resolves before the 25s hard cap, the `.catch()`/success path here will not run; users either wait for the full hard cap on failures or depend entirely on a separate auth event for successful restores. Attach handlers to `sessionPromise` after the soft timeout or otherwise continue observing it.
+
+**Why P2:** Defensive observability. In practice:
+- Slow success path → `onAuthStateChange.INITIAL_SESSION` fires when the same internal `_initialize()` completes, populating state and clearing loading. Covered.
+- Slow rejection path → no `INITIAL_SESSION` arrives with a session; the 25s hard cap eventually wipes storage and redirects. Recovery happens, just later than if we'd kept a `.catch()` on the in-flight promise.
+
+Net: no correctness gap, just slower recovery in one specific failure pattern. Not user-visible on first day of cold-send (Jordan won't hit a 5s-to-25s window of getSession rejection in the morning-briefing deep-link flow this is meant to unblock).
+
+**Action:** revisit if telemetry shows real users sitting on Loading… between 5s and 25s after a getSession rejection. Otherwise leave open. Trivial follow-up: attach `.then(handleSuccess).catch(handleFailure)` to `sessionPromise` directly so both soft-timeout success and rejection paths get the fast handlers instead of waiting on listener/hard cap.
+
+---
+
 ## platform-hardening-pre-coldsend — 21/05/2026
 
 ### overlay-bundle-load-fallback (Codex P2)
