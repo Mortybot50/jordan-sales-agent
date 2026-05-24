@@ -51,8 +51,6 @@ and configure Pub/Sub OIDC bearer tokens. Update the smoke roster accordingly.
 
 ---
 
----
-
 ## broadsheet-sitemap-migration — 24/05/2026
 
 ### broadsheet-sitemap-failure-observability (Codex P2)
@@ -82,3 +80,67 @@ that point, refactor all 7 source fetchers to return a typed
 `{ articles, fetch_error? }` shape and have the main handler propagate the
 fetch_error into `summary[source].errors`. Until then, function logs are the
 source of truth for sitemap-level outages.
+
+---
+
+## crawl-venue-contacts — 25/05/2026
+
+### crawler-retry-on-contact-insertion-failure (Codex P2)
+
+**Source:** Codex review round 2 on PR `feat/crawl-venue-contacts`, finding
+triaged P2 at gate close.
+
+**Finding (verbatim):**
+> [P2] Retry venues when contact insertion fails — supabase/functions/crawl-venue-contacts/index.ts:379-382
+> If the contact upsert returns `insErr` for any reason, this only logs the
+> error and then continues to set the venue status from `crawl.emails.size`,
+> usually `crawled_found`. For crawls that found emails but failed to write
+> them, the venue leaves the pending queue with zero new contacts and will
+> not be retried by the cron drainer.
+
+**Why P2:**
+Live smoke confirmed the upsert path works end-to-end for both test venues
+(Brunetti + Humble Rays), and Pattern B round 2 resolved the only path that
+could plausibly hit `insErr` mid-build (the partial-index incompatibility).
+Remaining `insErr` triggers would be transient PG outages or schema drift —
+both of which need broader sourcing-pipeline retry semantics, not a one-off
+band-aid in the crawler.
+
+**Action:** revisit when the sourcing pipeline gets a generalised retry
+shape (Phase 3 — exponential backoff + dead-letter queue across all 3
+discovery engines). At that point, distinguish `failed_transient`
+(reschedule) from `failed_permanent` (manual review) and move both venues +
+contacts into that pattern. Until then, accept that a rare transient
+upsert error will leave a venue at `crawled_found` with zero contacts and
+require manual re-trigger via the `leadflow_drain_crawl_queue()` SQL probe.
+
+### crawler-preserve-nested-hrefs (Codex P2)
+
+**Source:** Codex review round 3 on PR `feat/crawl-venue-contacts`, finding
+triaged P2 at gate close.
+
+**Finding (verbatim):**
+> [P2] Preserve discovered contact hrefs — supabase/functions/crawl-venue-contacts/index.ts:256-259
+> When a homepage links to a contact page below a nested path, such as
+> `/locations/carlton/contact-us` or `/venues/foo/team`, this code collapses
+> the link to only the matched slug and then fetches `${base}/${path}`.
+> Those venues will have their real contact page skipped and can be marked
+> `crawled_empty` even though the email is on the linked page; keep and
+> resolve the actual href instead of rebuilding a root-level URL.
+
+**Why P2:**
+The POC + first-cohort smoke (Carlton venues) consistently published
+contact pages at root-level slugs (`/contact-us`, `/about`, etc.). The
+nested-href case Codex describes is a real but rarer pattern — typically
+multi-location franchises (`/melbourne/contact`, `/locations/<x>/contact`).
+None of the current discovery-engine inputs (Outscraper / Google Places /
+VCGLR) bias toward franchise sites, so the hit rate is bounded.
+
+**Action:** revisit when the crawler hit rate for franchise venues
+specifically drops below 30% (currently unmeasured; baseline metric to
+collect during the Phase 3 sourcing observability rework). Fix shape:
+preserve the full `href` from the `findLinkedPaths` match alongside the
+slug, resolve it via `new URL(href, base).toString()`, and dedup against
+already-visited URLs before fetching. Until then, root-level fallbacks
+(`/contact`, `/contact-us`) still hit for franchise sites whose corporate
+brand publishes a parallel root contact page.

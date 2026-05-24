@@ -2521,6 +2521,7 @@ export type Database = {
           business_status: string | null
           cid: string | null
           competitor_water_usage: string | null
+          contact_enrichment_status: string
           cover_count: number | null
           created_at: string | null
           geocoded_at: string | null
@@ -2531,6 +2532,7 @@ export type Database = {
           is_excluded: boolean | null
           kgmid: string | null
           kitchen_type: string | null
+          last_crawled_at: string | null
           last_visited_at: string | null
           lat: number | null
           licence_type: string | null
@@ -2570,6 +2572,7 @@ export type Database = {
           business_status?: string | null
           cid?: string | null
           competitor_water_usage?: string | null
+          contact_enrichment_status?: string
           cover_count?: number | null
           created_at?: string | null
           geocoded_at?: string | null
@@ -2580,6 +2583,7 @@ export type Database = {
           is_excluded?: boolean | null
           kgmid?: string | null
           kitchen_type?: string | null
+          last_crawled_at?: string | null
           last_visited_at?: string | null
           lat?: number | null
           licence_type?: string | null
@@ -2619,6 +2623,7 @@ export type Database = {
           business_status?: string | null
           cid?: string | null
           competitor_water_usage?: string | null
+          contact_enrichment_status?: string
           cover_count?: number | null
           created_at?: string | null
           geocoded_at?: string | null
@@ -2629,6 +2634,7 @@ export type Database = {
           is_excluded?: boolean | null
           kgmid?: string | null
           kitchen_type?: string | null
+          last_crawled_at?: string | null
           last_visited_at?: string | null
           lat?: number | null
           licence_type?: string | null
@@ -2905,6 +2911,7 @@ export type Database = {
         Args: { p_email: string; p_org_id: string }
         Returns: boolean
       }
+      leadflow_drain_crawl_queue: { Args: never; Returns: number }
       recompute_monthly_gate: {
         Args: { p_month: string; p_org_id: string; p_user_id: string }
         Returns: undefined
@@ -3065,3 +3072,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+
