@@ -870,7 +870,12 @@ function IntegrationsTab() {
       toast.error('Please log in first')
       return
     }
-    window.location.href = `/api/oauth/gmail/start`
+    // Top-level navigation: browsers do NOT send custom Authorization headers
+    // on navigations, so the JWT must travel as a query param. The start
+    // endpoint's state HMAC (single-use, server-signed) is the actual security
+    // primitive for the OAuth round-trip — this token only identifies the user
+    // for the duration of the redirect.
+    window.location.href = `/api/oauth/gmail/start?access_token=${encodeURIComponent(session.access_token)}`
   }
 
   // ANTHROPIC_API_KEY is server-only; browser bundle cannot introspect it.

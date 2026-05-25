@@ -36,14 +36,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ error: 'OAuth not configured' })
   }
 
-  // Verify the caller is authenticated
+  // Verify the caller is authenticated.
+  //
+  // Two acceptable contracts:
+  //   1. `Authorization: Bearer <jwt>` header — used by programmatic / fetch callers.
+  //   2. `?access_token=<jwt>` query param — required for top-level browser
+  //      navigations (e.g. `window.location.href = '/api/oauth/gmail/start?...'`),
+  //      because browsers do NOT attach custom Authorization headers to
+  //      navigations, only to XHR/fetch.
+  //
+  // The state HMAC signed below (via signState) remains the security primitive
+  // for the OAuth round-trip: it binds nonce → user_id, is single-use, and is
+  // verified by the callback. This token only proves user identity at start
+  // time so we can issue a state for the right user. The token is NEVER logged
+  // or persisted; it lives only on the wire and in this function's stack.
   const authHeader = req.headers.authorization
-  if (!authHeader) {
-    return res.status(401).json({ error: 'Missing Authorization header' })
+  const queryToken = typeof req.query.access_token === 'string' ? req.query.access_token : undefined
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : queryToken
+  if (!token) {
+    return res.status(401).json({ error: 'Missing access token (header or query)' })
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-  const token = authHeader.replace('Bearer ', '')
   const { data: { user }, error } = await supabase.auth.getUser(token)
 
   if (error || !user) {
