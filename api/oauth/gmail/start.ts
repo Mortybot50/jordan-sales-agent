@@ -88,7 +88,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // blocked redirect URI registration. Reply detection now uses IMAP polling instead
     // (see leadflow-sender-build-plan.md Phase 1). If readonly is ever restored, the
     // justification form on Data Access must be completed first.
-    scope: 'https://www.googleapis.com/auth/gmail.send',
+    //
+    // gmail.metadata is RETAINED because the callback at api/oauth/gmail/callback.ts
+    // still calls users/me/profile (line ~88) to capture the connecting email and
+    // users/me/watch (line ~98) to register the Pub/Sub watch. Both methods require
+    // at minimum gmail.metadata per Google's Gmail API auth docs; with only
+    // gmail.send the callback would 403 silently and persist a broken
+    // gmail_connections row with no email. gmail.metadata is NOT a sensitive scope
+    // (no message-body access) so it does not require the Data Access justification
+    // form. When the callback is later refactored to drop the watch registration
+    // (post-IMAP migration), gmail.metadata can be dropped too.
+    scope: 'https://www.googleapis.com/auth/gmail.metadata https://www.googleapis.com/auth/gmail.send',
     access_type: 'offline',
     prompt: 'consent',
     state,
