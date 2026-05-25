@@ -283,7 +283,12 @@ Deno.serve(async (req: Request) => {
   })
 
   let smtpResponse: string | null = null
-  let smtpMessageId: string | null = null
+  // Generate the Message-ID before the send and quote it on the wire as a
+  // custom header. Reply clients echo this back in In-Reply-To / References,
+  // which is what poll-replies matches on. If we let the SMTP server pick
+  // its own Message-ID we can't correlate inbound replies back to the send.
+  const smtpMessageId = `<${crypto.randomUUID()}@${account.domain ?? account.email_address.split('@')[1]}>`
+  customHeaders.push({ name: 'Message-ID', value: smtpMessageId })
 
   try {
     const result = await client.send({
@@ -298,7 +303,6 @@ Deno.serve(async (req: Request) => {
         : undefined,
     })
     smtpResponse = result ? JSON.stringify(result).slice(0, 500) : 'ok'
-    smtpMessageId = `<${crypto.randomUUID()}@${account.domain ?? account.email_address.split('@')[1]}>`
   } catch (err) {
     const message = (err as Error).message ?? 'unknown SMTP error'
     const safeTo = await redactEmail(toAddress)
