@@ -84,7 +84,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     client_id: GOOGLE_CLIENT_ID,
     redirect_uri: redirectUri,
     response_type: 'code',
-    scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send',
+    // gmail.readonly intentionally REMOVED 25/05/2026 — sensitive-scope justification
+    // blocked redirect URI registration. Reply detection now uses IMAP polling instead
+    // (see leadflow-sender-build-plan.md Phase 1). If readonly is ever restored, the
+    // justification form on Data Access must be completed first.
+    scope: 'https://www.googleapis.com/auth/gmail.send',
     access_type: 'offline',
     prompt: 'consent',
     state,
