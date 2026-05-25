@@ -14,9 +14,9 @@
 
 **No follow-up action required.**
 
-### access-token-in-url-query (Codex P2)
+### access-token-in-url-query (Codex P2 round 1 → P1 round 2, re-triaged P2)
 
-**Source:** Codex review round 1 on PR #72, finding triaged P2 at gate close.
+**Source:** Codex review on PR #72 — raised P2 in round 1, re-raised P1 in round 2 (Codex's only remaining finding after the scope P1 was resolved by 7645cc4). Re-triaged to P2 at gate close per the BUILD prompt's pre-decision (*"think hard about whether the response should redirect via 302 with the access_token in a Location header — probably not"*) and the codex-review.md triage rubric (*"Would this fail a real user's first day of using this feature?"* — no, the connect works correctly; risk is theoretical credential exposure via logs/history).
 
 **Finding (verbatim):**
 > [P2] Avoid putting Supabase bearer tokens in URLs — src/pages/SettingsPage.tsx:878
