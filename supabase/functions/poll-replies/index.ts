@@ -373,19 +373,25 @@ Deno.serve(async (req: Request) => {
             continue
           }
 
-          // Belt-and-braces dedupe: skip if we've already inserted a 'replied'
-          // event for this send_queue row (handles the rare case where the
-          // IMAP keyword set succeeded but a re-scan still hits the message).
-          const { data: existingEvent } = await supabase
-            .from('email_send_events')
-            .select('id')
-            .eq('send_queue_id', queueRow.id)
-            .eq('event_type', 'replied')
-            .limit(1)
-            .maybeSingle()
-          if (existingEvent) {
-            await imapCmd(imap, `STORE ${uid} +FLAGS (${LF_KEYWORD})`)
-            continue
+          // Belt-and-braces dedupe: skip if we've already recorded THIS exact
+          // inbound message (by its Message-ID) as a reply. We must NOT
+          // dedupe on send_queue_id alone — a prospect can send multiple
+          // replies in the same thread (e.g. an initial "interested" then a
+          // follow-up "unsubscribe"), and each needs its own event row +
+          // classifier run. Only the IMAP message-id is uniquely tied to
+          // one inbound message.
+          if (headers.messageId) {
+            const { data: existingEvent } = await supabase
+              .from('email_send_events')
+              .select('id')
+              .eq('event_type', 'replied')
+              .eq('metadata->>reply_message_id', headers.messageId)
+              .limit(1)
+              .maybeSingle()
+            if (existingEvent) {
+              await imapCmd(imap, `STORE ${uid} +FLAGS (${LF_KEYWORD})`)
+              continue
+            }
           }
 
           const snippet = extractSnippet(bodyBlock).slice(0, 2000)

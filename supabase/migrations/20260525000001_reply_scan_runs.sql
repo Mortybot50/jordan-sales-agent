@@ -49,3 +49,36 @@ comment on table public.reply_scan_runs is
   'Per-tick log of the poll-replies cron. One row per email_account per scan. '
   'Drives the /admin/workers health page and surfaces IMAP failures early. '
   'Inserted by the poll-replies Edge Function via service_role.';
+
+-- ---------------------------------------------------------------------------
+-- pg_cron schedule for poll-replies. Runs every 5 min. Idempotent — drop the
+-- existing job first so re-runs of this migration don't create duplicates,
+-- and so an updated schedule landed via a future migration takes effect.
+--
+-- Uses the vault.decrypted_secrets 'service_role_key' pattern (the 21/05/2026
+-- LeadFlow hardening standard), NOT the legacy app.settings GUC.
+-- ---------------------------------------------------------------------------
+do $$
+begin
+  if exists (select 1 from cron.job where jobname = 'leadflow-poll-replies') then
+    perform cron.unschedule('leadflow-poll-replies');
+  end if;
+end$$;
+
+select cron.schedule(
+  'leadflow-poll-replies',
+  '*/5 * * * *',
+  $sched$
+    select net.http_post(
+      url     := 'https://bsevgxhnxlkzkcalevbb.supabase.co/functions/v1/poll-replies',
+      headers := jsonb_build_object(
+        'Content-Type',  'application/json',
+        'Authorization', 'Bearer ' || (
+          select decrypted_secret from vault.decrypted_secrets
+           where name = 'service_role_key' limit 1
+        )
+      ),
+      body    := jsonb_build_object('trigger','cron')
+    );
+  $sched$
+);
