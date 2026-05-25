@@ -265,6 +265,14 @@ async function dispatchOne(supabase: SupabaseClient, row: ClaimedRow, contactId:
     },
   })
 
+  // Generate the Message-ID up front and set it as an outbound header. Gmail
+  // and most reply clients quote this verbatim in `In-Reply-To` / `References`
+  // on replies — which is how poll-replies matches inbound mail back to the
+  // send_queue row. If we let denomailer / the SMTP server pick its own
+  // Message-ID, we never know what it was, and the IMAP poller can't match.
+  const smtpMessageId = `<${crypto.randomUUID()}@${account.domain ?? account.email_address.split('@')[1]}>`
+  customHeaders['Message-ID'] = smtpMessageId
+
   try {
     await client.send({
       from: fromHeader,
@@ -294,7 +302,8 @@ async function dispatchOne(supabase: SupabaseClient, row: ClaimedRow, contactId:
   }
   try { await client.close() } catch { /* best-effort */ }
 
-  const smtpMessageId = `<${crypto.randomUUID()}@${account.domain ?? account.email_address.split('@')[1]}>`
+  // smtpMessageId already generated above and set on the outbound headers —
+  // persist it on the queue row so poll-replies can match In-Reply-To against it.
   await supabase.from('email_send_queue').update({
     status: 'sent',
     sent_at: new Date().toISOString(),
