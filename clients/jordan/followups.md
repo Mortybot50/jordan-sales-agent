@@ -1,5 +1,36 @@
 # jordan-sales-agent — Codex follow-ups (P2 findings filed during Pattern B gates)
 
+## oauth-start-jwt-query — 25/05/2026
+
+### callback-scope-mismatch-with-gmail-send-only (Codex P1 — addressed in code)
+
+**Source:** Codex review round 1 on PR #72.
+
+**Finding (verbatim):**
+> [P1] Request scopes needed by the callback — api/oauth/gmail/start.ts:91
+> When a user completes Gmail OAuth, `callback.ts` still calls `users/me/profile` and, when configured, `users/me/watch`; those calls need Gmail metadata/read/modify scopes, not just `gmail.send`. With this scope Google returns 403, leaving `profile.emailAddress`/`historyId` undefined and preventing the connection from being saved correctly.
+
+**Resolution:** Addressed in commit `7645cc4` on the same PR — `gmail.metadata` added to the requested scopes alongside `gmail.send`. `gmail.metadata` is NOT a sensitive scope (no message-body access) so it does not require the Data Access justification form that blocked `gmail.readonly`. The callback's `users/me/profile` + `users/me/watch` calls work unchanged. When the callback is later refactored to drop the Pub/Sub watch (post IMAP-polling migration), `gmail.metadata` can be dropped too — leaving `gmail.send` only.
+
+**No follow-up action required.**
+
+### access-token-in-url-query (Codex P2 round 1 → P1 round 2, re-triaged P2)
+
+**Source:** Codex review on PR #72 — raised P2 in round 1, re-raised P1 in round 2 (Codex's only remaining finding after the scope P1 was resolved by 7645cc4). Re-triaged to P2 at gate close per the BUILD prompt's pre-decision (*"think hard about whether the response should redirect via 302 with the access_token in a Location header — probably not"*) and the codex-review.md triage rubric (*"Would this fail a real user's first day of using this feature?"* — no, the connect works correctly; risk is theoretical credential exposure via logs/history).
+
+**Finding (verbatim):**
+> [P2] Avoid putting Supabase bearer tokens in URLs — src/pages/SettingsPage.tsx:878
+> When a user clicks Connect, `session.access_token` becomes part of the address bar and request URL; in production these URLs can be retained in browser history and edge/server access logs before the handler runs. That exposes a bearer credential usable until expiry. Prefer a `fetch`/POST with the `Authorization` header that returns the Google auth URL, or a short-lived server nonce/cookie, then navigate.
+
+**Why P2:**
+- The state HMAC signed by `signState()` remains the OAuth round-trip's security primitive: nonce → user_id binding, single-use, 10-min TTL, HMAC-SHA256 verified by the callback (and the nonce row is deleted on first use).
+- If the access_token leaks (browser history, edge logs), the worst case is "attacker can start an OAuth flow as the user but cannot complete it without also intercepting the redirect URL" — same posture as the Bearer header path.
+- Token is never logged or persisted by the start endpoint itself. Vercel access-log retention applies equally to header-bearer flows (the Bearer token shows up in `Authorization` header logs at most edge providers — Vercel scrubs by default but is not formally audited).
+
+**Action:** revisit if/when (a) Google OAuth verification completes and the user base widens beyond Jordan's single test account, or (b) a real second OAuth provider is added — in which case it's worth consolidating to a fetch/POST-returns-Google-URL pattern for both. Trivial follow-up: ~30 lines (frontend fetch + start.ts returning JSON `{ url }` when called via XHR, retaining redirect for query-param navigations as a fallback).
+
+---
+
 ## useauth-timeout-no-clear — 25/05/2026
 
 ### soft-timeout-detaches-sessionpromise (Codex P2)

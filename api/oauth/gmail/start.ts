@@ -36,14 +36,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ error: 'OAuth not configured' })
   }
 
-  // Verify the caller is authenticated
+  // Verify the caller is authenticated.
+  //
+  // Two acceptable contracts:
+  //   1. `Authorization: Bearer <jwt>` header — used by programmatic / fetch callers.
+  //   2. `?access_token=<jwt>` query param — required for top-level browser
+  //      navigations (e.g. `window.location.href = '/api/oauth/gmail/start?...'`),
+  //      because browsers do NOT attach custom Authorization headers to
+  //      navigations, only to XHR/fetch.
+  //
+  // The state HMAC signed below (via signState) remains the security primitive
+  // for the OAuth round-trip: it binds nonce → user_id, is single-use, and is
+  // verified by the callback. This token only proves user identity at start
+  // time so we can issue a state for the right user. The token is NEVER logged
+  // or persisted; it lives only on the wire and in this function's stack.
   const authHeader = req.headers.authorization
-  if (!authHeader) {
-    return res.status(401).json({ error: 'Missing Authorization header' })
+  const queryToken = typeof req.query.access_token === 'string' ? req.query.access_token : undefined
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : queryToken
+  if (!token) {
+    return res.status(401).json({ error: 'Missing access token (header or query)' })
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-  const token = authHeader.replace('Bearer ', '')
   const { data: { user }, error } = await supabase.auth.getUser(token)
 
   if (error || !user) {
@@ -70,7 +84,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     client_id: GOOGLE_CLIENT_ID,
     redirect_uri: redirectUri,
     response_type: 'code',
-    scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send',
+    // gmail.readonly intentionally REMOVED 25/05/2026 — sensitive-scope justification
+    // blocked redirect URI registration. Reply detection now uses IMAP polling instead
+    // (see leadflow-sender-build-plan.md Phase 1). If readonly is ever restored, the
+    // justification form on Data Access must be completed first.
+    //
+    // gmail.metadata is RETAINED because the callback at api/oauth/gmail/callback.ts
+    // still calls users/me/profile (line ~88) to capture the connecting email and
+    // users/me/watch (line ~98) to register the Pub/Sub watch. Both methods require
+    // at minimum gmail.metadata per Google's Gmail API auth docs; with only
+    // gmail.send the callback would 403 silently and persist a broken
+    // gmail_connections row with no email. gmail.metadata is NOT a sensitive scope
+    // (no message-body access) so it does not require the Data Access justification
+    // form. When the callback is later refactored to drop the watch registration
+    // (post-IMAP migration), gmail.metadata can be dropped too.
+    scope: 'https://www.googleapis.com/auth/gmail.metadata https://www.googleapis.com/auth/gmail.send',
     access_type: 'offline',
     prompt: 'consent',
     state,
