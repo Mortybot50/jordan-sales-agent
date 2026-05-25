@@ -56,7 +56,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.redirect(302, '/settings?tab=integrations&error=invalid_state')
   }
 
-  const origin = req.headers.origin ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:5173')
+  // Must compute the SAME redirect_uri used in /api/oauth/gmail/start, or Google
+  // rejects the code exchange with redirect_uri_mismatch. Prefer Host header (set
+  // on every request including the Google-driven 302 callback) over Origin
+  // (absent on top-level GET navigations).
+  const hostHeader = req.headers.host as string | undefined
+  const originHeader = req.headers.origin as string | undefined
+  const origin =
+    (hostHeader ? `https://${hostHeader}` : undefined) ??
+    (originHeader as string | undefined) ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:5173')
   const redirectUri = `${origin}/api/oauth/gmail/callback`
 
   // Exchange code for tokens

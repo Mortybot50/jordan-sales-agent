@@ -64,9 +64,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
-  // S5: parenthesise so the request Origin header takes precedence over VERCEL_URL.
+  // S5: prefer the actual Host header the user visited (works for top-level
+  // browser navigations where Origin is absent). Falls back to Origin (set on
+  // cross-origin XHR/fetch) and finally to the randomly-named VERCEL_URL (used
+  // only during local dev or non-aliased deploys). The Host-based path ensures
+  // redirect_uri matches what's registered in GCP Clients for premiumwaterau.com.au.
+  const hostHeader = req.headers.host as string | undefined
+  const originHeader = req.headers.origin as string | undefined
   const origin =
-    (req.headers.origin as string | undefined) ??
+    (hostHeader ? `https://${hostHeader}` : undefined) ??
+    originHeader ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:5173')
   const redirectUri = `${origin}/api/oauth/gmail/callback`
 
