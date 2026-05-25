@@ -270,3 +270,24 @@ const origin = hostHeader ? `${scheme}://${hostHeader}` : ...
 ```
 
 Until then, document that local OAuth testing is unsupported. No prod impact.
+
+## imap-reply-poller — 2026-05-25
+**Source:** Codex review round 3 on PR (feat/imap-reply-poller), triaged P2/P3 at gate close (round cap hit, 3 rounds, ~7 min wall-clock, ~$0.30 spend).
+
+### Finding A — P2: Don't mark replies processed after side-effect failures
+**Verbatim:** When activity insertion, classification, or enrolment update fails, the code only appends to `accErrors` and still falls through to flag the IMAP message as `$LFReplyProcessed`. In those transient/error scenarios the next cron tick skips the reply, so classifier-driven suppression and sequence completion can be permanently missed despite the run being marked `partial`.
+
+**File:** supabase/functions/poll-replies/index.ts (the `STORE +FLAGS ${LF_KEYWORD}` after the side-effect block).
+
+**Why P2:** The `email_send_events` row IS inserted before the side-effect block (line ~395), so the reply itself is not lost — it shows up in dashboards and exports. What's missed is the classifier run + the sequence-completion update + (if intent=unsubscribe) auto-suppression. In Jordan's single-user CRM with low volume this is recoverable by hand (run classify-reply-intent on the activity_id manually). Not user-day-one-blocking.
+
+**Action:** track per-message success of the side-effect block. Only set `$LFReplyProcessed` when all of (activity insert OK, classifier 200, enrolment update OK). On partial failure, leave the keyword unset so the next tick retries — but cap retry attempts via a header-fetched X-LF-Retry-Count or by appending the message to a new failed_reply_retries table.
+
+### Finding B — P3: Preserve unsubscribe metadata when adding Message-ID
+**Verbatim:** For test sends or manual sends without a contact/signing key, this new `Message-ID` entry makes `customHeaders.length > 0`, so the later `had_list_unsubscribe` metadata is recorded as true even though no `List-Unsubscribe` headers were sent. Track unsubscribe-header presence separately, and apply the same fix to the drain-send-queue path.
+
+**Files:** supabase/functions/send-via-smtp/index.ts (line ~343), supabase/functions/drain-send-queue/index.ts (line ~342).
+
+**Why P3:** Metadata-only inflation of the `had_list_unsubscribe` flag in `email_send_events.metadata`. Zero behavioural impact on sending, suppression, or RFC 8058 compliance. Affects only analytics queries that count "how many sends had a List-Unsubscribe header".
+
+**Action:** introduce a `hadListUnsub: boolean` flag set when the unsub headers are actually pushed, and persist that instead of `customHeaders.length > 0`. Trivial cleanup, batch with the next email-stack patch.
