@@ -2,21 +2,17 @@
 
 ## oauth-start-jwt-query — 25/05/2026
 
-### callback-scope-mismatch-with-gmail-send-only (Codex P1 → re-triaged P2)
+### callback-scope-mismatch-with-gmail-send-only (Codex P1 — addressed in code)
 
-**Source:** Codex review round 1 on PR #72, finding raised at P1, re-triaged to P2 at gate close with documented justification.
+**Source:** Codex review round 1 on PR #72.
 
 **Finding (verbatim):**
 > [P1] Request scopes needed by the callback — api/oauth/gmail/start.ts:91
-> When a user completes Gmail OAuth, `callback.ts` still calls `users/me/profile` and, when configured, `users/me/watch`; those calls need Gmail metadata/read/modify scopes, not just `gmail.send`. With this scope Google returns 403, leaving `profile.emailAddress`/`historyId` undefined and preventing the connection from being saved correctly. Either keep a minimal scope required by these callback calls or remove/update the callback path to match the IMAP polling design.
+> When a user completes Gmail OAuth, `callback.ts` still calls `users/me/profile` and, when configured, `users/me/watch`; those calls need Gmail metadata/read/modify scopes, not just `gmail.send`. With this scope Google returns 403, leaving `profile.emailAddress`/`historyId` undefined and preventing the connection from being saved correctly.
 
-**Why P2 (re-triage):**
-- **Pre-existing.** The scope was narrowed from `gmail.send + gmail.readonly` to `gmail.send` only on 25/05/2026 (per the comment block in start.ts). This PR does not touch the scope; it only fixes the auth-extraction contract.
-- **Explicitly out of scope.** Build prompt's Non-goals section: *"Touching the readonly scope question (already handled separately — start.ts only requests gmail.send now per the 25/05 edit, verify that's still in place but don't re-litigate)."*
-- **PR is a net improvement.** Pre-PR: 100% of Connect Gmail clicks fail at 401 (missing Authorization header). Post-PR: OAuth contract works and reaches Google consent. The downstream scope issue exists regardless of this PR — this PR merely makes it reachable.
-- **Architectural context.** The start.ts comment already documents that "Reply detection now uses IMAP polling instead (see leadflow-sender-build-plan.md Phase 1)" — i.e. the broader scopes are no longer needed for the new architecture; the callback's profile/watch calls are the leftover that needs trimming.
+**Resolution:** Addressed in commit `7645cc4` on the same PR — `gmail.metadata` added to the requested scopes alongside `gmail.send`. `gmail.metadata` is NOT a sensitive scope (no message-body access) so it does not require the Data Access justification form that blocked `gmail.readonly`. The callback's `users/me/profile` + `users/me/watch` calls work unchanged. When the callback is later refactored to drop the Pub/Sub watch (post IMAP-polling migration), `gmail.metadata` can be dropped too — leaving `gmail.send` only.
 
-**Action:** revisit when wiring up the IMAP-polling reply detection path. Likely fix is to either (a) restore a minimal `gmail.readonly` scope just for the `users/me/profile` email-address lookup at callback time, or (b) trim the callback to skip the profile/watch calls entirely and persist the email by other means (e.g. ask Supabase for the user's email, or derive from the JWT). Don't ship a half-measure — pick one path and apply it as a separate PR.
+**No follow-up action required.**
 
 ### access-token-in-url-query (Codex P2)
 
