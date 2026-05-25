@@ -246,3 +246,27 @@ token is reasonable hygiene but defensive.
 literal `{{public_booking_url}}` token or a dead `/book/...` URL.
 Mitigation if it happens: edit Jordan's saved voice rules in Settings
 to remove the offending instruction. Otherwise leave open.
+
+
+## oauth-redirect-uri-host-header — 25/05/2026
+
+### oauth-localhost-https-scheme-regression (Codex P2)
+
+**Source:** Codex review round 1 on PR #73 `fix/oauth-redirect-uri-host-header`, triaged P2 at gate close.
+
+**Finding (verbatim):**
+> [P2] Preserve HTTP for local OAuth redirects — api/oauth/gmail/start.ts:75
+> When this runs locally, `Host` is normally present (for example `localhost:5173` or `localhost:3000`), so this now builds `https://localhost...` and the `http://localhost:5173` fallback is never reached. Google redirect URIs are scheme-sensitive, and the local dev server is plain HTTP, so the Gmail OAuth start flow will use an unregistered or unreachable redirect URI. Please derive the scheme from the environment/forwarded proto or special-case localhost, and keep the callback calculation in sync.
+
+**Why P2:**
+Prod (`premiumwaterau.com.au` apex domain via Vercel) terminates HTTPS at the edge so `https://${host}` is correct. The regression only manifests during local dev OAuth testing — which is not part of any active workflow right now (nobody dev-tests Gmail OAuth locally; the redirect URIs registered in GCP are prod-only). Worth fixing when we resume local OAuth testing, OR if/when we add `localhost` redirect URI to GCP Clients for dev work.
+
+**Action:** when next touching `api/oauth/gmail/start.ts` or `callback.ts`, swap the scheme derivation to:
+
+```ts
+const protoHeader = (req.headers['x-forwarded-proto'] as string | undefined) || 'https'
+const scheme = hostHeader?.startsWith('localhost') ? 'http' : protoHeader
+const origin = hostHeader ? `${scheme}://${hostHeader}` : ...
+```
+
+Until then, document that local OAuth testing is unsupported. No prod impact.
