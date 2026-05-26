@@ -1,6 +1,6 @@
 -- =============================================================================
 -- LeadFlow warmup network — pairing seed + ramp column + cron schedule.
--- Migration: 20260526142114_warmup_pairing_ramp_and_cron
+-- Migration: 20260526210000_warmup_pairing_ramp_and_cron
 -- =============================================================================
 -- Context. PR #64 (20260519000003_warmup_and_spam_act) shipped the warmup
 -- schema and 200 templates, but explicitly deferred the worker, the cron,

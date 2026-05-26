@@ -389,7 +389,17 @@ Deno.serve(async (req: Request) => {
             const flags = warmupAction === 'star'
               ? `(\\Flagged ${LF_KEYWORD})`
               : `(${LF_KEYWORD})`
-            try { await imapCmd(imap, `STORE ${uid} +FLAGS ${flags}`) } catch { /* ignore */ }
+            // Surface STORE failures into accErrors so we notice if a warmup
+            // inbound stays untagged across ticks (would re-trigger dice-roll
+            // on next poll → potential duplicate auto-replies). Belt-and-braces
+            // dedupe via Message-ID is filed as a P2 follow-up.
+            try {
+              await imapCmd(imap, `STORE ${uid} +FLAGS ${flags}`)
+            } catch (err) {
+              accErrors.push(
+                `warmup_store_flags(uid=${uid}): ${(err as Error).message}`,
+              )
+            }
             continue
           }
 
