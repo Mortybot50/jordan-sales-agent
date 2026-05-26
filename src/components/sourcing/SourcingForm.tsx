@@ -146,15 +146,16 @@ function SourcingFormBody({
     }
     setErrors({})
 
+    const trimmedCron = parsed.data.schedule_cron?.trim()
     const payload = {
-      name: parsed.data.name.trim(),
-      region: parsed.data.region.trim(),
+      name: parsed.data.name,
+      region: parsed.data.region,
       suburb: joinSuburbs(parsed.data.suburbs),
       categories: [...parsed.data.categories],
       source_engine: parsed.data.source_engine,
       limit_per_run: parsed.data.limit_per_run,
       email_extraction: parsed.data.email_extraction,
-      schedule_cron: parsed.data.schedule_cron ?? null,
+      schedule_cron: trimmedCron ? trimmedCron : null,
     }
 
     try {
@@ -353,14 +354,19 @@ function SourcingFormBody({
           </p>
         </div>
 
-        {/* Email extraction toggle */}
+        {/* Save email contacts toggle.
+            Note: Outscraper's emails_and_contacts enrichment runs on every
+            run today — this flag controls whether returned emails are saved
+            into the contacts table after fetch. Wiring it into the engine
+            request is a follow-up. */}
         <div className="flex items-center justify-between rounded-md border border-hairline px-3 py-2">
           <div>
             <Label htmlFor="sourcing-emails" className="cursor-pointer">
-              Extract emails
+              Save email contacts
             </Label>
             <p className="text-[11px] text-ink-faint mt-0.5">
-              Outscraper only — adds emails_and_contacts enrichment.
+              When on, emails returned by the engine are saved as contacts.
+              Off skips the contact insert (venues still land).
             </p>
           </div>
           <input
@@ -395,9 +401,7 @@ function SourcingFormBody({
           <Input
             id="sourcing-cron"
             value={values.schedule_cron ?? ''}
-            onChange={(e) =>
-              set('schedule_cron', e.target.value.trim() || null)
-            }
+            onChange={(e) => set('schedule_cron', e.target.value)}
             placeholder="Custom cron, e.g. 0 6 * * 1-5"
             maxLength={120}
           />

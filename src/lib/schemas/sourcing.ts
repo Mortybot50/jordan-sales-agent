@@ -12,10 +12,11 @@ import { HOSPITALITY_CATEGORIES } from '@/lib/constants/hospitality-categories'
 export const sourcingFormSchema = z.object({
   name: z
     .string()
+    .trim()
     .min(1, 'Give the search a name')
     .max(120, 'Keep the name under 120 characters'),
   source_engine: z.enum(['outscraper', 'google_places']),
-  region: z.string().min(1, 'Region is required').max(60),
+  region: z.string().trim().min(1, 'Region is required').max(60),
   suburbs: z
     .array(z.string().min(1).max(60))
     .max(20, 'Max 20 suburbs per search'),
