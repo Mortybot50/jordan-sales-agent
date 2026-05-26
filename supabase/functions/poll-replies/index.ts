@@ -167,6 +167,11 @@ interface ParsedHeaders {
   from?: string
   subject?: string
   date?: string
+  // X-LeadFlow-Warmup: '1' on inter-inbox warmup traffic. When present we
+  // route the message into handleWarmupInbound() and short-circuit the
+  // real-reply pipeline (no activity row, no classifier call, no
+  // suppression touch). See send-warmup-tick for the producer side.
+  xLeadflowWarmup?: string
 }
 
 // Headers are CRLF-separated, with continuation lines starting with whitespace.
@@ -185,8 +190,19 @@ function parseHeaders(headerBlock: string): ParsedHeaders {
     else if (name === 'from') out.from = value
     else if (name === 'subject') out.subject = value
     else if (name === 'date') out.date = value
+    else if (name === 'x-leadflow-warmup') out.xLeadflowWarmup = value
   }
   return out
+}
+
+// Extract the bare email address from a From header, which may look like
+// '"Display Name" <addr@host>' or just 'addr@host'.
+function extractFromAddress(raw: string | undefined): string | null {
+  if (!raw) return null
+  const bracket = raw.match(/<([^>]+)>/)
+  if (bracket) return bracket[1].trim().toLowerCase()
+  const bare = raw.match(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/)
+  return bare ? bare[0].toLowerCase() : null
 }
 
 // Message-IDs are wrapped in `<...>`. Strip the brackets, lowercase for match.
@@ -320,10 +336,12 @@ Deno.serve(async (req: Request) => {
         }
         accScanned++
         try {
-          // FETCH headers + first 4KB of body.
+          // FETCH headers + first 4KB of body. We include X-LEADFLOW-WARMUP
+          // so the parser can branch warmup traffic out of the real-reply
+          // pipeline before it touches activities / classifier / suppression.
           const fetchResp = await imapCmd(
             imap,
-            `FETCH ${uid} (BODY.PEEK[HEADER.FIELDS (MESSAGE-ID IN-REPLY-TO REFERENCES FROM SUBJECT DATE)] BODY.PEEK[TEXT]<0.4096>)`,
+            `FETCH ${uid} (BODY.PEEK[HEADER.FIELDS (MESSAGE-ID IN-REPLY-TO REFERENCES FROM SUBJECT DATE X-LEADFLOW-WARMUP)] BODY.PEEK[TEXT]<0.4096>)`,
           )
           // Two literals back — grab both.
           const literalMatches = [...fetchResp.matchAll(/\{(\d+)\}\r\n/g)]
@@ -346,6 +364,35 @@ Deno.serve(async (req: Request) => {
           }
 
           const headers = parseHeaders(headerBlock)
+
+          // Warmup branch — if the inbound carries X-LeadFlow-Warmup: 1, this
+          // is inter-inbox traffic from send-warmup-tick. Handle it here and
+          // hard-skip the real-reply pipeline. Critically, no `activities`
+          // row, no classify-reply-intent call, no suppression touch — those
+          // would all corrupt the customer-facing view of the contact graph.
+          if (headers.xLeadflowWarmup?.trim() === '1') {
+            let warmupAction: 'reply' | 'star' | 'ignore' = 'ignore'
+            try {
+              warmupAction = await handleWarmupInbound(supabase, {
+                accountId: account.id,
+                orgId: account.org_id,
+                fromAddress: extractFromAddress(headers.from),
+                messageId: headers.messageId,
+                references: headers.references,
+                subject: headers.subject,
+              })
+            } catch (err) {
+              accErrors.push(`warmup_inbound: ${(err as Error).message}`)
+            }
+            // Apply the IMAP flags. Star = \Flagged; always mark $LFReplyProcessed
+            // so we don't re-process on next tick.
+            const flags = warmupAction === 'star'
+              ? `(\\Flagged ${LF_KEYWORD})`
+              : `(${LF_KEYWORD})`
+            try { await imapCmd(imap, `STORE ${uid} +FLAGS ${flags}`) } catch { /* ignore */ }
+            continue
+          }
+
           const candidateMsgIds = new Set<string>()
           if (headers.inReplyTo) candidateMsgIds.add(headers.inReplyTo)
           for (const r of headers.references) candidateMsgIds.add(r)
@@ -534,6 +581,99 @@ Deno.serve(async (req: Request) => {
     errors: topErrors.slice(0, 10),
   })
 })
+
+// ---- Warmup-inbound handler -----------------------------------------------
+// Producer side: supabase/functions/send-warmup-tick — sets X-LeadFlow-Warmup: 1
+// on every outbound. When the IMAP poller sees that header on a received
+// message it short-circuits the real-reply pipeline and routes here.
+//
+// We roll a 3-way die:
+//   40% — auto-reply via send-warmup-tick (mode: 'reply')
+//   20% — IMAP STORE +FLAGS \Flagged (Gmail renders this as a yellow star)
+//   40% — ignore (just the $LFReplyProcessed mark applied by the caller)
+//
+// In all cases we log an email_send_events row with metadata.kind =
+// 'warmup_handled' so the dashboard can show conversation-graph health.
+
+interface WarmupInboundArgs {
+  accountId: string          // the inbox that received the warmup (becomes the sender if we reply)
+  orgId: string
+  fromAddress: string | null // bare email address of the warmup sender
+  messageId?: string         // inbound Message-ID — used for In-Reply-To on auto-reply
+  references: string[]
+  subject?: string
+}
+
+async function handleWarmupInbound(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  args: WarmupInboundArgs,
+): Promise<'reply' | 'star' | 'ignore'> {
+  const dice = Math.random()
+  let action: 'reply' | 'star' | 'ignore'
+  if (dice < 0.4) action = 'reply'
+  else if (dice < 0.6) action = 'star'
+  else action = 'ignore'
+
+  // For the auto-reply we need to resolve the from-address back to an
+  // email_accounts.id (the original sender becomes the recipient of the
+  // reply). Cross-org sends were already excluded at the producer; we
+  // still verify here as defence-in-depth.
+  let originalSenderAccountId: string | null = null
+  if (action === 'reply' && args.fromAddress) {
+    const { data: senderAcct } = await supabase
+      .from('email_accounts')
+      .select('id, org_id')
+      .ilike('email_address', args.fromAddress)
+      .eq('org_id', args.orgId)
+      .maybeSingle()
+    originalSenderAccountId = senderAcct?.id ?? null
+    if (!originalSenderAccountId) {
+      // Sender not in our roster — downgrade to ignore rather than reply
+      // to a stranger.
+      action = 'ignore'
+    }
+  }
+
+  if (action === 'reply' && originalSenderAccountId) {
+    try {
+      await fetch(`${SUPABASE_URL}/functions/v1/send-warmup-tick`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          'apikey': SUPABASE_SERVICE_ROLE_KEY,
+        },
+        body: JSON.stringify({
+          mode: 'reply',
+          sender_account_id: args.accountId,            // we received it → we reply
+          recipient_account_id: originalSenderAccountId, // back to original sender
+          in_reply_to_message_id: args.messageId,
+          references: args.references,
+          original_subject: args.subject,
+        }),
+      })
+    } catch (err) {
+      // If send-warmup-tick is unreachable, downgrade to ignore + log.
+      console.warn('warmup auto-reply dispatch failed:', (err as Error).message)
+      action = 'ignore'
+    }
+  }
+
+  await supabase.from('email_send_events').insert({
+    org_id: args.orgId,
+    email_account_id: args.accountId,
+    event_type: 'sent',
+    metadata: {
+      kind: 'warmup_handled',
+      action,
+      inbound_message_id: args.messageId,
+      from_resolved_to_account_id: originalSenderAccountId,
+    },
+  })
+
+  return action
+}
 
 // @ts-expect-error supabase client typed in caller
 async function finalizeRun(
