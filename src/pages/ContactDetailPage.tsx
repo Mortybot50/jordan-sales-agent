@@ -9,6 +9,7 @@ import {
   Globe,
   Loader2,
   MapPin,
+  MessageSquare,
   Plus,
   Sparkles,
   Workflow,
@@ -52,6 +53,7 @@ import {
   getActivityMeta,
 } from '@/components/primitives'
 
+import { ClaudePanel } from '@/components/claude/ClaudePanel'
 import { useContact, useUpdateContact } from '@/lib/queries/contacts'
 import { useContactDeals, useCreateDeal } from '@/lib/queries/deals'
 import { PackageDealForm } from '@/components/pipeline/PackageDealForm'
@@ -109,6 +111,7 @@ export function ContactDetailPage() {
   const [draftHint, setDraftHint] = useState('')
   const [enrolDialogOpen, setEnrolDialogOpen] = useState(false)
   const [selectedSequenceId, setSelectedSequenceId] = useState<string>('')
+  const [claudeOpen, setClaudeOpen] = useState(false)
 
   const sequencesQ = useSequences()
   const enrolContacts = useEnrolContacts()
@@ -392,6 +395,15 @@ export function ContactDetailPage() {
         }
         actions={
           <>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8"
+              onClick={() => setClaudeOpen(true)}
+            >
+              <MessageSquare className="w-4 h-4 mr-1.5" />
+              Ask Claude
+            </Button>
             <Button
               size="sm"
               variant="outline"
@@ -1105,6 +1117,15 @@ export function ContactDetailPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Ask Claude — per-contact drawer */}
+      <ClaudePanel
+        open={claudeOpen}
+        onOpenChange={setClaudeOpen}
+        scope="contact"
+        contactId={contact.id}
+        eyebrow={contact.full_name}
+      />
 
       {/* Enrol in sequence */}
       <Dialog open={enrolDialogOpen} onOpenChange={setEnrolDialogOpen}>
