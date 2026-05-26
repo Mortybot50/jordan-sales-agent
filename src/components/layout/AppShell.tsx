@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { ClaudeCommandBar } from '@/components/claude/ClaudeCommandBar'
 import {
   LayoutDashboard,
   KanbanSquare,
@@ -286,6 +287,11 @@ export function AppShell() {
           </ErrorBoundary>
         </main>
       </div>
+
+      {/* Global Cmd+K Claude command bar — mounted inside AppShell so it
+          only exists when the user is authenticated (RequireAuth wraps the
+          shell in App.tsx). */}
+      <ClaudeCommandBar />
     </div>
   )
 }
