@@ -45,6 +45,42 @@ const COST_PER_M_OUTPUT_USD = 15
 // the BUILD plan — small risk window, individual user, no abuse vector here).
 const rateLimitWindow = new Map<string, number[]>()
 
+// Returns the UTC instant corresponding to midnight on `now`'s calendar day in
+// `timeZone`. Uses Intl to avoid pulling in a timezone library — works for
+// IANA zones supported by V8 (Australia/Melbourne in our case).
+function startOfDayInTimezone(now: Date, timeZone: string): Date {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(now)
+  const lookup: Record<string, string> = {}
+  for (const p of parts) lookup[p.type] = p.value
+  // Project the wall-clock components back to UTC, then subtract the zone's
+  // offset to get the actual UTC midnight for the zone's "today".
+  const asUtc = Date.UTC(
+    Number(lookup.year),
+    Number(lookup.month) - 1,
+    Number(lookup.day),
+    Number(lookup.hour),
+    Number(lookup.minute),
+    Number(lookup.second),
+  )
+  const offsetMs = asUtc - now.getTime()
+  const midnightUtcOfZoneDay = Date.UTC(
+    Number(lookup.year),
+    Number(lookup.month) - 1,
+    Number(lookup.day),
+    0, 0, 0,
+  )
+  return new Date(midnightUtcOfZoneDay - offsetMs)
+}
+
 function checkRateLimit(userId: string): { ok: boolean; retryAfterSec?: number } {
   const now = Date.now()
   const stamps = rateLimitWindow.get(userId) ?? []
@@ -169,9 +205,11 @@ async function loadGlobalContext(
   supabase: ReturnType<typeof createClient>,
   orgId: string,
 ): Promise<GlobalCtx> {
-  const todayStart = new Date()
-  todayStart.setHours(0, 0, 0, 0)
-  const todayIso = todayStart.toISOString()
+  // Jordan operates in Australia/Melbourne. The Edge runtime is UTC, so we
+  // must compute "today" in the user's timezone — a naive new Date() local
+  // boundary would shift the window by up to 11 hours and either miss the
+  // early morning's activity or include yesterday's afternoon.
+  const todayIso = startOfDayInTimezone(new Date(), 'Australia/Melbourne').toISOString()
 
   const [recentContacts, draftsToday, repliesToday, pipelineMoves] = await Promise.all([
     supabase
@@ -185,11 +223,14 @@ async function loadGlobalContext(
       .select('id', { count: 'exact', head: true })
       .eq('org_id', orgId)
       .gte('generated_at', todayIso),
+    // Match the rest of the app (dashboard/briefing/activities/sequence-tick
+    // all treat both types as "a reply") — counting only reply_received here
+    // would under-report inbound replies coming via Gmail / IMAP.
     supabase
       .from('activities')
       .select('id', { count: 'exact', head: true })
       .eq('org_id', orgId)
-      .eq('activity_type', 'reply_received')
+      .in('activity_type', ['reply_received', 'email_inbound'])
       .gte('occurred_at', todayIso),
     supabase
       .from('deals')
