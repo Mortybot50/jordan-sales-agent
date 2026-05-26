@@ -61,17 +61,20 @@ CREATE INDEX IF NOT EXISTS idx_claude_conversations_org
 
 ALTER TABLE claude_conversations ENABLE ROW LEVEL SECURITY;
 
+-- User-scoped: a user can only see their own conversations, even within the
+-- same org. Chats are personal — co-workers shouldn't read each other's
+-- Claude history. Service role bypasses below.
 CREATE POLICY "claude_conversations_select" ON claude_conversations
-  FOR SELECT USING (org_id = auth_org_id());
+  FOR SELECT USING (org_id = auth_org_id() AND user_id = auth.uid());
 
 CREATE POLICY "claude_conversations_insert" ON claude_conversations
-  FOR INSERT WITH CHECK (org_id = auth_org_id());
+  FOR INSERT WITH CHECK (org_id = auth_org_id() AND user_id = auth.uid());
 
 CREATE POLICY "claude_conversations_update" ON claude_conversations
-  FOR UPDATE USING (org_id = auth_org_id());
+  FOR UPDATE USING (org_id = auth_org_id() AND user_id = auth.uid());
 
 CREATE POLICY "claude_conversations_delete" ON claude_conversations
-  FOR DELETE USING (org_id = auth_org_id());
+  FOR DELETE USING (org_id = auth_org_id() AND user_id = auth.uid());
 
 CREATE POLICY "claude_conversations_service_role" ON claude_conversations
   USING (auth.role() = 'service_role')
@@ -106,14 +109,37 @@ CREATE INDEX IF NOT EXISTS idx_claude_messages_conversation
 
 ALTER TABLE claude_messages ENABLE ROW LEVEL SECURITY;
 
+-- User-scoped via the parent conversation: only the conversation's owner
+-- (and the service role for Edge Function writes) can touch the messages.
 CREATE POLICY "claude_messages_select" ON claude_messages
-  FOR SELECT USING (org_id = auth_org_id());
+  FOR SELECT USING (
+    org_id = auth_org_id()
+    AND EXISTS (
+      SELECT 1 FROM claude_conversations c
+      WHERE c.id = claude_messages.conversation_id
+        AND c.user_id = auth.uid()
+    )
+  );
 
 CREATE POLICY "claude_messages_insert" ON claude_messages
-  FOR INSERT WITH CHECK (org_id = auth_org_id());
+  FOR INSERT WITH CHECK (
+    org_id = auth_org_id()
+    AND EXISTS (
+      SELECT 1 FROM claude_conversations c
+      WHERE c.id = claude_messages.conversation_id
+        AND c.user_id = auth.uid()
+    )
+  );
 
 CREATE POLICY "claude_messages_delete" ON claude_messages
-  FOR DELETE USING (org_id = auth_org_id());
+  FOR DELETE USING (
+    org_id = auth_org_id()
+    AND EXISTS (
+      SELECT 1 FROM claude_conversations c
+      WHERE c.id = claude_messages.conversation_id
+        AND c.user_id = auth.uid()
+    )
+  );
 
 CREATE POLICY "claude_messages_service_role" ON claude_messages
   USING (auth.role() = 'service_role')

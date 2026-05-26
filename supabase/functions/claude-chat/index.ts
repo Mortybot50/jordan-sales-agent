@@ -134,7 +134,7 @@ async function loadContactContext(
   let enrolment: SequenceEnrolmentCtx | null = null
   try {
     const { data: enrol } = await supabase
-      .from('sequence_enrolments')
+      .from('sequence_enrollments')
       .select(`
         status, current_step, next_step_due_at, last_status_message,
         sequence:sequences(name)
@@ -490,15 +490,19 @@ Deno.serve(async (req) => {
     global: globalCtx,
   })
 
-  // Load prior turns for this conversation
+  // Load prior turns for this conversation — fetch the *latest* 40 (newest
+  // first), then reverse to chronological order before sending to Anthropic.
+  // Ordering ascending + limit 40 would silently drop recent context once a
+  // conversation gets long.
   const { data: priorMessages } = await supabase
     .from('claude_messages')
-    .select('role, content')
+    .select('role, content, created_at')
     .eq('conversation_id', conversationId)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
     .limit(40)
 
-  const messages: AnthropicMessage[] = ((priorMessages ?? []) as Array<{ role: string; content: string }>)
+  const chronological = ((priorMessages ?? []) as Array<{ role: string; content: string }>).slice().reverse()
+  const messages: AnthropicMessage[] = chronological
     .filter((m) => m.role === 'user' || m.role === 'assistant')
     .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
   messages.push({ role: 'user', content: message })
