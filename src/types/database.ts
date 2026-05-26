@@ -1823,59 +1823,6 @@ export type Database = {
           },
         ]
       }
-      sender_inboxes: {
-        Row: {
-          created_at: string
-          daily_cap: number
-          display_name: string | null
-          email: string
-          enabled: boolean
-          id: string
-          instantly_account_id: string | null
-          last_send_at: string | null
-          notes: string | null
-          org_id: string
-          updated_at: string
-          weight: number
-        }
-        Insert: {
-          created_at?: string
-          daily_cap?: number
-          display_name?: string | null
-          email: string
-          enabled?: boolean
-          id?: string
-          instantly_account_id?: string | null
-          last_send_at?: string | null
-          notes?: string | null
-          org_id: string
-          updated_at?: string
-          weight?: number
-        }
-        Update: {
-          created_at?: string
-          daily_cap?: number
-          display_name?: string | null
-          email?: string
-          enabled?: boolean
-          id?: string
-          instantly_account_id?: string | null
-          last_send_at?: string | null
-          notes?: string | null
-          org_id?: string
-          updated_at?: string
-          weight?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sender_inboxes_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "orgs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       sending_domains: {
         Row: {
           created_at: string
@@ -2920,22 +2867,32 @@ export type Database = {
       select_next_sender: {
         Args: { p_org_id: string }
         Returns: {
+          brand: string | null
           created_at: string
-          daily_cap: number
+          daily_send_cap: number
           display_name: string | null
-          email: string
-          enabled: boolean
+          domain: string | null
+          email_address: string
+          icp_segment: string | null
           id: string
-          instantly_account_id: string | null
+          last_bounce_at: string | null
           last_send_at: string | null
-          notes: string | null
+          last_warmup_send_at: string | null
           org_id: string
+          reply_to_address: string | null
+          reputation_score: number | null
+          send_signature: string | null
+          smtp_host: string
+          smtp_password_encrypted: string | null
+          smtp_port: number
+          smtp_username: string
+          status: string
           updated_at: string
-          weight: number
+          user_id: string
         }
         SetofOptions: {
           from: "*"
-          to: "sender_inboxes"
+          to: "email_accounts"
           isOneToOne: true
           isSetofReturn: false
         }
