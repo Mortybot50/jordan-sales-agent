@@ -18,6 +18,10 @@ export interface AppUser {
     morning_briefing_paused_until?: string | null
   }
   default_commission_pct: number | null
+  notify_whatsapp_e164: string | null
+  notify_warm_replies: boolean
+  notify_quiet_hours_start: number | null
+  notify_quiet_hours_end: number | null
 }
 
 interface AuthState {
@@ -75,7 +79,7 @@ function redirectToLogin() {
 async function fetchUserProfile(userId: string): Promise<AppUser | null> {
   const { data, error } = await supabase
     .from('users')
-    .select('id, org_id, full_name, email, role, email_signature, voice_rules, icp_config, email_notifications, default_commission_pct')
+    .select('id, org_id, full_name, email, role, email_signature, voice_rules, icp_config, email_notifications, default_commission_pct, notify_whatsapp_e164, notify_warm_replies, notify_quiet_hours_start, notify_quiet_hours_end')
     .eq('id', userId)
     .maybeSingle()
 
@@ -97,6 +101,10 @@ async function fetchUserProfile(userId: string): Promise<AppUser | null> {
       morning_briefing_paused_until?: string | null
     }),
     default_commission_pct: d.default_commission_pct == null ? null : Number(d.default_commission_pct),
+    notify_whatsapp_e164: (d.notify_whatsapp_e164 as string | null) ?? null,
+    notify_warm_replies: (d.notify_warm_replies as boolean | null) ?? true,
+    notify_quiet_hours_start: d.notify_quiet_hours_start == null ? null : Number(d.notify_quiet_hours_start),
+    notify_quiet_hours_end: d.notify_quiet_hours_end == null ? null : Number(d.notify_quiet_hours_end),
   }
 }
 

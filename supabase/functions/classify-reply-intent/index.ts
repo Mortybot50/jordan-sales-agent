@@ -184,6 +184,24 @@ Reply: ${replyBody || '(empty)'}`
     )
   }
 
+  // Real-time warm-reply WhatsApp ping: positive intent with confidence >= 0.8
+  // → fire-and-forget POST to notify-warm-reply. We never await — caller
+  // returns the classification regardless of whether the notify Edge Function
+  // accepts the enqueue. Failures surface in notification_log for debugging.
+  if (intent === 'positive' && confidence >= 0.8) {
+    const notifyUrl = `${SUPABASE_URL}/functions/v1/notify-warm-reply`
+    fetch(notifyUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+      body: JSON.stringify({ activity_id }),
+    }).catch((err) => {
+      console.error('notify-warm-reply enqueue failed:', err)
+    })
+  }
+
   // Auto-suppression: unsubscribe with confidence >= 0.8
   if (intent === 'unsubscribe' && confidence >= 0.8 && activity.contact_id) {
     const { data: contact } = await supabase
