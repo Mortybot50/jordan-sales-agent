@@ -36,6 +36,8 @@ import { cn } from '@/lib/utils'
 import { DealCard } from './DealCard'
 import { DealDrawer } from './DealDrawer'
 import { MarkOutcomeDialog } from './MarkOutcomeDialog'
+import { ProductPicker } from './ProductPicker'
+import type { Product } from '@/lib/queries/products'
 import { MetricNumber, ErrorAlert } from '@/components/primitives'
 import { Plus } from 'lucide-react'
 import { useForm, type FieldErrors } from 'react-hook-form'
@@ -79,6 +81,8 @@ export function KanbanBoard({
   const [activeDeal, setActiveDeal] = useState<Deal | null>(null)
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null)
   const [quickAddStageId, setQuickAddStageId] = useState<string | null>(null)
+  const [quickAddProductId, setQuickAddProductId] = useState<string | null>(null)
+  const [quickAddProductTouched, setQuickAddProductTouched] = useState(false)
   const [outcomeIntent, setOutcomeIntent] = useState<{
     deal: Deal
     initialOutcome: 'won' | 'lost'
@@ -200,6 +204,11 @@ export function KanbanBoard({
 
   async function handleQuickAdd(values: DealFormValues) {
     if (!user || !quickAddStageId) return
+    if (!quickAddProductId) {
+      setQuickAddProductTouched(true)
+      toast.error('Pick a product to add the deal')
+      return
+    }
     if (
       values.contract_value != null &&
       values.contract_value > DEAL_VALUE_WARN &&
@@ -215,9 +224,21 @@ export function KanbanBoard({
       stage_id: quickAddStageId,
       contact_id: values.contact_id,
       contract_value: values.contract_value,
+      product_id: quickAddProductId,
     })
     setQuickAddStageId(null)
+    setQuickAddProductId(null)
+    setQuickAddProductTouched(false)
     form.reset({ contract_value: 800 })
+  }
+
+  function handleQuickAddProduct(productId: string, product: Product) {
+    setQuickAddProductId(productId)
+    setQuickAddProductTouched(true)
+    const t = (form.getValues('title') ?? '').trim()
+    if (t === '' || t === 'Purezza filtration') {
+      form.setValue('title', product.label, { shouldValidate: true })
+    }
   }
 
   function onQuickAddInvalid(errors: FieldErrors<DealFormValues>) {
@@ -403,7 +424,13 @@ export function KanbanBoard({
       {/* Quick-add dialog */}
       <Dialog
         open={!!quickAddStageId}
-        onOpenChange={(v) => !v && setQuickAddStageId(null)}
+        onOpenChange={(v) => {
+          if (!v) {
+            setQuickAddStageId(null)
+            setQuickAddProductId(null)
+            setQuickAddProductTouched(false)
+          }
+        }}
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -421,12 +448,27 @@ export function KanbanBoard({
               </div>
             )}
             <div className="space-y-1">
+              <Label htmlFor="quick-add-product">Product *</Label>
+              <ProductPicker
+                id="quick-add-product"
+                value={quickAddProductId}
+                onChange={handleQuickAddProduct}
+                invalid={quickAddProductTouched && !quickAddProductId}
+              />
+              {quickAddProductTouched && !quickAddProductId && (
+                <p className="text-xs text-destructive">Pick a product.</p>
+              )}
+            </div>
+            <div className="space-y-1">
               <Label>Title *</Label>
               <Input
                 {...form.register('title')}
                 placeholder="e.g. Purezza x The Espy"
                 className={cn(form.formState.errors.title && 'border-destructive')}
               />
+              <p className="text-[11px] text-ink-faint">
+                Title auto-fills from product when blank.
+              </p>
               {form.formState.errors.title && (
                 <p className="text-xs text-destructive">
                   {form.formState.errors.title.message}
@@ -465,7 +507,11 @@ export function KanbanBoard({
                 type="button"
                 variant="outline"
                 className="flex-1"
-                onClick={() => setQuickAddStageId(null)}
+                onClick={() => {
+                  setQuickAddStageId(null)
+                  setQuickAddProductId(null)
+                  setQuickAddProductTouched(false)
+                }}
               >
                 Cancel
               </Button>

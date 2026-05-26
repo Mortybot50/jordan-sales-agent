@@ -23,7 +23,9 @@ import {
 } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { CapsLabel, IntentBadge, MetricNumber } from '@/components/primitives'
+import { BrandChip, CapsLabel, IntentBadge, MetricNumber } from '@/components/primitives'
+import { ProductPicker } from './ProductPicker'
+import type { Product } from '@/lib/queries/products'
 import {
   useUpdateDeal,
   useDeleteDeal,
@@ -128,6 +130,34 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
         description: `${field}: ${message}`,
       })
     }
+  }
+
+  /**
+   * Should we replace the deal title when a new product is picked? Yes when:
+   *   - title is blank, OR
+   *   - title equals the legacy default "Purezza filtration", OR
+   *   - title contains the *previously-selected* product label (so swapping
+   *     Purezza Tap → Culligan Filter rewrites the title cleanly).
+   */
+  function shouldReplaceTitle(currentTitle: string | null | undefined, prevProductLabel: string | null | undefined): boolean {
+    const t = (currentTitle ?? '').trim()
+    if (t === '' || t === 'Purezza filtration') return true
+    if (prevProductLabel && t.toLowerCase().includes(prevProductLabel.toLowerCase())) return true
+    return false
+  }
+
+  async function handleSelectProduct(productId: string, product: Product) {
+    const currentTitle = form.getValues('title')
+    const replaceTitle = shouldReplaceTitle(currentTitle, deal.product?.label)
+    if (replaceTitle) {
+      form.setValue('title', product.label, { shouldDirty: true })
+    }
+    await updateDeal.mutateAsync({
+      id: deal.id,
+      org_id: deal.org_id,
+      product_id: productId,
+      ...(replaceTitle ? { title: product.label } : {}),
+    })
   }
 
   async function handleSave(values: DealFormValues) {
@@ -298,9 +328,14 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
                 <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/80">
                   <Building2 size={12} className="shrink-0" />
                   <span>{deal.venue.name}</span>
-                  {deal.product?.label && (
-                    <span className="text-ink-muted font-medium ml-1">· {deal.product.label}</span>
-                  )}
+                </div>
+              )}
+              {deal.product?.label && (
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <BrandChip brand={deal.product.brand} />
+                  <span className="text-[12px] text-ink-muted font-medium truncate">
+                    {deal.product.label}
+                  </span>
                 </div>
               )}
             </div>
@@ -735,11 +770,24 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
               </div>
             )}
             <div className="space-y-1.5">
+              <Label htmlFor="deal-product">Product</Label>
+              <ProductPicker
+                id="deal-product"
+                value={deal.product_id ?? null}
+                onChange={handleSelectProduct}
+                disabled={updateDeal.isPending}
+              />
+            </div>
+
+            <div className="space-y-1.5">
               <Label>Title</Label>
               <Input
                 {...form.register('title')}
                 className={cn(form.formState.errors.title && 'border-destructive')}
               />
+              <p className="text-[11px] text-ink-faint">
+                Title auto-fills from product when blank.
+              </p>
               {form.formState.errors.title && (
                 <p className="text-xs text-destructive">{form.formState.errors.title.message}</p>
               )}
