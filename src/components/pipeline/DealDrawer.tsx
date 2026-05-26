@@ -343,7 +343,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
 
           {/* ── Financial panel ─────────────────────────────── */}
           {(acv != null || tcv != null || commission != null) && (
-            <div className="mb-5 rounded-[10px] border border-hairline bg-surface-2 p-3 space-y-2">
+            <div className="mb-4 rounded-[10px] border border-hairline bg-surface-2 p-3 space-y-2">
               <CapsLabel>Financial</CapsLabel>
               <div className="grid grid-cols-4 gap-3">
                 <div>
@@ -376,7 +376,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
 
           {/* ── Outcome (Won / Lost) panel ─────────────────────── */}
           {deal.outcome === 'won' && (
-            <div className="mb-5 rounded-[10px] border border-[color:var(--jordan-accent-mint)]/40 bg-[color:var(--jordan-accent-mint-soft)] p-3 space-y-2">
+            <div className="mb-4 rounded-[10px] border border-[color:var(--jordan-accent-mint)]/40 bg-[color:var(--jordan-accent-mint-soft)] p-3 space-y-2">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <CapsLabel className="text-[color:var(--jordan-success-text)]">
@@ -412,7 +412,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
             </div>
           )}
           {deal.outcome === 'lost' && (
-            <div className="mb-5 rounded-[10px] border border-[color:var(--jordan-danger)]/40 bg-[color:var(--jordan-danger-soft)] p-3 flex items-start justify-between gap-3">
+            <div className="mb-4 rounded-[10px] border border-[color:var(--jordan-danger)]/40 bg-[color:var(--jordan-danger-soft)] p-3 flex items-start justify-between gap-3">
               <div>
                 <CapsLabel className="text-[color:var(--jordan-danger-text)]">Closed Lost</CapsLabel>
                 <p className="text-[12px] text-ink-muted mt-0.5">
@@ -431,7 +431,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
             </div>
           )}
           {needsOutcomeTag && (
-            <div className="mb-5 rounded-[10px] border border-[color:var(--jordan-warm)]/50 bg-[color:var(--jordan-warm-soft,transparent)] p-3 space-y-2">
+            <div className="mb-4 rounded-[10px] border border-[color:var(--jordan-warm)]/50 bg-[color:var(--jordan-warm-soft,transparent)] p-3 space-y-2">
               <div className="flex items-center gap-1.5 text-[color:var(--jordan-warm-text)] text-[12px] font-semibold uppercase tracking-[var(--jordan-tracking-label)]">
                 <AlertTriangle className="w-3.5 h-3.5" />
                 Outcome not set
@@ -466,7 +466,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
 
           {/* ── Install Lifecycle panel ─────────────────────── */}
           {(isClosedWon || deal.outcome === 'won') && (
-            <div className="mb-5 rounded-[10px] border border-hairline bg-surface-2 p-3 space-y-3">
+            <div className="mb-4 rounded-[10px] border border-hairline bg-surface-2 p-3 space-y-3">
               <CapsLabel>Install Lifecycle</CapsLabel>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
@@ -553,7 +553,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
 
           {/* ── Hold-for-next-month CTAs ─────────────────────── */}
           {isHeld && (
-            <div className="mb-5 rounded-[10px] border border-[color:var(--jordan-accent-mint)]/30 bg-[color:var(--jordan-accent-mint-soft)] p-3 space-y-2">
+            <div className="mb-4 rounded-[10px] border border-[color:var(--jordan-accent-mint)]/30 bg-[color:var(--jordan-accent-mint-soft)] p-3 space-y-2">
               <CapsLabel className="text-[color:var(--jordan-success-text)]">
                 Held for {nextMonthLabel()}
               </CapsLabel>
@@ -585,17 +585,17 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
           )}
 
           {!isHeld && !isClosedWon && !isLost && (
-            <div className="mb-5">
-              <p className="text-[10px] tracking-[0.18em] uppercase text-zinc-500 font-medium mb-2">Quick Actions</p>
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="mb-4">
+              <CapsLabel className="mb-2">Quick actions</CapsLabel>
+              <div className="flex flex-wrap items-center gap-1.5">
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => moveToStageByName('Hold for Next Month')}
                 disabled={updateStage.isPending}
-                className="text-[12px]"
+                className="h-8 px-2.5 text-[12px] rounded-full border-hairline bg-transparent hover:bg-surface-2 font-medium"
               >
-                <Pause className="w-3.5 h-3.5 mr-1" />
+                <Pause className="w-3 h-3 mr-1" />
                 Hold for next month
               </Button>
 
@@ -605,10 +605,10 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="text-[12px]"
+                      className="h-8 px-2.5 text-[12px] rounded-full border-hairline bg-transparent hover:bg-surface-2 font-medium"
                       disabled={snoozeDeal.isPending}
                     >
-                      <Moon className="w-3.5 h-3.5 mr-1" />
+                      <Moon className="w-3 h-3 mr-1" />
                       Snooze
                     </Button>
                   </PopoverTrigger>
@@ -659,7 +659,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
 
           {/* ── Currently-snoozed banner ─────────────────────── */}
           {isCurrentlySnoozed && snoozedUntilDate && (
-            <div className="mb-5 rounded-[10px] border border-hairline bg-surface-2 p-3 flex items-start justify-between gap-3">
+            <div className="mb-4 rounded-[10px] border border-hairline bg-surface-2 p-3 flex items-start justify-between gap-3">
               <div>
                 <CapsLabel>Snoozed</CapsLabel>
                 <p className="text-[12px] text-ink-muted mt-0.5">
@@ -681,7 +681,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
           )}
 
           {/* ── Next step ──────────────────────────────────── */}
-          <div className="mb-5 rounded-[10px] border border-hairline bg-surface-2 p-3 space-y-3">
+          <div className="mb-4 rounded-[10px] border border-hairline bg-surface-2 p-3 space-y-2.5">
             <div className="flex items-center justify-between gap-2">
               <CapsLabel>Next step</CapsLabel>
               {(deal.next_step_note || deal.next_step_due_at) && (
@@ -703,51 +703,67 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
               placeholder="What's the very next thing? e.g. send Espy quote, call back about install date"
               rows={3}
               maxLength={280}
-              className="text-[13px] min-h-[96px]"
+              className="text-[14px] min-h-[72px] sm:min-h-[88px]"
             />
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-zinc-600">{deal.next_step_due_at && `Currently due ${format(new Date(deal.next_step_due_at), 'EEE d MMM')}`}</span>
+              <span className="text-[11px] text-ink-muted">{deal.next_step_due_at && `Currently due ${format(new Date(deal.next_step_due_at), 'EEE d MMM')}`}</span>
               <span className="text-[11px] text-ink-faint">{nextStepNote.length}/280</span>
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              {(
-                [
-                  { label: 'Today', kw: 'today' as const },
-                  { label: 'Tomorrow', kw: 'tomorrow' as const },
-                  { label: 'Friday', kw: 'friday' as const },
-                  { label: 'Next Mon', kw: 'monday' as const },
-                  { label: '+1 week', kw: 'plus_week' as const },
-                ]
-              ).map((p) => (
+            <div className="-mx-3 px-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex gap-1.5 snap-x snap-mandatory">
+                {(
+                  [
+                    { label: 'Today', kw: 'today' as const },
+                    { label: 'Tomorrow', kw: 'tomorrow' as const },
+                    { label: 'Friday', kw: 'friday' as const },
+                    { label: 'Next Mon', kw: 'monday' as const },
+                    { label: '+1 week', kw: 'plus_week' as const },
+                  ]
+                ).map((p) => {
+                  const iso = nextStepDateFromKeyword(p.kw)
+                  const selected = nextStepDue === iso
+                  return (
+                    <Button
+                      key={p.kw}
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className={cn(
+                        'h-7 px-2.5 text-[11px] rounded-full shrink-0 snap-start whitespace-nowrap font-medium',
+                        selected
+                          ? 'bg-ink text-surface-1 border-ink hover:bg-ink/90'
+                          : 'border-hairline bg-transparent hover:bg-surface-3',
+                      )}
+                      onClick={() => setNextStepDue(iso)}
+                    >
+                      {p.label}
+                    </Button>
+                  )
+                })}
                 <Button
-                  key={p.kw}
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="h-7 px-2 text-[11px]"
-                  onClick={() => setNextStepDue(nextStepDateFromKeyword(p.kw))}
+                  className={cn(
+                    'h-7 px-2.5 text-[11px] rounded-full shrink-0 snap-start whitespace-nowrap font-medium',
+                    nextStepDue === ''
+                      ? 'bg-ink text-surface-1 border-ink hover:bg-ink/90'
+                      : 'border-hairline bg-transparent hover:bg-surface-3',
+                  )}
+                  onClick={() => setNextStepDue('')}
                 >
-                  {p.label}
+                  No date
                 </Button>
-              ))}
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-7 px-2 text-[11px]"
-                onClick={() => setNextStepDue('')}
-              >
-                No date
-              </Button>
+              </div>
             </div>
             <div className="flex items-end gap-2">
               <div className="flex-1 space-y-1">
-                <Label className="text-[11px]">Due</Label>
+                <Label className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">Due</Label>
                 <Input
                   type="date"
                   value={nextStepDue}
                   onChange={(e) => setNextStepDue(e.target.value)}
-                  className="h-8 text-[13px]"
+                  className="h-8 text-[14px]"
                 />
               </div>
               <Button
@@ -762,8 +778,8 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
           </div>
 
           {/* ── Edit form ────────────────────────────────────── */}
-          <form onSubmit={form.handleSubmit(handleSave, onInvalid)} className="space-y-5">
-            <p className="text-[11px] tracking-[0.18em] uppercase text-zinc-500 font-semibold pb-1">Deal Details</p>
+          <form onSubmit={form.handleSubmit(handleSave, onInvalid)} className="space-y-4">
+            <CapsLabel className="block pb-1">Deal details</CapsLabel>
             {Object.keys(form.formState.errors).length > 0 && (
               <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
                 Please fix the highlighted fields before saving.
@@ -859,7 +875,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
           <Separator className="my-5" />
 
           {/* Meta info */}
-          <div className="grid grid-cols-2 gap-3 text-sm mb-5">
+          <div className="grid grid-cols-2 gap-3 text-sm mb-4">
             <div>
               <p className="text-xs text-muted-foreground">Days in stage</p>
               <p className="font-semibold">{deal.days_in_stage ?? 0}</p>
