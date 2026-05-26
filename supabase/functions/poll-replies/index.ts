@@ -675,17 +675,21 @@ async function handleWarmupInbound(
     }
   }
 
-  await supabase.from('email_send_events').insert({
-    org_id: args.orgId,
-    email_account_id: args.accountId,
-    event_type: 'sent',
-    metadata: {
-      kind: 'warmup_handled',
-      action,
-      inbound_message_id: args.messageId,
-      from_resolved_to_account_id: originalSenderAccountId,
-    },
-  })
+  // Observability: log only when no outbound 'sent' is otherwise recorded.
+  // Codex P2 fix: previous version emitted event_type='sent' for every
+  // inbound action, inflating reputation analytics that count sent rows.
+  // - action='reply' → send-warmup-tick already logs a 'sent' row on the
+  //                    outbound reply, so we add nothing here.
+  // - action='star'/'ignore' → no outbound, no event. The action lands in
+  //                    the local accErrors/console.warn trail only.
+  if (action === 'reply') {
+    console.log('warmup_inbound: replied via send-warmup-tick', {
+      account: args.accountId,
+      from: originalSenderAccountId,
+    })
+  } else {
+    console.log('warmup_inbound: action=', action, { account: args.accountId })
+  }
 
   return action
 }

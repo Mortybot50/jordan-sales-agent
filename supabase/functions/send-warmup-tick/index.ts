@@ -160,6 +160,7 @@ interface AccountRow {
   user_id: string
   email_address: string
   smtp_host: string | null
+  smtp_port: number | null
   smtp_username: string
   smtp_password_encrypted: string | null
   status: string
@@ -244,7 +245,7 @@ async function handleTick(
 ): Promise<Response> {
   const { data: accounts, error: acctErr } = await supabase
     .from('email_accounts')
-    .select('id, org_id, user_id, email_address, smtp_host, smtp_username, smtp_password_encrypted, status, warmup_day, warmup_day_bumped_on, last_warmup_send_at')
+    .select('id, org_id, user_id, email_address, smtp_host, smtp_port, smtp_username, smtp_password_encrypted, status, warmup_day, warmup_day_bumped_on, last_warmup_send_at')
     .in('status', ['active', 'warming'])
     .not('smtp_password_encrypted', 'is', null)
 
@@ -387,7 +388,7 @@ async function handleReply(
 
   const { data: account } = await supabase
     .from('email_accounts')
-    .select('id, org_id, user_id, email_address, smtp_host, smtp_username, smtp_password_encrypted, status, warmup_day, warmup_day_bumped_on, last_warmup_send_at')
+    .select('id, org_id, user_id, email_address, smtp_host, smtp_port, smtp_username, smtp_password_encrypted, status, warmup_day, warmup_day_bumped_on, last_warmup_send_at')
     .eq('id', body.sender_account_id)
     .maybeSingle()
   if (!account || !account.smtp_password_encrypted) {
@@ -507,17 +508,21 @@ async function sendWarmupEmail(
       .join(' ')
   }
 
-  // Gmail SMTP: port 465 implicit TLS only (Week 1 PR #63 finding).
+  // SMTP transport selection — mirror send-via-smtp / drain-send-queue.
+  // Gmail force-465 (Week 1 PR #63 edge-runtime workaround); for any other
+  // host we honour the configured smtp_port and infer TLS from it (465 =
+  // implicit TLS, anything else = STARTTLS-or-plain via denomailer default).
   const host = (acct.smtp_host ?? 'smtp.gmail.com').toLowerCase()
   const isGmail = host.endsWith('gmail.com')
-  const port = isGmail ? 465 : 587
-  const tls = isGmail ? true : false
+  const configuredPort = acct.smtp_port ?? 587
+  const effectivePort = isGmail ? 465 : configuredPort
+  const effectiveTls = isGmail ? true : (configuredPort === 465)
 
   const client = new SMTPClient({
     connection: {
       hostname: acct.smtp_host ?? 'smtp.gmail.com',
-      port,
-      tls,
+      port: effectivePort,
+      tls: effectiveTls,
       auth: { username: acct.smtp_username, password: smtpPassword },
     },
   })
