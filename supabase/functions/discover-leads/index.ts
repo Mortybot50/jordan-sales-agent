@@ -52,6 +52,37 @@ async function getCallerOrgId(req: Request): Promise<string | null> {
   return profile?.org_id ?? null
 }
 
+/**
+ * Detect a trusted service-role caller. discover-leads is currently
+ * verify_jwt=false (see scripts/smoke-manifest.yaml), so decoding the JWT
+ * payload and trusting its claims would be forgeable — anyone can craft a
+ * `{"role":"service_role"}` payload and skip the IDOR check.
+ *
+ * Instead, compare the raw bearer token to SUPABASE_SERVICE_ROLE_KEY using
+ * a constant-time check. The cron dispatcher (sourcing-cron-tick) sends the
+ * literal service-role JWT, so only callers in possession of the secret
+ * pass this gate. Same primitive that protected the Week 1/2 cron functions
+ * before `_shared/auth.ts` was introduced.
+ *
+ * Returns true iff the request carries the exact service-role JWT.
+ */
+function isServiceRoleCaller(req: Request): boolean {
+  const auth = req.headers.get('Authorization') ?? ''
+  if (!auth.startsWith('Bearer ')) return false
+  const token = auth.slice('Bearer '.length).trim()
+  if (!token || !SUPABASE_SERVICE_ROLE_KEY) return false
+  return timingSafeEqual(token, SUPABASE_SERVICE_ROLE_KEY)
+}
+
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  let diff = 0
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  }
+  return diff === 0
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -300,7 +331,7 @@ Deno.serve(async (req: Request) => {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-  let body: { search_id?: string } = {}
+  let body: { search_id?: string; triggered_by?: string } = {}
   try {
     body = await req.json()
   } catch {
@@ -310,11 +341,36 @@ Deno.serve(async (req: Request) => {
   const { search_id } = body
   if (!search_id) return jsonResp({ error: 'search_id required' }, 400)
 
-  // Validate caller's org before using service role key
-  const callerOrgId = await getCallerOrgId(req)
-  if (!callerOrgId) return jsonResp({ error: 'unauthorized' }, 401)
+  // Auth: accept either (a) a user JWT whose org_id matches the search, or
+  // (b) a request bearing the literal service-role JWT — used by
+  // sourcing-cron-tick. The service-role path skips the IDOR check because
+  // possession of the secret already implies trust; the search row's own
+  // org_id is the authoritative scope from that point on.
+  const isCronCaller = isServiceRoleCaller(req)
+  let triggeredBy: 'manual' | 'cron' = 'manual'
 
-  // Load search config
+  if (!isCronCaller) {
+    const callerOrgId = await getCallerOrgId(req)
+    if (!callerOrgId) return jsonResp({ error: 'unauthorized' }, 401)
+
+    const { data: searchPeek, error: peekErr } = await supabase
+      .from('lead_searches')
+      .select('org_id')
+      .eq('id', search_id)
+      .single()
+    if (peekErr || !searchPeek) {
+      return jsonResp({ error: peekErr?.message ?? 'search not found' }, 404)
+    }
+    if (searchPeek.org_id !== callerOrgId) {
+      return jsonResp({ error: 'forbidden' }, 403)
+    }
+  } else {
+    // Only the cron dispatcher should set triggered_by='cron'. Validate
+    // the value rather than echoing the request body blindly.
+    triggeredBy = body.triggered_by === 'cron' ? 'cron' : 'manual'
+  }
+
+  // Load full search config
   const { data: search, error: searchErr } = await supabase
     .from('lead_searches')
     .select('*')
@@ -325,11 +381,6 @@ Deno.serve(async (req: Request) => {
     return jsonResp({ error: searchErr?.message ?? 'search not found' }, 404)
   }
 
-  // Confirm caller's org owns this search (defence in depth against IDOR)
-  if (search.org_id !== callerOrgId) {
-    return jsonResp({ error: 'forbidden' }, 403)
-  }
-
   // Create run record
   const { data: run, error: runErr } = await supabase
     .from('lead_search_runs')
@@ -337,6 +388,7 @@ Deno.serve(async (req: Request) => {
       search_id,
       org_id: search.org_id,
       status: 'running',
+      triggered_by: triggeredBy,
     })
     .select('id')
     .single()

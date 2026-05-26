@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { formatDistanceToNow } from 'date-fns'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,6 +28,7 @@ import {
   useUpdateLeadSearch,
   type LeadSearch,
 } from '@/lib/queries/sourcing'
+import { isValidCron, nextRunAt, parseCron } from '@/lib/cron/match'
 import { SuburbInput } from './SuburbInput'
 
 interface SourcingFormProps {
@@ -383,7 +385,7 @@ function SourcingFormBody({
           <Label htmlFor="sourcing-cron">
             Schedule{' '}
             <span className="text-ink-faint text-[11px] font-normal">
-              (optional — saved but not yet auto-run)
+              (optional — runs automatically when set)
             </span>
           </Label>
           <div className="flex flex-wrap gap-1.5">
@@ -402,13 +404,16 @@ function SourcingFormBody({
             id="sourcing-cron"
             value={values.schedule_cron ?? ''}
             onChange={(e) => set('schedule_cron', e.target.value)}
-            placeholder="Custom cron, e.g. 0 6 * * 1-5"
+            placeholder="Custom cron (UTC), e.g. 0 6 * * 1-5"
             maxLength={120}
+            aria-invalid={!!errors.schedule_cron}
           />
-          <p className="text-[11px] text-ink-faint">
-            Phase 1 ships manual "Run now" only. The cron string is stored
-            for the follow-up scheduler PR.
-          </p>
+          <CronPreview value={values.schedule_cron} />
+          {errors.schedule_cron && (
+            <p className="text-[12px] text-[color:var(--jordan-danger-text)]">
+              {errors.schedule_cron}
+            </p>
+          )}
         </div>
       </div>
 
@@ -434,5 +439,47 @@ function SourcingFormBody({
         </Button>
       </DialogFooter>
     </DialogContent>
+  )
+}
+
+/**
+ * Live preview line under the cron input. Two states:
+ *   - empty/null  → "No schedule — runs only on demand."
+ *   - parseable   → "Next run: in about X (HH:mm UTC)"
+ *   - unparseable → hidden (the field-level error message handles it)
+ */
+function CronPreview({ value }: { value: string | null | undefined }) {
+  const next = useMemo(() => {
+    const v = value?.trim()
+    if (!v) return null
+    if (!isValidCron(v)) return 'invalid'
+    try {
+      const parsed = parseCron(v)
+      return nextRunAt(parsed, new Date())
+    } catch {
+      return 'invalid'
+    }
+  }, [value])
+
+  if (next === null) {
+    return (
+      <p className="text-[11px] text-ink-faint">
+        No schedule — runs only on demand.
+      </p>
+    )
+  }
+  if (next === 'invalid') return null
+
+  const iso = next.toISOString().slice(11, 16) + ' UTC'
+  return (
+    <p className="text-[11px] text-ink-faint">
+      Next run:{' '}
+      <span className="text-ink-muted">
+        {formatDistanceToNow(next, { addSuffix: true })}
+      </span>{' '}
+      <span className="text-ink-faint jordan-tnum">
+        ({next.toISOString().slice(5, 10)} {iso})
+      </span>
+    </p>
   )
 }
