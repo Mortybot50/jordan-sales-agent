@@ -1,0 +1,67 @@
+# LeadFlow Edge Function manifest — canonical roster + expected verify_jwt setting.
+#
+# Three categories, all checked against the Supabase Management API:
+#   jwt    → verify_jwt=true. End-user calls. Handler trusts the gateway-verified
+#            JWT and reads the caller's user id from it.
+#   svc    → verify_jwt=true. Cron / inter-function only. Handler additionally
+#            calls requireServiceRoleAuth (_shared/auth.ts) to require the
+#            'role' claim == 'service_role'.
+#   public → verify_jwt=false. Anyone can hit. Used for outbound tracking links
+#            (click-redirect, pixel-track), webhook callbacks (gmail-inbound,
+#            unsubscribe-post), demo bootstrap (create-demo-user), and a few
+#            internal helpers that haven't been migrated to requireServiceRoleAuth
+#            yet — flagged in comments below for follow-up.
+#
+# verify_jwt expected by the smoke script:
+#   jwt + svc → true
+#   public    → false
+#
+# Update this file when functions are added, removed, or flipped. The smoke
+# script diffs the live Management API roster against this manifest and exits
+# non-zero on any MISSING / UNEXPECTED / AUTH_DRIFT finding.
+
+jwt:
+  - claude-chat            # PR #76 — in-app AI chat for sales agent
+  - field-route-optimize   # field-day route planner, end-user call
+  - generate-draft         # AI email draft generation, end-user call
+  - reopening-radar-manual # manual radar refresh from UI
+  - voice-transcribe       # voice-note transcribe, end-user call
+
+svc:
+  - audit-snapshot         # nightly audit cron
+  - classify-reply-intent  # called from gmail-inbound after inbound reply lands
+  - crawl-venue-contacts   # contact-discovery cron
+  - drain-send-queue       # send-queue drain cron, calls send-via-smtp
+  - enqueue-sends          # enqueue sends cron, pulls from sequence-tick output
+  - geocode-batch          # geocoding cron for places
+  - geocode-venues-batch   # geocoding cron for venues
+  - gmail-inbound          # Gmail Pub/Sub push webhook — currently verify_jwt=true,
+                           # pending Gmail Pub/Sub wire-up (Morty-side, Google
+                           # verification). Flip to PUBLIC when Pub/Sub goes live.
+  - notify-warm-reply      # PR #79 — warm-reply WhatsApp push, called from classify-reply-intent
+  - poll-replies           # IMAP poll cron
+  - process-bounces        # bounce-processing cron
+  - reopening-radar-poll   # radar polling cron
+  - send-via-smtp          # SMTP sender, called from drain-send-queue
+  - sequence-tick          # sequence-engine tick cron
+
+public:
+  # Public-by-design — outbound email tracking + webhook callbacks.
+  - click-redirect         # link redirect + click event capture
+  - pixel-track            # tracking pixel for email opens
+  - unsubscribe-post       # unsubscribe link callback
+
+  # Demo bootstrap — provisions the demo user, intentionally open.
+  - create-demo-user
+
+  # Internal helpers — currently verify_jwt=false but the handlers do their own
+  # auth (anon-key user client OR service-role guard). Migrating these to
+  # verify_jwt=true + requireServiceRoleAuth is tracked separately; until then
+  # the smoke script accepts them as public so deploys stay green.
+  - abr-lookup             # ABN lookup, called from discover-leads
+  - discover-leads         # lead-discovery cron
+  - ensure-intent-idx      # pgvector index ensurer
+  - generate-learning-digest  # learning-digest cron
+  - publication-poll       # publication-poll cron
+  - send-morning-briefing  # morning-briefing cron
+  - vcglr-poll             # VCGLR-poll cron

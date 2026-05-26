@@ -4,9 +4,15 @@
 # Two phases:
 #   Phase A — Management API metadata check (always runs).
 #             GET https://api.supabase.com/v1/projects/{ref}/functions
-#             Asserts every function is ACTIVE with the expected verify_jwt
-#             flag. Zero HTTP calls to function handlers, no side effects.
-#             Closes Codex review v2 residuals on PR #46:
+#             Loads the canonical roster from scripts/smoke-manifest.yaml and
+#             diffs against the live Management API response. Reports per
+#             function:
+#               OK         — deployed, ACTIVE, verify_jwt matches manifest
+#               MISSING    — in manifest but not deployed
+#               AUTH_DRIFT — deployed but verify_jwt differs from manifest
+#               UNEXPECTED — deployed but not in manifest (drift the other way)
+#             Zero HTTP calls to function handlers, no side effects. Closes
+#             Codex review v2 residuals on PR #46:
 #               [P1] OPTIONS could trigger handlers without a method-guard.
 #               [P2] Only one function's verify_jwt was being checked.
 #   Phase B — PostgREST + JWT login (skipped if creds not present).
@@ -23,7 +29,7 @@
 #
 # Exit 0 = every check passed (and Phase B either passed or was skipped).
 # Exit 1 = at least one assertion failed or the Management API returned non-200.
-# Exit 2 = config gap (no project ref / no PAT) or Phase B login failed.
+# Exit 2 = config gap (no project ref / no PAT / no manifest) or Phase B login failed.
 #
 # Phase A auth: SUPABASE_ACCESS_TOKEN (Supabase CLI PAT). Resolved in order:
 #   1. Environment variable SUPABASE_ACCESS_TOKEN.
@@ -33,10 +39,8 @@
 # automatically. If nothing resolves, the script fails loudly with the
 # `security add-generic-password` command needed to provision it.
 #
-# Truth table source: verified 2026-05-15 against live project bsevgxhnxlkzkcalevbb
-# via `mcp__supabase__list_edge_functions`. Update EXPECTED_* arrays when
-# functions are added/removed/flipped; the drift check fails first deploy
-# after the change.
+# Manifest source: scripts/smoke-manifest.yaml — JWT / SVC / PUBLIC groups.
+# Effective verify_jwt: jwt+svc → true, public → false.
 #
 # Reference: ~/.openclaw/roles/dev/ppb-ops-hub/scripts/smoke-api.sh
 # Discipline: ~/.claude/rules/dev/frontend-smoke.md §2
@@ -48,11 +52,18 @@ CURL=/usr/bin/curl
 PY=/usr/bin/python3
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+MANIFEST="${SCRIPT_DIR}/smoke-manifest.yaml"
 
 # Source .env.local if present (gitignored).
 if [[ -f "${REPO_DIR}/.env.local" ]]; then
   # shellcheck disable=SC1091
   set -a; . "${REPO_DIR}/.env.local"; set +a
+fi
+
+# ---------- Manifest ----------
+if [[ ! -f "$MANIFEST" ]]; then
+  echo "✗ manifest missing: ${MANIFEST}" >&2
+  exit 2
 fi
 
 # ---------- Project ref ----------
@@ -92,7 +103,8 @@ PASS=0
 FAIL=0
 
 echo "=== LeadFlow API smoke v2 ==="
-echo "Project: ${PROJECT_REF}"
+echo "Project:  ${PROJECT_REF}"
+echo "Manifest: ${MANIFEST}"
 echo ""
 
 # ============================================================================
@@ -114,162 +126,153 @@ if [[ "$HTTP" != "200" ]]; then
   exit 1
 fi
 
-# Validate the response shape up-front so the drift check + assertions can
-# assume a well-formed array. Codex review v2 round-1 [P2] — JSON-parse error
-# handling.
-SHAPE_CHECK=$("$PY" - "$RESP_BODY" <<'PYEOF'
-import json, sys
+# Hand the whole audit (manifest parse + live response diff + per-function
+# assertion) to one Python pass. Easier to reason about than three layered
+# shell heredocs, and produces a single line per function for the bash loop.
+AUDIT_OUT=$("$PY" - "$MANIFEST" "$RESP_BODY" <<'PYEOF'
+import json
+import sys
+
+manifest_path, body_path = sys.argv[1], sys.argv[2]
+
+# --- Parse manifest (tiny YAML subset: group: then "  - name  # comment").
+groups = {"jwt": [], "svc": [], "public": []}
+current = None
 try:
-    with open(sys.argv[1]) as f:
-        data = json.load(f)
+    with open(manifest_path) as f:
+        for raw in f:
+            line = raw.rstrip("\n")
+            stripped = line.split("#", 1)[0].rstrip()
+            if not stripped.strip():
+                continue
+            if not line.startswith(" ") and stripped.endswith(":"):
+                key = stripped[:-1].strip()
+                current = key if key in groups else None
+                continue
+            if current and stripped.lstrip().startswith("- "):
+                name = stripped.lstrip()[2:].strip()
+                if name:
+                    groups[current].append(name)
 except Exception as e:
-    print(f"FAIL|not JSON: {e}"); sys.exit(0)
-if not isinstance(data, list):
-    print(f"FAIL|expected array, got {type(data).__name__}"); sys.exit(0)
-print("OK")
-PYEOF
-)
-if [[ "$SHAPE_CHECK" != "OK" ]]; then
-  echo "✗ Management API response malformed — ${SHAPE_CHECK#FAIL|}" >&2
-  exit 1
-fi
+    print(f"MANIFEST_ERR|{e}")
+    sys.exit(0)
 
-# Expected truth table — verified 2026-05-21 against live project
-# bsevgxhnxlkzkcalevbb. Update both arrays when the roster changes; the drift
-# check will fail first deploy after the change.
-#
-# Note on verify_jwt=false entries: these are either (a) public-by-design
-# (click-redirect, pixel-track, unsubscribe-post — outbound tracking links),
-# (b) internal-helper invocations from other Edge Functions / crons that
-# pass service-role bearer (abr-lookup, discover-leads, publication-poll,
-# vcglr-poll, ensure-intent-idx, generate-learning-digest, send-morning-
-# briefing), or (c) explicit demo bootstrap (create-demo-user). Internal-
-# helper functions perform their own auth via the Authorization header +
-# SUPABASE_ANON_KEY user client OR service-role guard — see _shared/auth.ts.
-EXPECTED_JWT_TRUE=(
-  audit-snapshot
-  classify-reply-intent
-  drain-send-queue
-  enqueue-sends
-  field-route-optimize
-  generate-draft
-  geocode-batch
-  geocode-venues-batch
-  gmail-inbound
-  process-bounces
-  reopening-radar-manual
-  reopening-radar-poll
-  send-via-smtp
-  sequence-tick
-  voice-transcribe
-)
-EXPECTED_JWT_FALSE=(
-  abr-lookup
-  click-redirect
-  create-demo-user
-  discover-leads
-  ensure-intent-idx
-  generate-learning-digest
-  pixel-track
-  publication-poll
-  send-morning-briefing
-  unsubscribe-post
-  vcglr-poll
-)
+# Effective verify_jwt: jwt + svc → True, public → False.
+expected = {}
+category = {}
+for name in groups["jwt"]:
+    expected[name] = True
+    category[name] = "JWT"
+for name in groups["svc"]:
+    expected[name] = True
+    category[name] = "SVC"
+for name in groups["public"]:
+    expected[name] = False
+    category[name] = "PUBLIC"
 
-assert_fn() {
-  local NAME="$1"
-  local EXPECTED_JWT="$2"   # "true" or "false"
-  RESULT=$("$PY" - "$NAME" "$EXPECTED_JWT" "$RESP_BODY" <<'PYEOF'
-import json, sys
-name, expected_jwt, body_path = sys.argv[1], sys.argv[2], sys.argv[3]
+# --- Parse live response.
 try:
     with open(body_path) as f:
         fns = json.load(f)
 except Exception as e:
-    print(f"FAIL|not JSON: {e}"); sys.exit(0)
+    print(f"PARSE_ERR|{e}")
+    sys.exit(0)
 if not isinstance(fns, list):
-    print(f"FAIL|expected array, got {type(fns).__name__}"); sys.exit(0)
-match = next((f for f in fns if f.get("slug") == name or f.get("name") == name), None)
-if not match:
-    print("FAIL|missing from project"); sys.exit(0)
-status = match.get("status", "?")
-version = match.get("version", "?")
-# verify_jwt MUST be present and MUST be a real bool. Codex review v2 round-1
-# [P1] — coercing missing/non-bool to False silently passes EXPECTED_JWT_FALSE
-# entries when the API drops or renames the field.
-if "verify_jwt" not in match:
-    print(f"FAIL|verify_jwt missing from response v{version} status={status}"); sys.exit(0)
-verify_jwt = match["verify_jwt"]
-if not isinstance(verify_jwt, bool):
-    print(f"FAIL|verify_jwt not bool (got {type(verify_jwt).__name__}={verify_jwt!r}) v{version} status={status}"); sys.exit(0)
-expected = expected_jwt == "true"
-if status != "ACTIVE":
-    print(f"FAIL|status={status} (expected ACTIVE) v{version} verify_jwt={verify_jwt}"); sys.exit(0)
-if verify_jwt != expected:
-    print(f"FAIL|verify_jwt={verify_jwt} (expected {expected}) v{version} status={status}"); sys.exit(0)
-print(f"OK|v{version} verify_jwt={verify_jwt} {status}")
+    print(f"PARSE_ERR|expected array, got {type(fns).__name__}")
+    sys.exit(0)
+
+live = {}
+for fn in fns:
+    key = fn.get("slug") or fn.get("name")
+    if key:
+        live[key] = fn
+
+# --- Per-manifest-entry checks, in manifest order (jwt, svc, public).
+for group_key in ("jwt", "svc", "public"):
+    for name in groups[group_key]:
+        cat = category[name]
+        want = expected[name]
+        match = live.get(name)
+        if not match:
+            print(f"MISSING|{cat}|{name}|expected verify_jwt={want}, not deployed")
+            continue
+        status = match.get("status", "?")
+        version = match.get("version", "?")
+        if "verify_jwt" not in match:
+            print(f"AUTH_DRIFT|{cat}|{name}|verify_jwt missing from response v{version} status={status}")
+            continue
+        got = match["verify_jwt"]
+        if not isinstance(got, bool):
+            print(f"AUTH_DRIFT|{cat}|{name}|verify_jwt not bool (got {type(got).__name__}={got!r}) v{version} status={status}")
+            continue
+        if status != "ACTIVE":
+            print(f"AUTH_DRIFT|{cat}|{name}|status={status} (expected ACTIVE) v{version} verify_jwt={got}")
+            continue
+        if got != want:
+            print(f"AUTH_DRIFT|{cat}|{name}|verify_jwt={got} (expected {want}) v{version} status={status}")
+            continue
+        print(f"OK|{cat}|{name}|v{version} verify_jwt={got} {status}")
+
+# --- Drift the other way: deployed but not in manifest.
+unexpected = sorted(k for k in live.keys() if k not in expected)
+for name in unexpected:
+    match = live[name]
+    got = match.get("verify_jwt")
+    version = match.get("version", "?")
+    status = match.get("status", "?")
+    print(f"UNEXPECTED|?|{name}|deployed v{version} status={status} verify_jwt={got}, not in smoke-manifest.yaml")
 PYEOF
 )
+
+case "$AUDIT_OUT" in
+  MANIFEST_ERR\|*)
+    echo "✗ manifest parse failed — ${AUDIT_OUT#MANIFEST_ERR|}" >&2
+    exit 1
+    ;;
+  PARSE_ERR\|*)
+    echo "✗ Management API response malformed — ${AUDIT_OUT#PARSE_ERR|}" >&2
+    exit 1
+    ;;
+esac
+
+# Emit grouped, with PASS / FAIL counters. AUDIT_OUT has one line per result:
+#   STATUS|CATEGORY|name|detail
+LAST_CAT=""
+while IFS='|' read -r RESULT CAT NAME DETAIL; do
+  [[ -z "$RESULT" ]] && continue
+  if [[ "$CAT" != "$LAST_CAT" ]]; then
+    echo ""
+    case "$CAT" in
+      JWT)    echo "  JWT (end-user calls, verify_jwt=true):" ;;
+      SVC)    echo "  SVC (cron / inter-function, verify_jwt=true + requireServiceRoleAuth):" ;;
+      PUBLIC) echo "  PUBLIC (webhooks / tracking / open-by-design, verify_jwt=false):" ;;
+      "?")    echo "  Drift — deployed but not in manifest:" ;;
+    esac
+    LAST_CAT="$CAT"
+  fi
   case "$RESULT" in
-    OK\|*)
-      echo "✓ ${NAME} ${RESULT#OK|}"
+    OK)
+      echo "    ✓ OK         ${NAME} — ${DETAIL}"
       PASS=$((PASS + 1))
       ;;
+    MISSING)
+      echo "    ✗ MISSING    ${NAME} — ${DETAIL}"
+      FAIL=$((FAIL + 1))
+      ;;
+    AUTH_DRIFT)
+      echo "    ✗ AUTH_DRIFT ${NAME} — ${DETAIL}"
+      FAIL=$((FAIL + 1))
+      ;;
+    UNEXPECTED)
+      echo "    ✗ UNEXPECTED ${NAME} — ${DETAIL}"
+      FAIL=$((FAIL + 1))
+      ;;
     *)
-      echo "✗ ${NAME} — ${RESULT#FAIL|}"
+      echo "    ✗ UNKNOWN    ${NAME} — ${RESULT} ${DETAIL}"
       FAIL=$((FAIL + 1))
       ;;
   esac
-}
-
-echo "  verify_jwt = true (Supabase JWT enforced):"
-for fn in "${EXPECTED_JWT_TRUE[@]}"; do
-  assert_fn "$fn" "true"
-done
-
-echo ""
-echo "  verify_jwt = false (external webhook / cron / public):"
-for fn in "${EXPECTED_JWT_FALSE[@]}"; do
-  assert_fn "$fn" "false"
-done
-
-echo ""
-echo "  Drift check:"
-DRIFT_OUT=$("$PY" - "$RESP_BODY" "${EXPECTED_JWT_TRUE[*]}" "${EXPECTED_JWT_FALSE[*]}" <<'PYEOF'
-import json, sys
-body_path, t, f = sys.argv[1], sys.argv[2].split(), sys.argv[3].split()
-known = set(t) | set(f)
-try:
-    with open(body_path) as fp:
-        fns = json.load(fp)
-except Exception as e:
-    print(f"PARSE_ERR|{e}"); sys.exit(0)
-if not isinstance(fns, list):
-    print(f"PARSE_ERR|expected array, got {type(fns).__name__}"); sys.exit(0)
-unexpected = sorted(
-    (fn.get("slug") or fn.get("name") or "<unnamed>")
-    for fn in fns
-    if (fn.get("slug") or fn.get("name")) not in known
-)
-print("UNEXPECTED|" + ",".join(unexpected) if unexpected else "OK")
-PYEOF
-)
-case "$DRIFT_OUT" in
-  OK)
-    echo "  ✓ no drift — every deployed function is accounted for in the smoke roster"
-    PASS=$((PASS + 1))
-    ;;
-  UNEXPECTED\|*)
-    echo "  ✗ unexpected function(s) deployed but not in smoke roster: ${DRIFT_OUT#UNEXPECTED|}"
-    echo "    → add to EXPECTED_JWT_TRUE or EXPECTED_JWT_FALSE in scripts/smoke-api.sh"
-    FAIL=$((FAIL + 1))
-    ;;
-  PARSE_ERR\|*)
-    echo "  ✗ drift check could not parse Management API response — ${DRIFT_OUT#PARSE_ERR|}"
-    FAIL=$((FAIL + 1))
-    ;;
-esac
+done <<< "$AUDIT_OUT"
 
 # ============================================================================
 # Phase B — PostgREST + JWT (skipped if creds absent)
