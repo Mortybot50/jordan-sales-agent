@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import {
+  BrandChip,
   DataTable,
   type ColumnDef,
   FacetBar,
@@ -146,10 +147,18 @@ export function DealListView({ includeSnoozed = false, sortBy = 'default' }: Dea
       id: 'title',
       header: 'Deal',
       sortable: true,
-      width: 'minmax(180px, 1.8fr)',
-      cell: (row) => (
-        <span className="truncate font-medium text-ink">{row.title ?? 'Untitled'}</span>
-      ),
+      width: 'minmax(200px, 1.8fr)',
+      cell: (row) => {
+        const label = row.product?.label ?? row.title ?? 'Untitled'
+        return (
+          <span className="flex items-center gap-1.5 min-w-0">
+            {row.product?.brand && <BrandChip brand={row.product.brand} />}
+            <span className="truncate font-medium text-ink" title={row.title ?? label}>
+              {label}
+            </span>
+          </span>
+        )
+      },
     },
     {
       id: 'venue',

@@ -36,6 +36,9 @@ export {
 /* ── Feature E — Reply Intent Classifier ───────────────────────── */
 export { IntentBadge, type IntentBadgeProps, type ReplyIntent } from './IntentBadge'
 
+/* ── Deal product display (FE-PO-06) ───────────────────────────── */
+export { BrandChip, type BrandKey } from './BrandChip'
+
 /* ── Phase F — Dark Anchor ─────────────────────────────────────── */
 export { CapsLabel, type CapsLabelProps } from './CapsLabel'
 export { MeterRail, type MeterRailProps } from './MeterRail'

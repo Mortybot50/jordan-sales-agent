@@ -1,4 +1,4 @@
-import { MetricNumber, ScoreBadge } from '@/components/primitives'
+import { BrandChip, MetricNumber, ScoreBadge } from '@/components/primitives'
 import { cn } from '@/lib/utils'
 import type { Deal } from '@/lib/queries/deals'
 import { useSortable } from '@dnd-kit/sortable'
@@ -275,14 +275,29 @@ export function DealCard({ deal, onClick }: DealCardProps) {
               />
             )}
           </div>
-          <p
-            className={cn(
-              'text-[13px] leading-[18px] font-medium text-ink line-clamp-2',
-              isLost && 'line-through text-ink-muted',
-            )}
-          >
-            {deal.title ?? 'Untitled deal'}
-          </p>
+          {deal.product?.label ? (
+            <div className="flex items-start gap-1.5 min-w-0">
+              <BrandChip brand={deal.product.brand} className="mt-px shrink-0" />
+              <p
+                className={cn(
+                  'text-[13px] leading-[18px] font-medium text-ink line-clamp-2 min-w-0',
+                  isLost && 'line-through text-ink-muted',
+                )}
+                title={deal.title ?? deal.product.label}
+              >
+                {deal.product.label}
+              </p>
+            </div>
+          ) : (
+            <p
+              className={cn(
+                'text-[13px] leading-[18px] font-medium text-ink line-clamp-2',
+                isLost && 'line-through text-ink-muted',
+              )}
+            >
+              {deal.title ?? 'Untitled deal'}
+            </p>
+          )}
 
           {nextStepNote && (
             <p
