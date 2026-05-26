@@ -18,6 +18,7 @@ import {
   Package,
   Upload,
   Workflow,
+  Compass,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -54,6 +55,7 @@ const NAV_SECTIONS: { id: string; label: string; items: NavItem[] }[] = [
     id: 'leads',
     label: 'Leads',
     items: [
+      { to: '/sourcing', label: 'Sourcing', icon: Compass },
       { to: '/contacts', label: 'Contacts', icon: Users },
       { to: '/import/contacts', label: 'Import CSV', icon: Upload },
       { to: '/sequences', label: 'Sequences', icon: Workflow },

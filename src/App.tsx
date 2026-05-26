@@ -14,6 +14,7 @@ import { SalesforceCsvImportPage } from '@/pages/SalesforceCsvImportPage'
 import { DraftsPage } from '@/pages/DraftsPage'
 import { SequencesPage } from '@/pages/SequencesPage'
 import { SequenceEditPage } from '@/pages/SequenceEditPage'
+import { SourcingPage } from '@/pages/SourcingPage'
 import { ReopeningRadarPage } from '@/pages/ReopeningRadarPage'
 import { CataloguePage } from '@/pages/CataloguePage'
 import { FieldPage } from '@/pages/FieldPage'
@@ -103,6 +104,7 @@ export default function App() {
           <Route path="drafts" element={<DraftsPage />} />
           <Route path="sequences" element={<SequencesPage />} />
           <Route path="sequences/:id" element={<SequenceEditPage />} />
+          <Route path="sourcing" element={<SourcingPage />} />
           <Route path="briefing" element={<BriefingPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="settings/email-accounts" element={<EmailAccountsPage />} />
