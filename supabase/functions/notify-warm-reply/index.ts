@@ -123,12 +123,11 @@ async function buildWarmReplyBody(
   if (activity.contact_id) {
     const { data: contact } = await sb
       .from('contacts')
-      .select('first_name, last_name, venue_id')
+      .select('full_name, venue_id')
       .eq('id', activity.contact_id)
       .maybeSingle()
     if (contact) {
-      const name = [contact.first_name, contact.last_name].filter(Boolean).join(' ').trim()
-        || 'Unknown contact'
+      const name = (contact.full_name ?? '').trim() || 'Unknown contact'
       let venueBit = ''
       if (contact.venue_id) {
         const { data: venue } = await sb
