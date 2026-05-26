@@ -1,6 +1,8 @@
 import { BrandChip, MetricNumber, ScoreBadge } from '@/components/primitives'
+import { GroupChip } from '@/components/venue-groups/GroupChip'
 import { cn } from '@/lib/utils'
 import type { Deal } from '@/lib/queries/deals'
+import { useVenueGroupBadges } from '@/lib/queries/venue-groups'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { format, addMonths } from 'date-fns'
@@ -309,9 +311,14 @@ export function DealCard({ deal, onClick }: DealCardProps) {
           )}
 
           {(deal.contact?.full_name || deal.venue?.name) && (
-            <p className="truncate text-[11px] text-ink-faint">
-              {deal.venue?.name ?? deal.contact?.full_name}
-            </p>
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <p className="truncate text-[11px] text-ink-faint">
+                {deal.venue?.name ?? deal.contact?.full_name}
+              </p>
+              {deal.venue?.id && (
+                <DealCardGroupChip venueId={deal.venue.id} />
+              )}
+            </div>
           )}
 
           <div className="flex items-center justify-between gap-1 pt-0.5">
@@ -361,4 +368,15 @@ export function DealCard({ deal, onClick }: DealCardProps) {
       </div>
     </div>
   )
+}
+
+/**
+ * Tiny lookup wrapper — shares the cached useVenueGroupBadges query across
+ * every DealCard so we make one round-trip per pipeline render, not N.
+ */
+function DealCardGroupChip({ venueId }: { venueId: string }) {
+  const { data } = useVenueGroupBadges()
+  const badge = data?.[venueId]
+  if (!badge) return null
+  return <GroupChip name={badge.group_name} compact />
 }
