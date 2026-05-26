@@ -184,6 +184,33 @@ Reply: ${replyBody || '(empty)'}`
     )
   }
 
+  // Real-time warm-reply WhatsApp ping: positive intent with confidence >= 0.8
+  // → background POST to notify-warm-reply. We don't block the classifier
+  // response on it, but we DO register it via EdgeRuntime.waitUntil so the
+  // serverless runtime keeps the worker alive until the fetch resolves.
+  // Without that, the runtime is free to tear the worker down as soon as the
+  // classifier's Response is returned, and a real warm reply can land without
+  // ever being enqueued. Failures surface in notification_log for debugging.
+  if (intent === 'positive' && confidence >= 0.8) {
+    const notifyUrl = `${SUPABASE_URL}/functions/v1/notify-warm-reply`
+    const notifyPromise = fetch(notifyUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+      body: JSON.stringify({ activity_id }),
+    }).catch((err) => {
+      console.error('notify-warm-reply enqueue failed:', err)
+    })
+    // @ts-expect-error EdgeRuntime is Deno Deploy/Supabase Edge global, not
+    // typed in @types/deno but present at runtime.
+    if (typeof EdgeRuntime !== 'undefined' && typeof EdgeRuntime.waitUntil === 'function') {
+      // @ts-expect-error see above
+      EdgeRuntime.waitUntil(notifyPromise)
+    }
+  }
+
   // Auto-suppression: unsubscribe with confidence >= 0.8
   if (intent === 'unsubscribe' && confidence >= 0.8 && activity.contact_id) {
     const { data: contact } = await supabase
