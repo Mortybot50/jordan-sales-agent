@@ -52,6 +52,34 @@ async function getCallerOrgId(req: Request): Promise<string | null> {
   return profile?.org_id ?? null
 }
 
+/**
+ * Decode the JWT payload (no signature check — gateway has already verified).
+ * Returns the `role` claim or null. Used to detect service-role callers
+ * coming from the cron dispatcher (sourcing-cron-tick).
+ */
+function callerRole(req: Request): string | null {
+  const auth = req.headers.get('Authorization') ?? ''
+  if (!auth.startsWith('Bearer ')) return null
+  const token = auth.slice('Bearer '.length).trim()
+  if (!token) return null
+  const parts = token.split('.')
+  if (parts.length !== 3) return null
+  try {
+    const padded = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const padLen = (4 - (padded.length % 4)) % 4
+    const b64 = padded + '='.repeat(padLen)
+    // @ts-expect-error Deno globals
+    const text = typeof atob === 'function' ? atob(b64) : Buffer.from(b64, 'base64').toString('utf8')
+    const claims = JSON.parse(text) as { role?: string; exp?: number }
+    if (typeof claims.exp === 'number' && claims.exp < Math.floor(Date.now() / 1000)) {
+      return null
+    }
+    return claims.role ?? null
+  } catch {
+    return null
+  }
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -300,7 +328,7 @@ Deno.serve(async (req: Request) => {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-  let body: { search_id?: string } = {}
+  let body: { search_id?: string; triggered_by?: string } = {}
   try {
     body = await req.json()
   } catch {
@@ -310,11 +338,36 @@ Deno.serve(async (req: Request) => {
   const { search_id } = body
   if (!search_id) return jsonResp({ error: 'search_id required' }, 400)
 
-  // Validate caller's org before using service role key
-  const callerOrgId = await getCallerOrgId(req)
-  if (!callerOrgId) return jsonResp({ error: 'unauthorized' }, 401)
+  // Auth: accept either (a) a user JWT whose org_id matches the search, or
+  // (b) a service-role JWT — used by sourcing-cron-tick. The service-role
+  // path skips the IDOR check because the search row's own org_id is the
+  // authoritative scope.
+  const role = callerRole(req)
+  const isCronCaller = role === 'service_role'
+  let triggeredBy: 'manual' | 'cron' = 'manual'
 
-  // Load search config
+  if (!isCronCaller) {
+    const callerOrgId = await getCallerOrgId(req)
+    if (!callerOrgId) return jsonResp({ error: 'unauthorized' }, 401)
+
+    const { data: searchPeek, error: peekErr } = await supabase
+      .from('lead_searches')
+      .select('org_id')
+      .eq('id', search_id)
+      .single()
+    if (peekErr || !searchPeek) {
+      return jsonResp({ error: peekErr?.message ?? 'search not found' }, 404)
+    }
+    if (searchPeek.org_id !== callerOrgId) {
+      return jsonResp({ error: 'forbidden' }, 403)
+    }
+  } else {
+    // Only the cron dispatcher should set triggered_by='cron'. Validate
+    // the value rather than echoing the request body blindly.
+    triggeredBy = body.triggered_by === 'cron' ? 'cron' : 'manual'
+  }
+
+  // Load full search config
   const { data: search, error: searchErr } = await supabase
     .from('lead_searches')
     .select('*')
@@ -325,11 +378,6 @@ Deno.serve(async (req: Request) => {
     return jsonResp({ error: searchErr?.message ?? 'search not found' }, 404)
   }
 
-  // Confirm caller's org owns this search (defence in depth against IDOR)
-  if (search.org_id !== callerOrgId) {
-    return jsonResp({ error: 'forbidden' }, 403)
-  }
-
   // Create run record
   const { data: run, error: runErr } = await supabase
     .from('lead_search_runs')
@@ -337,6 +385,7 @@ Deno.serve(async (req: Request) => {
       search_id,
       org_id: search.org_id,
       status: 'running',
+      triggered_by: triggeredBy,
     })
     .select('id')
     .single()

@@ -28,12 +28,30 @@ import {
 import { SourcingForm } from '@/components/sourcing/SourcingForm'
 import { RunHistoryDrawer } from '@/components/sourcing/RunHistoryDrawer'
 import { RunNowButton } from '@/components/sourcing/RunNowButton'
+import { SCHEDULE_PRESETS } from '@/lib/schemas/sourcing'
+import { isValidCron, nextRunAt, parseCron } from '@/lib/cron/match'
 
 function formatCost(cents: number | null): string {
   if (cents == null) return '—'
   const n = Number(cents)
   if (!Number.isFinite(n)) return '—'
   return `$${n.toFixed(3)}`
+}
+
+function scheduleLabel(cron: string | null): string {
+  if (!cron) return 'Off'
+  const preset = SCHEDULE_PRESETS.find((p) => p.cron === cron)
+  if (preset) return preset.label
+  return 'Custom'
+}
+
+function scheduleNextRun(cron: string | null): Date | null {
+  if (!cron || !isValidCron(cron)) return null
+  try {
+    return nextRunAt(parseCron(cron), new Date())
+  } catch {
+    return null
+  }
 }
 
 function suburbLabel(s: string | null): string {
@@ -137,15 +155,26 @@ export function SourcingPage() {
     {
       id: 'schedule',
       header: 'Schedule',
-      width: '110px',
-      cell: (s) =>
-        s.schedule_cron ? (
-          <StatusPill tone="cold" uppercase>
-            Scheduled
-          </StatusPill>
-        ) : (
-          <span className="text-ink-faint">Manual</span>
-        ),
+      width: '170px',
+      cell: (s) => {
+        if (!s.schedule_cron) {
+          return <span className="text-ink-faint">Off</span>
+        }
+        const label = scheduleLabel(s.schedule_cron)
+        const next = scheduleNextRun(s.schedule_cron)
+        return (
+          <div className="flex flex-col gap-0.5 leading-tight">
+            <StatusPill tone="cold" uppercase>
+              {label}
+            </StatusPill>
+            {next && (
+              <span className="text-[11px] text-ink-faint jordan-tnum">
+                next {formatDistanceToNow(next, { addSuffix: true })}
+              </span>
+            )}
+          </div>
+        )
+      },
     },
     {
       id: 'last_run',

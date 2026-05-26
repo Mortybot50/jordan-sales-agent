@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { HOSPITALITY_CATEGORIES } from '@/lib/constants/hospitality-categories'
+import { isValidCron } from '@/lib/cron/match'
 
 /**
  * Form schema for creating / editing a lead_searches row.
@@ -34,7 +35,11 @@ export const sourcingFormSchema = z.object({
     .string()
     .max(120)
     .nullable()
-    .optional(),
+    .optional()
+    .refine(
+      (v) => v == null || v.trim() === '' || isValidCron(v),
+      'Cron expression must be 5 space-separated fields (e.g. 0 20 * * *)',
+    ),
 })
 
 export type SourcingFormValues = z.infer<typeof sourcingFormSchema>
@@ -51,15 +56,18 @@ export const DEFAULT_SOURCING_FORM_VALUES: SourcingFormValues = {
 }
 
 /**
- * Schedule preset pills shown in the form. The cron strings target
- * Australia/Melbourne wall-clock time the same way the rest of the
- * platform does — though cron itself is interpreted in UTC by
- * pg_cron, scheduling is deferred to a follow-up PR (no cron worker
- * for `lead_searches.schedule_cron` exists yet). Storing the value
- * means we don't have to migrate later.
+ * Schedule preset pills shown in the form.
+ *
+ * pg_cron interprets schedules in UTC. The labels here describe the UTC
+ * fire time (6am UTC ≈ 4pm AEST winter / 5pm AEDT summer). If Jordan
+ * wants strict Melbourne-morning runs he uses the custom cron field
+ * (e.g. `0 20 * * *` for 06:00 AEST = 20:00 UTC prev day). Keeping
+ * presets UTC-anchored avoids DST drift and matches the cron strings
+ * the codebase has already shipped via PR #75.
  */
 export const SCHEDULE_PRESETS: Array<{ label: string; cron: string }> = [
-  { label: 'Daily 6am', cron: '0 6 * * *' },
-  { label: 'Weekly Mon 6am', cron: '0 6 * * 1' },
-  { label: 'Monthly 1st 6am', cron: '0 6 1 * *' },
+  { label: 'Daily 6am UTC', cron: '0 6 * * *' },
+  { label: 'Weekly Mon 6am UTC', cron: '0 6 * * 1' },
+  { label: 'Weekly Mon+Thu 6am UTC', cron: '0 6 * * 1,4' },
+  { label: 'Monthly 1st 6am UTC', cron: '0 6 1 * *' },
 ]

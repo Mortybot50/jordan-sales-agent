@@ -44,6 +44,7 @@ svc:
   - reopening-radar-poll   # radar polling cron
   - send-via-smtp          # SMTP sender, called from drain-send-queue
   - sequence-tick          # sequence-engine tick cron
+  - sourcing-cron-tick     # saved-search dispatcher cron (PR Wave B/11)
 
 public:
   # Public-by-design — outbound email tracking + webhook callbacks.
