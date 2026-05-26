@@ -37,6 +37,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSuppressionList } from '@/lib/queries/suppression'
 import { SendingInfrastructureCard } from '@/components/settings/SendingInfrastructureCard'
 import { NotificationsSection } from '@/components/settings/NotificationsSection'
+import { SignaturesSection } from '@/components/settings/SignaturesSection'
 
 // --- Profile Tab ---
 function ProfileTab() {
@@ -1099,6 +1100,18 @@ export function SettingsPage() {
             </CardHeader>
             <CardContent>
               <VoiceRulesSection />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Email signatures</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Per-brand sign-offs appended to every draft.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <SignaturesSection />
             </CardContent>
           </Card>
 

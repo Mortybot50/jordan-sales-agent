@@ -43,6 +43,77 @@ async function signEmailHmac(email: string, key: string): Promise<string> {
     .join('')
 }
 
+// Resolve the brand_key for a deal based on its product's brand. Maps
+// products.brand → email_signature_templates.brand_key:
+//   'purezza'           → 'purezza'
+//   'culligan' / 'zip'  → 'culligan_zip'
+//   anything else / no deal / no product → 'purezza' (default per Jordan)
+async function resolveBrandKey(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  productId: string | null | undefined,
+): Promise<'purezza' | 'culligan_zip'> {
+  if (!productId) return 'purezza'
+  const { data: product } = await supabase
+    .from('products')
+    .select('brand')
+    .eq('id', productId)
+    .maybeSingle()
+  const brand = (product?.brand ?? '').toLowerCase()
+  if (brand === 'culligan' || brand === 'zip') return 'culligan_zip'
+  return 'purezza'
+}
+
+// Loads the signature template for (user_id, brand_key) and substitutes the
+// {{sending_mailbox_email}} placeholder with the actual sending inbox address.
+// Returns null if no template row is configured for this user/brand — the
+// caller should treat that as "no signature" and skip appending.
+async function resolveSignature(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  userId: string,
+  orgId: string,
+  brandKey: 'purezza' | 'culligan_zip',
+  senderInboxId: string | null,
+): Promise<string | null> {
+  const { data: tpl } = await supabase
+    .from('email_signature_templates')
+    .select('body_text')
+    .eq('user_id', userId)
+    .eq('brand_key', brandKey)
+    .maybeSingle()
+  if (!tpl?.body_text) return null
+
+  // Look up the actual mailbox email — sender_inbox_id when provided, else
+  // the first active inbox for the org so the preview / cold draft still
+  // matches a real inbox the user owns.
+  let mailboxEmail: string | null = null
+  if (senderInboxId) {
+    const { data: acct } = await supabase
+      .from('email_accounts')
+      .select('email_address')
+      .eq('id', senderInboxId)
+      .maybeSingle()
+    mailboxEmail = acct?.email_address ?? null
+  }
+  if (!mailboxEmail) {
+    const { data: acct } = await supabase
+      .from('email_accounts')
+      .select('email_address')
+      .eq('org_id', orgId)
+      .eq('status', 'active')
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    mailboxEmail = acct?.email_address ?? null
+  }
+  const substituted = (tpl.body_text as string).replace(
+    /\{\{sending_mailbox_email\}\}/g,
+    mailboxEmail ?? '',
+  )
+  return substituted
+}
+
 async function buildUnsubFooter(email: string): Promise<string> {
   // Caller is guarded by UNSUB_KEY_CHECK in the request handler — if we ever
   // reach here the key is present and ≥32 chars. Belt-and-braces throw so a
@@ -230,10 +301,11 @@ Deno.serve(async (req) => {
     .order('occurred_at', { ascending: false })
     .limit(3)
 
-  // Load any open deal for this contact
+  // Load any open deal for this contact. `product_id` drives signature-brand
+  // resolution further down (deal.product_id → products.brand → signature).
   const { data: deal } = await supabase
     .from('deals')
-    .select('id, title, contract_value, stage:pipeline_stages(name)')
+    .select('id, title, contract_value, product_id, stage:pipeline_stages(name)')
     .eq('contact_id', contact_id)
     .is('closed_at', null)
     .order('created_at', { ascending: false })
@@ -360,6 +432,24 @@ Respond with ONLY valid JSON in this exact format (no markdown, no explanation):
       JSON.stringify({ error: 'Failed to generate draft. Check logs.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
+  }
+
+  // Inject the per-brand signature between Claude's body and the unsub footer.
+  // Brand resolves via deal.product_id → products.brand; falls back to Purezza
+  // when there's no deal or no product (Jordan's explicit default 20/05/2026).
+  // The {{sending_mailbox_email}} placeholder is substituted with the chosen
+  // sender_inbox or the org's first active inbox so signature email line
+  // matches the From address (Jordan's Option B).
+  const brandKey = await resolveBrandKey(supabase, deal?.product_id ?? null)
+  const signature = await resolveSignature(
+    supabase,
+    user.id,
+    userProfile.org_id,
+    brandKey,
+    null,
+  )
+  if (signature) {
+    body = `${body}\n\n${signature}`
   }
 
   // Append the Spam Act 2003 unsubscribe footer AFTER Claude has generated

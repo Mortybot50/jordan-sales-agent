@@ -105,6 +105,63 @@ async function signEmailHmac(email: string, key: string): Promise<string> {
     .join('')
 }
 
+// Resolve the per-brand signature for this contact's open deal. Mirrors the
+// logic in generate-draft: deals.product_id → products.brand → brand_key,
+// then load email_signature_templates and substitute {{sending_mailbox_email}}
+// with the org's first active inbox. Returns null when no template row exists
+// for this user/brand — caller appends nothing.
+async function resolveSignatureForContact(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  userId: string,
+  orgId: string,
+  contactId: string,
+): Promise<string | null> {
+  // Pick the most recent open deal for this contact, if any.
+  const { data: deal } = await supabase
+    .from('deals')
+    .select('product_id')
+    .eq('contact_id', contactId)
+    .is('closed_at', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  let brandKey: 'purezza' | 'culligan_zip' = 'purezza'
+  if (deal?.product_id) {
+    const { data: product } = await supabase
+      .from('products')
+      .select('brand')
+      .eq('id', deal.product_id)
+      .maybeSingle()
+    const brand = (product?.brand ?? '').toLowerCase()
+    if (brand === 'culligan' || brand === 'zip') brandKey = 'culligan_zip'
+  }
+
+  const { data: tpl } = await supabase
+    .from('email_signature_templates')
+    .select('body_text')
+    .eq('user_id', userId)
+    .eq('brand_key', brandKey)
+    .maybeSingle()
+  if (!tpl?.body_text) return null
+
+  const { data: acct } = await supabase
+    .from('email_accounts')
+    .select('email_address')
+    .eq('org_id', orgId)
+    .eq('status', 'active')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  const mailboxEmail = acct?.email_address ?? ''
+
+  return (tpl.body_text as string).replace(
+    /\{\{sending_mailbox_email\}\}/g,
+    mailboxEmail,
+  )
+}
+
 async function buildUnsubFooter(email: string): Promise<string | null> {
   if (!UNSUBSCRIBE_SIGNING_KEY) {
     console.warn('UNSUBSCRIBE_SIGNING_KEY not set — skipping unsub footer')
@@ -528,6 +585,16 @@ async function processEnrolment(supabase: any, enr: EnrolmentRow): Promise<Proce
     }
     subject = renderTemplate(variant.subject_template, renderCtx)
     body = renderTemplate(variant.body_template, renderCtx)
+    // Append per-brand signature (resolved via the contact's open deal's
+    // product brand → 'purezza' default) BEFORE the unsub footer so the
+    // legal copy stays at the very bottom of the email.
+    const signature = await resolveSignatureForContact(
+      supabase,
+      user.id,
+      enr.org_id,
+      contact.id,
+    )
+    if (signature) body = `${body}\n\n${signature}`
     if (contact.email) {
       const footer = await buildUnsubFooter(String(contact.email))
       if (footer) body = body + footer
@@ -550,6 +617,15 @@ async function processEnrolment(supabase: any, enr: EnrolmentRow): Promise<Proce
       )
       subject = result.subject
       body = result.body
+      // Same brand-signature resolution as the template path above —
+      // appended between Claude's body and the Spam Act unsub footer.
+      const signature = await resolveSignatureForContact(
+        supabase,
+        user.id,
+        enr.org_id,
+        contact.id,
+      )
+      if (signature) body = `${body}\n\n${signature}`
       if (contact.email) {
         const footer = await buildUnsubFooter(String(contact.email))
         if (footer) body = body + footer
