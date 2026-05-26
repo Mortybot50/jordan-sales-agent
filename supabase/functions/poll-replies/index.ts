@@ -637,7 +637,7 @@ async function handleWarmupInbound(
 
   if (action === 'reply' && originalSenderAccountId) {
     try {
-      await fetch(`${SUPABASE_URL}/functions/v1/send-warmup-tick`, {
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/send-warmup-tick`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -653,6 +653,21 @@ async function handleWarmupInbound(
           original_subject: args.subject,
         }),
       })
+      // Downgrade to 'ignore' if the send didn't actually fire. Codex P2 fix:
+      // send-warmup-tick can return 200 with { skipped: true } when outside
+      // quiet-hours, or 502 on SMTP failure. Treating those as 'reply' would
+      // make warmup health metrics lie and prevent retry on a future inbound.
+      let bodyOk = true
+      try {
+        const j = await resp.json().catch(() => ({} as Record<string, unknown>))
+        if (j && typeof j === 'object') {
+          if ((j as { skipped?: unknown }).skipped === true) bodyOk = false
+          if ((j as { success?: unknown }).success === false) bodyOk = false
+        }
+      } catch { /* unparseable body — fall through to status check */ }
+      if (!resp.ok || !bodyOk) {
+        action = 'ignore'
+      }
     } catch (err) {
       // If send-warmup-tick is unreachable, downgrade to ignore + log.
       console.warn('warmup auto-reply dispatch failed:', (err as Error).message)
