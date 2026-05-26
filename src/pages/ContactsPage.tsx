@@ -19,6 +19,8 @@ import {
   scoreToTier,
   type Contact,
 } from '@/lib/queries/contacts'
+import { useVenueGroupBadges } from '@/lib/queries/venue-groups'
+import { GroupChip } from '@/components/venue-groups/GroupChip'
 import { roleLabel, venueTypeLabel, cn } from '@/lib/utils'
 import { ContactBulkActionsToolbar } from '@/components/contacts/ContactBulkActionsToolbar'
 
@@ -70,6 +72,7 @@ export function ContactsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const { data: distinctTags } = useDistinctContactTags()
+  const { data: groupBadges } = useVenueGroupBadges()
 
   /*
     Deep-link from Dashboard "Warm Leads" → ?segment=warm.
@@ -304,16 +307,22 @@ export function ContactsPage() {
       header: 'Venue',
       sortable: true,
       width: 'minmax(160px, 1.8fr)',
-      cell: (row) => (
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-ink">{row.venue?.name ?? '—'}</span>
-          {row.venue?.venue_type && (
-            <StatusPill tone="neutral" className="shrink-0 h-[16px] px-1 text-[10px]">
-              {venueTypeLabel(row.venue.venue_type)}
-            </StatusPill>
-          )}
-        </span>
-      ),
+      cell: (row) => {
+        const badge = row.venue?.id ? groupBadges?.[row.venue.id] : undefined
+        return (
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-ink">{row.venue?.name ?? '—'}</span>
+              {row.venue?.venue_type && (
+                <StatusPill tone="neutral" className="shrink-0 h-[16px] px-1 text-[10px]">
+                  {venueTypeLabel(row.venue.venue_type)}
+                </StatusPill>
+              )}
+            </span>
+            {badge && <GroupChip name={badge.group_name} compact />}
+          </div>
+        )
+      },
     },
     {
       id: 'suburb',

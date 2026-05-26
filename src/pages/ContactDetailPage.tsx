@@ -55,6 +55,9 @@ import {
 
 import { ClaudePanel } from '@/components/claude/ClaudePanel'
 import { useContact, useUpdateContact } from '@/lib/queries/contacts'
+import { useVenueGroupBadges } from '@/lib/queries/venue-groups'
+import { AssignToGroupCombobox } from '@/components/venue-groups/AssignToGroupCombobox'
+import { GroupChip } from '@/components/venue-groups/GroupChip'
 import { useContactDeals, useCreateDeal } from '@/lib/queries/deals'
 import { PackageDealForm } from '@/components/pipeline/PackageDealForm'
 import type { PackageDealValues } from '@/lib/schemas/deal'
@@ -98,6 +101,7 @@ export function ContactDetailPage() {
   const { data: contact, isLoading, error, refetch } = useContact(id ?? '')
   const { data: deals } = useContactDeals(id ?? '')
   const { data: activities } = useContactActivities(id ?? '')
+  const { data: groupBadges } = useVenueGroupBadges()
 
   const updateContact = useUpdateContact(id ?? '')
   const createDeal = useCreateDeal()
@@ -667,6 +671,11 @@ export function ContactDetailPage() {
                   <dt className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
                     {venue.name}
                   </dt>
+                  {groupBadges?.[venue.id] && (
+                    <dd className="mt-0.5">
+                      <GroupChip name={groupBadges[venue.id].group_name} />
+                    </dd>
+                  )}
                   {venue.address && (
                     <dd className="mt-0.5 flex items-start gap-1.5 text-ink-muted">
                       <MapPin className="w-3 h-3 mt-0.5 shrink-0 text-ink-faint" />
@@ -732,6 +741,20 @@ export function ContactDetailPage() {
                       >
                         {venue.website.replace(/^https?:\/\//, '')}
                       </a>
+                    </dd>
+                  </div>
+                )}
+                {user && (
+                  <div>
+                    <dt className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint mb-1">
+                      Group
+                    </dt>
+                    <dd>
+                      <AssignToGroupCombobox
+                        venueId={venue.id}
+                        currentGroupId={groupBadges?.[venue.id]?.group_id ?? null}
+                        orgId={user.org_id}
+                      />
                     </dd>
                   </div>
                 )}
