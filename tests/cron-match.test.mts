@@ -78,6 +78,40 @@ test('firesInWindow — 5-min window catches a once-daily schedule', () => {
   assert.equal(firesInWindow(p, startMiss, endMiss), false)
 })
 
+test('firesInWindow — consecutive minute-aligned windows do not double-fire', () => {
+  // Simulates the dispatcher's anchoring: nowMinute = floor(now), with
+  // windowEnd = nowMinute + 1 (exclusive). Two consecutive */5 ticks at
+  // 06:00:03 and 06:05:03 produce windows [05:56, 06:01) and [06:01, 06:06).
+  // A daily "0 6 * * *" schedule must fire exactly once across the two.
+  const p = parseCron('0 6 * * *')
+
+  const w1Start = new Date('2026-05-27T05:56:00Z')
+  const w1End   = new Date('2026-05-27T06:01:00Z')
+  const w2Start = new Date('2026-05-27T06:01:00Z')
+  const w2End   = new Date('2026-05-27T06:06:00Z')
+
+  assert.equal(firesInWindow(p, w1Start, w1End), true,  'first window must catch 06:00')
+  assert.equal(firesInWindow(p, w2Start, w2End), false, 'second window must NOT re-catch 06:00')
+})
+
+test('firesInWindow — late tick (pg_cron 3 sec late) still covers its minute', () => {
+  // pg_cron fires at 06:00:03 instead of 06:00:00. After flooring, the
+  // dispatcher uses [05:56:00, 06:01:00). The 06:00 minute is included.
+  const p = parseCron('0 6 * * *')
+  const start = new Date('2026-05-27T05:56:00Z')
+  const end   = new Date('2026-05-27T06:01:00Z')
+  assert.equal(firesInWindow(p, start, end), true)
+})
+
+test('firesInWindow — sub-minute fractional start is still covered cleanly', () => {
+  // Old bug: flooring expanded window backwards. Ceil ensures the start
+  // minute is honoured strictly. 05:55:30 → ceil to 05:56:00.
+  const p = parseCron('55 5 * * *')   // fires at 05:55
+  const start = new Date('2026-05-27T05:55:30Z')
+  const end   = new Date('2026-05-27T06:00:30Z')
+  assert.equal(firesInWindow(p, start, end), false, '05:55 boundary excluded by ceil')
+})
+
 test('firesInWindow — */5 fires in any 5-min window', () => {
   const p = parseCron('*/5 * * * *')
   const start = new Date('2026-05-27T20:01:00Z')

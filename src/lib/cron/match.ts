@@ -150,19 +150,24 @@ export function matchesAt(parsed: ParsedCron, when: Date): boolean {
 }
 
 /**
- * Does the cron fire at ANY minute in the half-open window
+ * Does the cron fire at ANY minute boundary inside the half-open window
  * [windowStart, windowEnd)?
  *
  * Used by the dispatcher to detect "this schedule should have fired
- * sometime in the last 5 minutes".
+ * sometime in the current window". We iterate exact minute boundaries:
+ * the first iteration is the smallest minute boundary >= windowStart
+ * (via ceil), and we stop strictly before windowEnd. This guarantees
+ * every minute boundary belongs to exactly one window, so consecutive
+ * dispatcher ticks cannot double-fire the same scheduled time even
+ * when pg_cron itself is a few seconds late.
  */
 export function firesInWindow(
   parsed: ParsedCron,
   windowStart: Date,
   windowEnd: Date,
 ): boolean {
-  // Iterate one minute at a time; window is small (5 min in production).
-  const startMs = Math.floor(windowStart.getTime() / 60_000) * 60_000
+  // Ceil to the next minute boundary at or after windowStart.
+  const startMs = Math.ceil(windowStart.getTime() / 60_000) * 60_000
   const endMs = windowEnd.getTime()
   for (let t = startMs; t < endMs; t += 60_000) {
     if (matchesAt(parsed, new Date(t))) return true

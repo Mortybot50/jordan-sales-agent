@@ -89,7 +89,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   const now = bodyNow ?? new Date()
-  const windowStart = new Date(now.getTime() - WINDOW_MIN * 60_000)
+
+  // Anchor the window to the closest minute boundary so consecutive ticks
+  // don't overlap. Each minute is checked in exactly one tick:
+  //   windowEnd   = floor(now) + 1 minute  (exclusive)
+  //   windowStart = windowEnd - WINDOW_MIN minutes (inclusive minute boundary)
+  // Example with WINDOW_MIN=5:
+  //   tick at 06:00:03 → covers minutes 05:56, 05:57, 05:58, 05:59, 06:00
+  //   tick at 06:05:03 → covers minutes 06:01, 06:02, 06:03, 06:04, 06:05
+  // pg_cron is allowed to be a few seconds late without missing or
+  // duplicating any scheduled minute.
+  const nowMs = now.getTime()
+  const nowMinute = Math.floor(nowMs / 60_000) * 60_000
+  const windowEnd = new Date(nowMinute + 60_000)
+  const windowStart = new Date(nowMinute - (WINDOW_MIN - 1) * 60_000)
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
@@ -112,7 +125,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     try {
       const parsed = parseCron(row.schedule_cron)
-      shouldFire = firesInWindow(parsed, windowStart, now)
+      shouldFire = firesInWindow(parsed, windowStart, windowEnd)
       if (!shouldFire) reason = 'no match in window'
     } catch (e) {
       reason =
@@ -164,6 +177,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   return json(200, {
     now: now.toISOString(),
     window_start: windowStart.toISOString(),
+    window_end: windowEnd.toISOString(),
     total_scheduled: rows?.length ?? 0,
     fired: toDispatch.length,
     results,
