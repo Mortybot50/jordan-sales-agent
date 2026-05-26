@@ -24,7 +24,7 @@ export const PageHeader = React.forwardRef<HTMLElement, PageHeaderProps>(
         ref={ref}
         data-slot="page-header"
         className={cn(
-          'flex items-start justify-between gap-4 border-b border-hairline pb-4',
+          'flex flex-col gap-3 border-b border-hairline pb-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4',
           className,
         )}
         {...rest}
@@ -40,7 +40,9 @@ export const PageHeader = React.forwardRef<HTMLElement, PageHeaderProps>(
             <p className="mt-1 text-[13px] leading-5 text-ink-muted">{description}</p>
           )}
         </div>
-        {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+        {actions && (
+          <div className="flex flex-wrap items-center gap-2 sm:shrink-0">{actions}</div>
+        )}
       </header>
     )
   },
