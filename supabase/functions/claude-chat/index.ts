@@ -453,6 +453,17 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
+      // Also validate scope + contact match. Without this, a stale client could
+      // append contact-scoped turns into a global conversation (or the wrong
+      // contact's conversation) and silently corrupt history.
+      const convoContactId = (convo.contact_id as string | null) ?? null
+      const requestedContactId = contactId ?? null
+      if (convo.scope !== scope || convoContactId !== requestedContactId) {
+        return new Response(JSON.stringify({ error: 'Conversation scope mismatch' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
       conversationId = convo.id as string
     } else {
       const c = await findOrCreateConversation(supabase, {

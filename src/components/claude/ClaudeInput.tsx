@@ -29,7 +29,10 @@ export function ClaudeInput({
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      if (!disabled && value.trim()) onSubmit()
+      // Mirror the send button's guard — Enter must also be blocked while a
+      // previous response is still streaming, otherwise two requests race
+      // through the shared useClaudeStream and interleave into one buffer.
+      if (!disabled && !isStreaming && value.trim()) onSubmit()
     }
   }
 
