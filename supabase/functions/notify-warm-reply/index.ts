@@ -162,6 +162,34 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
+  // -----------------------------------------------------------------------
+  // Authorisation gate. Two trusted caller shapes:
+  //   1. Service-role JWT (server-to-server: classify-reply-intent fanout
+  //      and any future cron/poller). May enqueue any activity, any user.
+  //   2. End-user JWT (browser via supabase.functions.invoke). May ONLY
+  //      enqueue test pings, and only for their OWN user_id.
+  // Anything else (anon key, missing/invalid JWT) is rejected.
+  // -----------------------------------------------------------------------
+  const authHeader = req.headers.get('Authorization') ?? ''
+  const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+  if (!bearer) {
+    return jsonResponse({ error: 'authorization_required' }, 401)
+  }
+  const isServiceRole = bearer === SUPABASE_SERVICE_ROLE_KEY
+
+  let authedUserId: string | null = null
+  if (!isServiceRole) {
+    // Decode the user JWT via the auth admin API. We don't pass the bearer
+    // to createClient because we use service-role below for actual writes —
+    // we only need the JWT here to confirm WHO is calling.
+    const sbAuthCheck = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+    const { data: userData, error: authErr } = await sbAuthCheck.auth.getUser(bearer)
+    if (authErr || !userData?.user) {
+      return jsonResponse({ error: 'invalid_jwt' }, 401)
+    }
+    authedUserId = userData.user.id
+  }
+
   const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
   let payload: Record<string, unknown>
@@ -179,11 +207,22 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'activity_id is required' }, 400)
   }
 
+  // End-user callers can only hit the test path — warm-reply enqueue must
+  // come from another Edge Function authenticated with the service role.
+  if (!isServiceRole && !isTest) {
+    return jsonResponse({ error: 'forbidden — warm_reply enqueue is internal-only' }, 403)
+  }
+
   // -----------------------------------------------------------------------
   // TEST PING — synchronous, returns the log row id so the UI can show it.
   // -----------------------------------------------------------------------
   if (isTest) {
     if (!explicitUserId) return jsonResponse({ error: 'user_id required for test ping' }, 400)
+    // End-user callers can only test-ping themselves. The request payload's
+    // user_id is ignored when it doesn't match the JWT subject.
+    if (!isServiceRole && authedUserId !== explicitUserId) {
+      return jsonResponse({ error: 'forbidden — test ping must target your own user_id' }, 403)
+    }
     const prefs = await loadUserPrefs(sb, explicitUserId)
     if (!prefs) return jsonResponse({ error: 'user not found' }, 404)
     if (!prefs.notify_whatsapp_e164) {

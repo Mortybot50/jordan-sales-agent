@@ -68,12 +68,19 @@ export function NotificationsSection() {
   const quietStart = form.watch('notify_quiet_hours_start')
   const quietEnd = form.watch('notify_quiet_hours_end')
   const [phoneRaw, setPhoneRaw] = useState(user?.notify_whatsapp_e164 ?? '')
+  // Mirrors the last-persisted number so the "Send test ping" button enables
+  // immediately after the very first save. useAuth holds its user object in
+  // local state and isn't subscribed to the ['user'] React Query key the
+  // update mutation invalidates — so without this local mirror the button
+  // would stay disabled until a full page reload.
+  const [savedNumber, setSavedNumber] = useState<string | null>(user?.notify_whatsapp_e164 ?? null)
 
   // Keep the visible input in sync when the form resets above. We need a
   // controlled-ish bridge because the zod transform turns "" into null at
   // validation time, but the user is still typing.
   useEffect(() => {
     setPhoneRaw(user?.notify_whatsapp_e164 ?? '')
+    setSavedNumber(user?.notify_whatsapp_e164 ?? null)
   }, [user?.notify_whatsapp_e164])
 
   async function onSubmit(values: NotificationPrefsValues) {
@@ -85,6 +92,7 @@ export function NotificationsSection() {
       notify_quiet_hours_start: values.notify_quiet_hours_start,
       notify_quiet_hours_end: values.notify_quiet_hours_end,
     })
+    setSavedNumber(values.notify_whatsapp_e164 ?? null)
   }
 
   function onInvalid(errors: FieldErrors<NotificationPrefsValues>) {
@@ -96,7 +104,7 @@ export function NotificationsSection() {
     }
   }
 
-  const hasNumber = !!user?.notify_whatsapp_e164 && user.notify_whatsapp_e164.trim() !== ''
+  const hasNumber = !!savedNumber && savedNumber.trim() !== ''
   const quietConfigured = quietStart != null && quietEnd != null && quietStart !== quietEnd
 
   return (
