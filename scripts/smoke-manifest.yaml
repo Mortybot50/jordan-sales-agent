@@ -31,6 +31,7 @@ svc:
   - audit-snapshot         # nightly audit cron
   - classify-reply-intent  # called from gmail-inbound after inbound reply lands
   - crawl-venue-contacts   # contact-discovery cron
+  - discover-leads         # lead-discovery cron (verify_jwt=true since 28/05)
   - drain-send-queue       # send-queue drain cron, calls send-via-smtp
   - enqueue-sends          # enqueue sends cron, pulls from sequence-tick output
   - geocode-batch          # geocoding cron for places
@@ -60,7 +61,6 @@ public:
   # verify_jwt=true + requireServiceRoleAuth is tracked separately; until then
   # the smoke script accepts them as public so deploys stay green.
   - abr-lookup             # ABN lookup, called from discover-leads
-  - discover-leads         # lead-discovery cron
   - ensure-intent-idx      # pgvector index ensurer
   - generate-learning-digest  # learning-digest cron
   - publication-poll       # publication-poll cron

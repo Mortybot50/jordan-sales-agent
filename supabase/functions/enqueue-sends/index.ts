@@ -42,10 +42,19 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? Deno.env.get('VITE_SUPABASE
 // @ts-expect-error Deno globals
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 // @ts-expect-error Deno globals
-const EMAIL_VERIFICATION_API_KEY = Deno.env.get('EMAIL_VERIFICATION_API_KEY') ?? ''
-// @ts-expect-error Deno globals
 const EMAIL_VERIFICATION_PROVIDER = (Deno.env.get('EMAIL_VERIFICATION_PROVIDER') ?? 'neverbounce')
   .toLowerCase()
+// Fall back to a provider-specific env var when EMAIL_VERIFICATION_API_KEY
+// is unset — historical Vercel/Supabase deployments seeded ZEROBOUNCE_API_KEY
+// directly. Keeps the verifier active without forcing an operator to copy a
+// secret across two env stores.
+// @ts-expect-error Deno globals
+const EMAIL_VERIFICATION_API_KEY =
+  (Deno.env.get('EMAIL_VERIFICATION_API_KEY') ?? '')
+  // @ts-expect-error Deno globals
+  || (EMAIL_VERIFICATION_PROVIDER === 'zerobounce' ? (Deno.env.get('ZEROBOUNCE_API_KEY') ?? '') : '')
+  // @ts-expect-error Deno globals
+  || (EMAIL_VERIFICATION_PROVIDER === 'neverbounce' ? (Deno.env.get('NEVERBOUNCE_API_KEY') ?? '') : '')
 
 const MIN_INBOX_GAP_SECONDS = 90
 const MAX_DRAFTS_PER_TICK = 100  // safety bound — one tick should never overwhelm
@@ -75,6 +84,26 @@ function currentHourInTz(tz: string, now: Date = new Date()): number {
   } catch {
     return now.getUTCHours()
   }
+}
+
+// Day-start (midnight) in the given IANA timezone, as a UTC Date. Used so
+// daily_send_cap counts calendar days in the user's tz, not trailing-24h-UTC
+// sliding windows. Pre per-tz fix, a user in Melbourne who burned half their
+// cap at 11pm could send the other half at 12:30am, then a fresh allocation
+// from "midnight Melbourne" — total well above the cap for the operator-facing
+// day. Closes audit P1-CP-01.
+function dayStartInTz(now: Date, tz: string): Date {
+  // Format `now` as YYYY-MM-DD in the tz. en-CA gives ISO-style YYYY-MM-DD.
+  const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(now)
+  // Resolve the tz offset at `now` so we can build a stable ISO timestamp.
+  // `longOffset` is supported in V8 (Node 20+, Deno) and emits e.g. "GMT+10:00".
+  const offParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    timeZoneName: 'longOffset',
+  }).formatToParts(now)
+  const rawOff = offParts.find((p) => p.type === 'timeZoneName')?.value ?? 'GMT+00:00'
+  const off = rawOff.replace(/^GMT/, '') || '+00:00'
+  return new Date(`${dateStr}T00:00:00${off}`)
 }
 
 // Push `from` forward into the next [startHourLocal, endHourLocal) window in tz.
@@ -229,36 +258,56 @@ Deno.serve(async (req: Request) => {
     accountsByUser.set(a.user_id, list)
   }
 
-  // 3b. Pre-compute today's send count per account so we can enforce
-  // email_accounts.daily_send_cap. Counts any row scheduled today UTC in
-  // {queued,sending,sent} — failed/cancelled don't burn cap. Used 24h sliding
-  // window for v1; a per-user-tz day boundary is a Week 3 followup.
-  const allAccountIds = (accounts ?? []).map((a) => a.id)
-  const dayWindowStart = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-  const usedTodayByAccount = new Map<string, number>()
-  if (allAccountIds.length > 0) {
-    const { data: todayRows } = await supabase
-      .from('email_send_queue')
-      .select('email_account_id, status')
-      .in('email_account_id', allAccountIds)
-      .gte('scheduled_for', dayWindowStart)
-      .in('status', ['queued', 'sending', 'sent'])
-    for (const r of (todayRows ?? [])) {
-      usedTodayByAccount.set(r.email_account_id, (usedTodayByAccount.get(r.email_account_id) ?? 0) + 1)
-    }
-  }
-  // Helper — returns true when account still has cap headroom for one more send.
-  function hasCap(accountId: string, cap: number | null | undefined): boolean {
-    if (cap == null || cap <= 0) return true  // null cap = unlimited
-    return (usedTodayByAccount.get(accountId) ?? 0) < cap
-  }
-
-  // 4. Per-user working window config.
+  // 3b. Per-user working-window + timezone config — needed BEFORE the
+  // daily-cap computation so the cap can use per-tz day boundaries.
   const { data: users } = await supabase
     .from('users')
     .select('id, send_timezone, working_hours_start_local, working_hours_end_local')
     .in('id', userIds)
   const userCfg = new Map((users ?? []).map((u) => [u.id, u]))
+
+  // 3c. Per-account day-start (in user's tz). Used by the daily_send_cap
+  // computation below — counts rows scheduled at-or-after the account's
+  // user-local midnight, not the trailing-24h UTC window. Closes audit
+  // P1-CP-01: pre-fix, a Melbourne user who burned half their cap at 11pm
+  // could send the other half at 12:30am, then start a fresh cap allocation
+  // from "midnight Melbourne" — total well above the daily limit.
+  const allAccountIds = (accounts ?? []).map((a) => a.id)
+  const dayStartByAccount = new Map<string, Date>()
+  const nowForCap = new Date()
+  for (const a of (accounts ?? [])) {
+    const tz = userCfg.get(a.user_id)?.send_timezone ?? 'Australia/Melbourne'
+    dayStartByAccount.set(a.id, dayStartInTz(nowForCap, tz))
+  }
+  const earliestDayStart = allAccountIds.length > 0
+    ? new Date(Math.min(...allAccountIds.map((id) => dayStartByAccount.get(id)!.getTime())))
+    : nowForCap
+
+  // 3d. Count today's per-account sends. Floor query at the earliest day-start
+  // across all accounts to keep the SQL window tight, then JS-filter rows by
+  // each account's own per-tz day boundary. Counts {queued,sending,sent} —
+  // failed/cancelled don't burn cap.
+  const usedTodayByAccount = new Map<string, number>()
+  if (allAccountIds.length > 0) {
+    const { data: todayRows } = await supabase
+      .from('email_send_queue')
+      .select('email_account_id, scheduled_for, status')
+      .in('email_account_id', allAccountIds)
+      .gte('scheduled_for', earliestDayStart.toISOString())
+      .in('status', ['queued', 'sending', 'sent'])
+    for (const r of (todayRows ?? [])) {
+      const dayStart = dayStartByAccount.get(r.email_account_id)
+      if (!dayStart) continue
+      if (new Date(r.scheduled_for).getTime() < dayStart.getTime()) continue
+      usedTodayByAccount.set(r.email_account_id, (usedTodayByAccount.get(r.email_account_id) ?? 0) + 1)
+    }
+  }
+
+  // Helper — returns true when account still has cap headroom for one more send.
+  function hasCap(accountId: string, cap: number | null | undefined): boolean {
+    if (cap == null || cap <= 0) return true  // null cap = unlimited
+    return (usedTodayByAccount.get(accountId) ?? 0) < cap
+  }
 
   // 5. Load suppression-list once per org_id touched.
   const orgIds = Array.from(new Set(fresh.map((d) => d.org_id).filter(Boolean) as string[]))

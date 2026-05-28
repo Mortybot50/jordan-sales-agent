@@ -42,6 +42,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { decryptToken } from '../_shared/token-crypto.ts'
 import { redactEmail } from '../_shared/pii.ts'
 import { requireServiceRoleAuth } from '../_shared/auth.ts'
+import { initSentry, captureException } from '../_shared/sentry.ts'
+
+initSentry('poll-replies')
 
 // @ts-expect-error Deno globals
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? Deno.env.get('VITE_SUPABASE_URL')!
@@ -243,7 +246,7 @@ interface AccountRow {
 }
 
 // @ts-expect-error Deno serve
-Deno.serve(async (req: Request) => {
+Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST' && req.method !== 'GET') {
     return json(405, { success: false, error: 'Method not allowed' })
@@ -252,6 +255,15 @@ Deno.serve(async (req: Request) => {
   const unauthorizedResp = await requireServiceRoleAuth(req)
   if (unauthorizedResp) return unauthorizedResp
 
+  try {
+    return await pollReplies(req)
+  } catch (err) {
+    await captureException(err, { service: 'poll-replies', url: req.url })
+    return json(500, { success: false, error: (err as Error).message })
+  }
+})
+
+async function pollReplies(_req: Request): Promise<Response> {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
   const { data: accounts, error: acctErr } = await supabase
@@ -590,7 +602,7 @@ Deno.serve(async (req: Request) => {
     classified: totalClassified,
     errors: topErrors.slice(0, 10),
   })
-})
+}
 
 // ---- Warmup-inbound handler -----------------------------------------------
 // Producer side: supabase/functions/send-warmup-tick — sets X-LeadFlow-Warmup: 1

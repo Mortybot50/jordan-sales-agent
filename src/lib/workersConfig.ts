@@ -14,6 +14,11 @@ export type WorkerKey =
   | 'reopening_radar_poll'
   | 'learning_digest'
   | 'sequence_tick'
+  | 'send_warmup_tick'
+  | 'poll_replies'
+  | 'enqueue_sends'
+  | 'drain_send_queue'
+  | 'process_bounces'
 
 export interface WorkerExpectedInterval {
   intervalMs: number
@@ -25,7 +30,8 @@ export interface WorkerExpectedInterval {
   description?: string
 }
 
-const HOUR = 60 * 60_000
+const MIN = 60_000
+const HOUR = 60 * MIN
 const DAY = 24 * HOUR
 
 export const WORKER_EXPECTED_INTERVALS: Record<WorkerKey, WorkerExpectedInterval> = {
@@ -53,6 +59,45 @@ export const WORKER_EXPECTED_INTERVALS: Record<WorkerKey, WorkerExpectedInterval
     title: 'Sequence tick',
     description:
       'Hourly at :15 — generates next-step drafts for active sequence enrolments. Drafts only; Jordan reviews before send.',
+  },
+  // Cold-send workers — added 28/05/2026 per AUDIT-2026-05-28 P1-OBS-01.
+  // send_warmup_tick does NOT write worker_runs (warmup tracks via
+  // email_send_events.metadata.kind='warmup'); the AdminWorkersPage shows a
+  // dedicated warmup-pulse widget reading that table directly.
+  send_warmup_tick: {
+    intervalMs: 30 * MIN,
+    label: 'Every 30 min',
+    title: 'Warmup tick',
+    description:
+      'Drives inter-inbox warmup sends + replies through the mandatory 14-day ramp. Health surfaced via warmup-pulse widget, not worker_runs.',
+  },
+  poll_replies: {
+    intervalMs: 5 * MIN,
+    label: 'Every 5 min',
+    title: 'Reply poller',
+    description:
+      'IMAP poll across active mailboxes — captures real replies, fires intent classification + auto-unsubscribe + warm-reply WhatsApp push.',
+  },
+  enqueue_sends: {
+    intervalMs: 5 * MIN,
+    label: 'Every 5 min',
+    title: 'Enqueue sends',
+    description:
+      'Promotes approved drafts into the send queue — applies suppression + verification + per-tz daily cap + pacing + anti-clustering.',
+  },
+  drain_send_queue: {
+    intervalMs: 2 * MIN,
+    label: 'Every 2 min',
+    title: 'Drain send queue',
+    description:
+      'Claims due queue rows + dispatches via SMTP. The actual outbound-send path; failures here are the most operator-relevant.',
+  },
+  process_bounces: {
+    intervalMs: 15 * MIN,
+    label: 'Every 15 min',
+    title: 'Bounce processor',
+    description:
+      'Scans IMAP for DSN bounces, marks send rows bounced, auto-suppresses hard-bouncing recipients.',
   },
 }
 
