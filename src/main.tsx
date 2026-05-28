@@ -4,6 +4,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import './index.css'
 import App from './App.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { initSentry } from './lib/sentry'
+
+initSentry()
 
 const queryClient = new QueryClient({
   defaultOptions: {

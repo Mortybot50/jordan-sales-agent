@@ -1,4 +1,5 @@
 import { Component, type ReactNode, type ErrorInfo } from 'react'
+import { Sentry } from '../lib/sentry'
 
 interface ErrorBoundaryProps {
   /** Children to render when no error has been caught. */
@@ -46,6 +47,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     this.setState({ componentStack: info.componentStack ?? null })
     // eslint-disable-next-line no-console
     console.error('[ErrorBoundary]', this.props.label ?? 'route', error, info.componentStack)
+    Sentry.captureException(error, {
+      extra: {
+        label: this.props.label ?? 'route',
+        componentStack: info.componentStack,
+      },
+    })
   }
 
   componentDidUpdate(prevProps: ErrorBoundaryProps): void {
