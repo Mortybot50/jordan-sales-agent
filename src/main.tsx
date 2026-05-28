@@ -1,3 +1,7 @@
+// Side-effect import — initialises Sentry before any other module evaluates.
+// MUST stay first (ESM hoists imports; this needs to win the eval order).
+import './instrumentation'
+
 import { StrictMode, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
