@@ -30,6 +30,10 @@ Current prod bundle: `index-FfsK5snX.js` on `https://jordan-sales-agent.vercel.a
 - No Mapbox — MapLibre + OSM only.
 - API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`) live in Supabase secrets; absence must degrade gracefully, never block the build.
 
+## Cold-send decisions
+
+- **30/05/2026 — Spam Act footer locked to ABN-only.** Authorised by Jordan via WhatsApp 30/05/2026 12:20 AEST ("Ship it"). Footer text verbatim: `Jordan Marziale - ABN 78 180 361 897 - Reply STOP or click the unsubscribe link above.` Real ABN is 78 180 361 897. No street address — Jordan declined to put his home address on bulk commercial send; ABN identifies him uniquely via the public ABR lookup. Residual Spam Act 2003 s.17 risk (ACMA could read "accurate information about the individual or organisation that authorised the sending" as requiring an address as well as ABN) was raised and accepted in writing. Revisit if ACMA position changes or a business PO Box is stood up. Encoded in `supabase/migrations/20260530020000_spam_act_sender_block_jordan_real_abn.sql`; supersedes the placeholder seed at `20260519000003_warmup_and_spam_act.sql` lines 213–224.
+
 ## Operating model
 
 - Conventional commits: `feat(scope):`, `fix(scope):`, `chore(scope):`.
