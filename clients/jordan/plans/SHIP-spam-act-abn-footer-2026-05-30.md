@@ -14,7 +14,7 @@
 | # | Surface | Change |
 |---|---|---|
 | 1 | Production data | `public.users.spam_act_sender_block` patched on 1 row (`demo@jordan-sales-agent.test`) via `mcp__supabase__execute_sql`. New value verbatim: `Jordan Marziale - ABN 78 180 361 897 - Reply STOP or click the unsubscribe link above.` |
-| 2 | Migration tree | New file `supabase/migrations/20260530000001_spam_act_sender_block_jordan_real_abn.sql`. Idempotent UPDATE matching the same WHERE predicate as the prod patch, with header comments explaining supersession, authorisation, and the deliberate ABN-only trade-off. Captured for fresh-clone replays. |
+| 2 | Migration tree | New file `supabase/migrations/20260530020000_spam_act_sender_block_jordan_real_abn.sql`. Idempotent UPDATE matching the same WHERE predicate as the prod patch, with header comments explaining supersession, authorisation, and the deliberate ABN-only trade-off. Captured for fresh-clone replays. |
 | 3 | Canonical docs | `clients/jordan/IDENTITY.md` — new `## Cold-send decisions` section between `## Hard constraints` and `## Operating model`. Records the date, footer text verbatim, authorisation source, residual s.17 risk, and migration pointer. |
 
 ---
@@ -124,7 +124,7 @@ The trade-off is captured in:
 
 | File | Type | Lines |
 |---|---|---|
-| `supabase/migrations/20260530000001_spam_act_sender_block_jordan_real_abn.sql` | new | ~40 |
+| `supabase/migrations/20260530020000_spam_act_sender_block_jordan_real_abn.sql` | new | ~40 |
 | `clients/jordan/IDENTITY.md` | edit | +3 |
 | `clients/jordan/plans/SHIP-spam-act-abn-footer-2026-05-30.md` | new | this file |
 
@@ -135,7 +135,7 @@ The trade-off is captured in:
 | Phase | Artefact | Probe | Status |
 |---|---|---|---|
 | Prod patch | UPDATE on `users.spam_act_sender_block` | 1 row before / 0 placeholder after / 1 with real ABN | ✅ |
-| Migration file | `20260530000001_spam_act_sender_block_jordan_real_abn.sql` | idempotent, header comments document the trade-off | ✅ |
+| Migration file | `20260530020000_spam_act_sender_block_jordan_real_abn.sql` | idempotent, header comments document the trade-off | ✅ |
 | IDENTITY doc | Cold-send decisions section in `clients/jordan/IDENTITY.md` | bullet with verbatim footer + migration pointer | ✅ |
 | Smoke | SELECT replay + code-chain inspection | new value reaches `send-via-smtp` verbatim, no placeholder reachable | ✅ |
 | PR | open on `fix/spam-act-abn-only-footer` | awaiting Codex review | ⏳ |

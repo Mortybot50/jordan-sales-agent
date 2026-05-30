@@ -1,5 +1,5 @@
 -- =============================================================================
--- 20260530000001_spam_act_sender_block_jordan_real_abn.sql
+-- 20260530020000_spam_act_sender_block_jordan_real_abn.sql
 -- =============================================================================
 -- Purpose
 --   Replace the placeholder Spam Act sender block (placeholder ABN
@@ -30,12 +30,13 @@
 --   stood up.
 --
 -- Idempotency
---   The UPDATE matches any row still holding the placeholder OR PO Box 123
---   string. Replaying this migration on a DB where production already
+--   The UPDATE is scoped to the two seeded emails (demo + jordan@purezza)
+--   AND requires the placeholder predicate. Replaying this migration on a DB where production already
 --   contains the new value is a 0-row no-op.
 -- =============================================================================
 
 UPDATE public.users
    SET spam_act_sender_block = 'Jordan Marziale - ABN 78 180 361 897 - Reply STOP or click the unsubscribe link above.'
- WHERE spam_act_sender_block ILIKE '%12 345 678 901%'
-    OR spam_act_sender_block ILIKE '%PO Box 123%';
+ WHERE email IN ('demo@jordan-sales-agent.test', 'jordan@purezza.com.au')
+   AND (spam_act_sender_block ILIKE '%12 345 678 901%'
+        OR spam_act_sender_block ILIKE '%PO Box 123%');
