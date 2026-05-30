@@ -19,6 +19,9 @@
 // @ts-expect-error Deno edge runtime import
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { requireServiceRoleAuth } from '../_shared/auth.ts'
+import { initSentry, captureException } from '../_shared/sentry.ts'
+
+initSentry('drain-send-queue')
 
 // @ts-expect-error Deno globals
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? Deno.env.get('VITE_SUPABASE_URL')!
@@ -51,7 +54,7 @@ interface ClaimedRow {
 }
 
 // @ts-expect-error Deno serve
-Deno.serve(async (req: Request) => {
+Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST' && req.method !== 'GET') {
     return json(405, { success: false, error: 'Method not allowed' })
@@ -60,6 +63,16 @@ Deno.serve(async (req: Request) => {
   // Service-role auth gate — see _shared/auth.ts for rationale.
   const unauthorizedResp = await requireServiceRoleAuth(req)
   if (unauthorizedResp) return unauthorizedResp
+
+  try {
+    return await drainTick(req)
+  } catch (err) {
+    await captureException(err, { service: 'drain-send-queue', url: req.url })
+    return json(500, { success: false, error: (err as Error).message })
+  }
+})
+
+async function drainTick(_req: Request): Promise<Response> {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
@@ -133,7 +146,7 @@ Deno.serve(async (req: Request) => {
   }
 
   return json(200, { success: true, drained, failed, claimed: rows.length })
-})
+}
 
 // ---- inline send logic (mirrors send-via-smtp's manual-mode path) -----------
 

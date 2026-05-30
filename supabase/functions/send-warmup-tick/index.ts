@@ -56,6 +56,9 @@ import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts'
 import { decryptToken } from '../_shared/token-crypto.ts'
 import { redactEmail } from '../_shared/pii.ts'
 import { requireServiceRoleAuth } from '../_shared/auth.ts'
+import { initSentry, captureException } from '../_shared/sentry.ts'
+
+initSentry('send-warmup-tick')
 
 // @ts-expect-error Deno globals
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? Deno.env.get('VITE_SUPABASE_URL')!
@@ -200,7 +203,7 @@ interface TickModeBody {
 // ---- Main handler ----------------------------------------------------------
 
 // @ts-expect-error Deno serve
-Deno.serve(async (req: Request) => {
+Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') {
     return json(405, { success: false, error: 'Method not allowed' })
@@ -209,6 +212,15 @@ Deno.serve(async (req: Request) => {
   const unauthorized = await requireServiceRoleAuth(req)
   if (unauthorized) return unauthorized
 
+  try {
+    return await warmupTick(req)
+  } catch (err) {
+    await captureException(err, { service: 'send-warmup-tick', url: req.url })
+    return json(500, { success: false, error: (err as Error).message })
+  }
+})
+
+async function warmupTick(req: Request): Promise<Response> {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
   let body: ReplyModeBody | TickModeBody = {}
@@ -234,7 +246,7 @@ Deno.serve(async (req: Request) => {
     return await handleReply(supabase, body, mel)
   }
   return await handleTick(supabase, mel)
-})
+}
 
 // ---- Tick mode -------------------------------------------------------------
 

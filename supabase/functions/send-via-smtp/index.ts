@@ -30,6 +30,9 @@ import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts'
 import { decryptToken } from '../_shared/token-crypto.ts'
 import { signUnsubTuple } from '../_shared/unsub-token.ts'
 import { redactEmail } from '../_shared/pii.ts'
+import { initSentry, captureException } from '../_shared/sentry.ts'
+
+initSentry('send-via-smtp')
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -87,6 +90,19 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') {
     return jsonResponse(405, { success: false, error: 'Method not allowed' })
   }
+
+  try {
+    return await handle(req)
+  } catch (err) {
+    await captureException(err, { service: 'send-via-smtp', url: req.url })
+    return jsonResponse(500, { success: false, error: (err as Error).message })
+  }
+})
+
+// @ts-expect-error Deno serve — original body extracted so the outer try/catch
+// can forward unhandled errors to Sentry without restructuring the existing
+// flow. AUDIT-2026-05-28 P1-OBS-02.
+async function handle(req: Request): Promise<Response> {
 
   const authHeader = req.headers.get('authorization')
   if (!authHeader) {
@@ -365,4 +381,4 @@ Deno.serve(async (req: Request) => {
     smtp_message_id: smtpMessageId,
     smtp_response: smtpResponse,
   })
-})
+}

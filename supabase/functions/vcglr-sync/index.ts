@@ -28,6 +28,16 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? Deno.env.get('VITE_SUPABASE
 // @ts-expect-error Deno globals
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
+// Parser-drift floor: weekly snapshots historically return ~23k rows. If the
+// XLSX parser returns suspiciously few (e.g. a header rename quietly dropped
+// every row), the worker should fail loudly rather than record `success` with
+// near-zero coverage. Closes audit P1-CP-04. Overridable via env for ad-hoc
+// reduced-scope runs.
+const VCGLR_MIN_ROWS_ASSERT = Number(
+  // @ts-expect-error Deno globals
+  Deno.env.get('VCGLR_MIN_ROWS_ASSERT') ?? '10',
+)
+
 const CKAN_URL =
   'https://discover.data.vic.gov.au/api/3/action/package_show?id=victorian-liquor-licences-by-location'
 const EVIDENCE_URL = 'https://www.vic.gov.au/victorian-liquor-licences-location'
@@ -175,7 +185,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // 4. Download + parse XLSX
     const newRows = await downloadAndParseXlsx(xlsxUrl)
     if (newRows.length === 0) {
-      throw new Error('XLSX parsed to zero rows — header or structure changed')
+      throw new Error('parser_empty_drift_likely: XLSX parsed to zero rows — header or structure changed')
+    }
+    // Drift guard — if the parser returned suspiciously few rows, fail loud
+    // rather than ship a near-empty snapshot. Historical snapshots are ~23k
+    // rows; anything under VCGLR_MIN_ROWS_ASSERT (default 10) almost
+    // certainly means a header rename quietly dropped most rows.
+    if (newRows.length < VCGLR_MIN_ROWS_ASSERT) {
+      throw new Error(
+        `parser_empty_drift_likely: parsed ${newRows.length} rows, below floor ${VCGLR_MIN_ROWS_ASSERT}`,
+      )
     }
 
     // 5. Upsert all rows into vcglr_licences

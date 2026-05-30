@@ -43,6 +43,12 @@ interface BriefingSendRow {
   error: string | null
 }
 
+interface WarmupPulse {
+  totalLast24h: number
+  totalLast7d: number
+  lastEventAt: string | null
+}
+
 type Health = 'healthy' | 'stale' | 'failing' | 'idle' | 'never'
 
 const STATUS_TONE: Record<string, PillTone> = {
@@ -160,6 +166,35 @@ export function AdminWorkersPage() {
     enabled: !!user && isAdmin,
     refetchInterval: 30_000,
     staleTime: 10_000,
+  })
+
+  // Warmup pulse — send_warmup_tick doesn't write worker_runs, so we read
+  // email_send_events directly. AUDIT-2026-05-28 P1-OBS-01.
+  const { data: warmupPulse } = useQuery({
+    queryKey: ['warmup-pulse'],
+    queryFn: async (): Promise<WarmupPulse> => {
+      const sevenDaysAgoIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+      const oneDayAgoIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+      const { data: rows, error } = await supabase
+        .from('email_send_events')
+        .select('event_at')
+        .eq('metadata->>kind', 'warmup')
+        .gte('event_at', sevenDaysAgoIso)
+        .order('event_at', { ascending: false })
+        .limit(1000)
+      if (error) {
+        console.warn('[warmupPulse] fetch failed:', error.message)
+        return { totalLast24h: 0, totalLast7d: 0, lastEventAt: null }
+      }
+      const list = (rows ?? []) as { event_at: string }[]
+      const totalLast7d = list.length
+      const totalLast24h = list.filter((r) => r.event_at >= oneDayAgoIso).length
+      const lastEventAt = list[0]?.event_at ?? null
+      return { totalLast24h, totalLast7d, lastEventAt }
+    },
+    enabled: !!user && isAdmin,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
   })
 
   const {
@@ -458,6 +493,43 @@ export function AdminWorkersPage() {
           )
         })}
       </div>
+
+      {/* Warmup pulse — added 28/05/2026 per AUDIT-2026-05-28 P1-OBS-01.
+          send_warmup_tick doesn't write worker_runs; this reads
+          email_send_events.metadata->>kind='warmup' directly. */}
+      <Card className="bg-background border border-hairline">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CapsLabel>Warmup pulse</CapsLabel>
+              <div className="text-sm text-ink-muted mt-0.5">
+                Inter-inbox warmup activity. Sourced from email_send_events
+                (warmup tick does not write worker_runs).
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3 text-[11px] pt-2 border-t border-hairline">
+            <div>
+              <div className="text-ink-faint uppercase tracking-wide">Last event</div>
+              <div className="font-mono text-ink mt-0.5">
+                {relativeTime(warmupPulse?.lastEventAt ?? null)}
+              </div>
+            </div>
+            <div>
+              <div className="text-ink-faint uppercase tracking-wide">Events 24h</div>
+              <div className="font-mono jordan-tnum text-ink mt-0.5">
+                {warmupPulse?.totalLast24h ?? 0}
+              </div>
+            </div>
+            <div>
+              <div className="text-ink-faint uppercase tracking-wide">Events 7d</div>
+              <div className="font-mono jordan-tnum text-ink mt-0.5">
+                {warmupPulse?.totalLast7d ?? 0}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Morning briefing send history — FE-P1-02 */}
       <Card className="bg-background border border-hairline">
