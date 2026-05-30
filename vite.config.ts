@@ -24,7 +24,14 @@ export default defineConfig({
             org: process.env.SENTRY_ORG,
             project: process.env.SENTRY_PROJECT,
             authToken: process.env.SENTRY_AUTH_TOKEN,
-            sourcemaps: { assets: './dist/**' },
+            sourcemaps: {
+              assets: './dist/**',
+              // Delete *.map files from the build artefact AFTER upload so
+              // they live only in Sentry, not on the public CDN. Without
+              // this, Vercel serves /assets/index-*.js.map at 200 and
+              // anyone can deminify the bundle.
+              filesToDeleteAfterUpload: ['./dist/**/*.map'],
+            },
             telemetry: false,
           }),
         ]

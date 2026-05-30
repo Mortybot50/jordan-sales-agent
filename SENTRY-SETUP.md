@@ -18,26 +18,42 @@ Set the following three env vars on the `jordan-sales-agent` Vercel project,
 | `SENTRY_ORG` | Sentry org slug | Sentry → Settings → Organisation Settings → "Slug" |
 | `SENTRY_PROJECT` | Sentry project slug | Sentry → Projects → jordan-sales-agent (or your project's slug) |
 
-CLI flow (canonical — leaves audit trail in shell history):
+CLI flow:
 
 ```bash
-echo -n "<auth-token>" | vercel env add SENTRY_AUTH_TOKEN production
+# Auth token — interactive prompt so the secret never lands in shell history.
+# Vercel CLI will prompt; paste the sntrys_... value when asked.
+vercel env add SENTRY_AUTH_TOKEN production
+
+# Org + project slugs — not secrets, safe to pass via echo:
 echo -n "<org-slug>"   | vercel env add SENTRY_ORG       production
 echo -n "<proj-slug>"  | vercel env add SENTRY_PROJECT   production
-vercel --prod   # rebuild so the next bundle includes sourcemaps
+
+vercel --prod   # rebuild so the next bundle uploads sourcemaps
 ```
+
+**Why interactive for the auth token:** `echo -n "<token>" | vercel env add` writes
+the literal token into your shell history (`~/.zsh_history` / `~/.bash_history`),
+where it lives until manually scrubbed. The interactive prompt asks Vercel to read
+from a TTY directly — the token never touches history.
 
 ## How the wiring works
 
 `vite.config.ts` detects the three env vars at build time. If any is missing,
-the `@sentry/vite-plugin` is skipped — local `vite build` still works, just
-without source-map upload. When all three are present:
+the `@sentry/vite-plugin` is skipped AND `build.sourcemap` stays `false` —
+local `vite build` still works, just without source maps. When all three
+are present:
 
-1. Vite emits `*.map` files alongside the JS bundle (`build.sourcemap = true`).
+1. Vite emits `*.map` files alongside the JS bundle.
 2. The Sentry plugin uploads the maps to the Sentry org, tagged with the
    commit SHA.
-3. The build artefact ships **without** the maps — they live only in Sentry,
-   not in the public bundle.
+3. The plugin then **deletes the maps from the artefact** (via
+   `filesToDeleteAfterUpload`) before Vercel ships it — so they live only
+   in Sentry, never on the public CDN.
+
+The map-emission and map-deletion are gated by the same `sentryEnabled`
+boolean, so it's impossible to ship public maps without simultaneously
+uploading them to Sentry.
 
 ## Verification
 
