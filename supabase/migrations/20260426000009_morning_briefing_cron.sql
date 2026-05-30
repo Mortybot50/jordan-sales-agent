@@ -9,15 +9,17 @@
 -- Idempotency: briefing_sends has UNIQUE (user_id, sent_local_date) so
 -- duplicate fires (transient pg_net retries) are no-ops, not duplicate emails.
 --
--- Service role key: NEVER hardcode. We read it from a Postgres custom
--- setting `app.settings.service_role_key` that Morty must set ONCE via
--- the Supabase SQL editor:
+-- Service role key: NEVER hardcode. We read it from Supabase Vault via
+-- the `vault.decrypted_secrets` view. The secret must be created ONCE per
+-- project (typically via supabase-mcp) before this migration applies:
 --
---   ALTER DATABASE postgres SET app.settings.service_role_key = '<service_role_key>';
+--   SELECT vault.create_secret('<service-role-key>'::text, 'service_role_key');
 --
--- (Setting it on the database means it persists across sessions and is
--- visible to pg_cron's background worker. NOT visible to anon/authenticated
--- roles because of GUC permissions.)
+-- NOTE: the older `ALTER DATABASE postgres SET app.settings.service_role_key`
+-- pattern (with `current_setting('app.settings.service_role_key', true)` reads
+-- inside the cron body) is REJECTED by Supabase managed Postgres — confirmed
+-- 04/05/2026 during the LeadFlow cron rewire. Vault is the only working path.
+-- See ~/.claude/rules/dev/supabase-migrations.md "Service-role keys & Vault".
 
 DO $$
 BEGIN
@@ -36,7 +38,12 @@ SELECT cron.schedule(
       url     := 'https://bsevgxhnxlkzkcalevbb.supabase.co/functions/v1/send-morning-briefing',
       headers := jsonb_build_object(
         'Content-Type',  'application/json',
-        'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
+        'Authorization', 'Bearer ' || (
+          SELECT decrypted_secret
+          FROM vault.decrypted_secrets
+          WHERE name = 'service_role_key'
+          LIMIT 1
+        )
       ),
       body    := '{}'::jsonb
     );
