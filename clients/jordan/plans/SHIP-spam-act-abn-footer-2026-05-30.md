@@ -3,7 +3,7 @@
 **Slug:** `spam-act-abn-only-footer`
 **Branch:** `fix/spam-act-abn-only-footer`
 **Dispatched:** 30/05/2026 ~12:20 AEST
-**Authorised by:** Jordan Marziale (+61416104718) via WhatsApp — "Ship it"
+**Authorised by:** Jordan Marziale via WhatsApp — "Ship it"
 **Decision path:** Path 1 from the morning thread — ABN-only footer, no street address.
 **Project ref:** `bsevgxhnxlkzkcalevbb` (live Jordan Supabase, NOT orphan `gzpmocpczhsqxidfcwrn`)
 

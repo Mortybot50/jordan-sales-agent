@@ -12,7 +12,7 @@
 --   and jordan@purezza.com.au pending a real value from Jordan.
 --
 -- Authorisation
---   Jordan Marziale (+61416104718) via WhatsApp, 30/05/2026 12:20 AEST -- "Ship it".
+--   Jordan Marziale via WhatsApp, 30/05/2026 12:20 AEST -- "Ship it".
 --   See clients/jordan/IDENTITY.md -- Cold-send decisions, 30/05/2026 entry.
 --
 -- Compliance trade-off (deliberate)
