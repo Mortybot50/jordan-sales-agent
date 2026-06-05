@@ -5,6 +5,7 @@ import { LivePill, PageHeader } from '@/components/primitives'
 import { DarkAnchorBar } from '@/components/dashboard/DarkAnchorBar'
 import { HeroGateCard } from '@/components/dashboard/HeroGateCard'
 import { PipelineFinancialBar } from '@/components/dashboard/PipelineFinancialBar'
+import { SetupChecklist } from '@/components/dashboard/SetupChecklist'
 import { PendingInstallsCard } from '@/components/dashboard/PendingInstallsCard'
 import { EarnedThisYearCard } from '@/components/dashboard/EarnedThisYearCard'
 import { ReopeningRadarCard } from '@/components/dashboard/ReopeningRadarCard'
@@ -53,6 +54,8 @@ export function DashboardPage() {
           </div>
         }
       />
+
+      <SetupChecklist />
 
       <HeroGateCard />
 

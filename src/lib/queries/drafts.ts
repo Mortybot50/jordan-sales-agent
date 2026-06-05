@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { getSuppressionSet, isSuppressed } from '@/lib/suppression'
@@ -184,6 +185,39 @@ export function useApproveDraft() {
   const qc = useQueryClient()
   return useMutation<ApproveDraftResult, Error, string>({
     mutationFn: async (id: string) => {
+      // Outbound-readiness pre-flight — block approve when the user is still
+      // missing profile name / signature / sending inbox. Without this, the
+      // draft flips to 'approved', the worker picks it up, can't send, and
+      // the failure is invisible to Jordan until the next morning briefing.
+      // Same check the dashboard SetupChecklist surfaces.
+      const { user } = (await supabase.auth.getUser()).data
+      if (user?.id) {
+        const [profileRes, sigRes, inboxRes] = await Promise.all([
+          supabase.from('users').select('full_name').eq('id', user.id).maybeSingle(),
+          (supabase as unknown as SupabaseClient)
+            .from('email_signature_templates')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', user.id),
+          (supabase as unknown as SupabaseClient)
+            .from('email_accounts')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', user.id)
+            .eq('status', 'active'),
+        ])
+        const profileNameSet = !!(profileRes.data?.full_name && (profileRes.data.full_name as string).trim())
+        const hasSignature = (sigRes.count ?? 0) > 0
+        const hasInbox = (inboxRes.count ?? 0) > 0
+        if (!profileNameSet || !hasSignature || !hasInbox) {
+          const missing: string[] = []
+          if (!profileNameSet) missing.push('your profile name')
+          if (!hasSignature) missing.push('at least one brand signature')
+          if (!hasInbox) missing.push('a connected sending inbox')
+          throw new Error(
+            `Finish setup before approving — still need ${missing.join(' + ')}. Open Settings to fix.`,
+          )
+        }
+      }
+
       // Learning Loop — read current vs original to capture the edit delta.
       // Approve is the "sent" signal in this app today; if Jordan changed
       // subject or body before approving, record the diff for weekly analysis.
