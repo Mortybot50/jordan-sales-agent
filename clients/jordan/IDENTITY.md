@@ -44,6 +44,8 @@ Current prod bundle: `index-FfsK5snX.js` on `https://jordan-sales-agent.vercel.a
 
 ## Latest session handoff
 
+**9-bug bash — 05/06/2026.** Hard-refresh session at 15:24 AEST surfaced 9 bugs ranging from a $100M seed deal inflating dashboard tiles to a wedged auth flow on `/dashboard` reload. All 9 closed on `fix/leadflow-9bug-bash-2026-06-05` across 8 commits — full per-item summary at `clients/jordan/plans/9bug-bash-2026-06-05.md`. Notable artefacts: migration `20260605113000_deals_value_ceiling` (CHECK ≤ $1M on `contract_value/acv/tcv/final_value`); new `supabase/functions/_shared/contact-name.ts` helper that closes the "bookings/info/hello as contact name" bug class; `useOutboundReadiness` hook + dashboard `SetupChecklist` banner gating draft approve when profile/signature/inbox aren't all set. Pre-existing $99,999,999.99 seed deal deleted; 39 generic-alias contacts renamed in place from "bookings" → "Bookings — The Kingston". Codex Pattern B + headless smoke pending pre-merge.
+
 **Wave 3A — 15/05/2026.** Closed the two Codex review v2 residuals from Wave 1A.
 
 - **PR #60 — smoke v2 (Management API rewrite)** — SHIPPED to main as `4007352`. `scripts/smoke-api.sh` rewritten as a two-phase guard: Phase A reads the Edge Function roster via `GET /v1/projects/{ref}/functions` (zero handler calls, no side-effect risk) and asserts every function is `ACTIVE` with the expected `verify_jwt` flag; Phase B keeps the original PostgREST + JWT login coverage but now exits 2 if creds are missing (CI cannot silently skip). Codex review: PASS at round 3 after addressing round-1 (lost coverage / coerced bool / JSON error handling) and round-2 (silent Phase B skip).
