@@ -28,6 +28,13 @@ interface AuthState {
   session: Session | null
   user: AppUser | null
   loading: boolean
+  /**
+   * True when there IS a Supabase session but the app profile could not be
+   * loaded — either the users-row fetch errored (DB/RLS/network) or no row
+   * exists. Either way the app shell must not render against `user=null`;
+   * RequireAuth surfaces a recoverable error screen instead.
+   */
+  profileError: boolean
 }
 
 // Hard cap for the case where Supabase's internal session restore truly hangs
@@ -68,14 +75,21 @@ function redirectToLogin() {
   }
 }
 
-async function fetchUserProfile(userId: string): Promise<AppUser | null> {
+// Distinguish the three outcomes so the caller can react correctly:
+//   AppUser  — profile loaded
+//   'error'  — the fetch failed (DB/RLS/network); recoverable via retry
+//   null     — no users row for this auth id (misconfiguration)
+type ProfileResult = AppUser | 'error' | null
+
+async function fetchUserProfile(userId: string): Promise<ProfileResult> {
   const { data, error } = await supabase
     .from('users')
     .select('id, org_id, full_name, email, role, email_signature, voice_rules, icp_config, email_notifications, default_commission_pct, notify_whatsapp_e164, notify_warm_replies, notify_quiet_hours_start, notify_quiet_hours_end')
     .eq('id', userId)
     .maybeSingle()
 
-  if (error || !data) return null
+  if (error) return 'error'
+  if (!data) return null
 
   const d = data as unknown as Record<string, unknown>
   return {
@@ -104,6 +118,7 @@ export function useAuth(): AuthState {
   const [session, setSession] = useState<Session | null>(null)
   const [user, setUser] = useState<AppUser | null>(null)
   const [loading, setLoading] = useState(true)
+  const [profileError, setProfileError] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -126,6 +141,7 @@ export function useAuth(): AuthState {
       clearStaleSupabaseAuthStorage()
       setSession(null)
       setUser(null)
+      setProfileError(false)
       setLoading(false)
       toast.error('Session expired, please log in')
       redirectToLogin()
@@ -139,12 +155,26 @@ export function useAuth(): AuthState {
       if (s?.user) {
         try {
           const profile = await fetchUserProfile(s.user.id)
-          if (mounted) setUser(profile)
+          if (!mounted) return
+          if (profile === 'error' || profile === null) {
+            // Fetch failed or no profile row — never render the app shell with
+            // a null user. RequireAuth shows a recoverable error screen.
+            setUser(null)
+            setProfileError(true)
+          } else {
+            setUser(profile)
+            setProfileError(false)
+          }
         } catch (err) {
           console.error('[useAuth] Failed to load profile on auth change:', err)
+          if (mounted) {
+            setUser(null)
+            setProfileError(true)
+          }
         }
       } else {
         setUser(null)
+        setProfileError(false)
       }
       if (mounted) setLoading(false)
     })
@@ -156,5 +186,5 @@ export function useAuth(): AuthState {
     }
   }, [])
 
-  return { session, user, loading }
+  return { session, user, loading, profileError }
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ClaudeCommandBar } from '@/components/claude/ClaudeCommandBar'
@@ -199,6 +199,21 @@ function TargetWidget() {
 
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  // Track the lg breakpoint (Tailwind lg = 1024px) so the off-canvas drawer can
+  // be made truly inert (not just translated offscreen) on mobile when closed,
+  // while staying fully interactive on desktop where it's a static column.
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const onChange = (e: MediaQueryListEvent) => setIsDesktop(e.matches)
+    mq.addEventListener('change', onChange)
+    setIsDesktop(mq.matches)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  // Hidden to assistive tech + keyboard only when it's the closed mobile drawer.
+  const drawerHidden = !isDesktop && !mobileOpen
   const location = useLocation()
 
   async function handleSignOut() {
@@ -220,6 +235,8 @@ export function AppShell() {
           <aside> regions which left a duplicate <nav> in the DOM at every
           viewport and made screen-reader / Cmd-F output redundant. */}
       <aside
+        aria-hidden={drawerHidden || undefined}
+        inert={drawerHidden || undefined}
         className={cn(
           'fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-hairline bg-surface-1 transition-transform duration-150',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
