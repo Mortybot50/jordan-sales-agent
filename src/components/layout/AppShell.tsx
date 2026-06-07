@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ClaudeCommandBar } from '@/components/claude/ClaudeCommandBar'
@@ -202,16 +202,17 @@ export function AppShell() {
   // Track the lg breakpoint (Tailwind lg = 1024px) so the off-canvas drawer can
   // be made truly inert (not just translated offscreen) on mobile when closed,
   // while staying fully interactive on desktop where it's a static column.
-  const [isDesktop, setIsDesktop] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
+  // useSyncExternalStore subscribes to matchMedia without a setState-in-effect
+  // (which React's lint flags as a cascading-render risk).
+  const isDesktop = useSyncExternalStore(
+    (onStoreChange) => {
+      const mq = window.matchMedia('(min-width: 1024px)')
+      mq.addEventListener('change', onStoreChange)
+      return () => mq.removeEventListener('change', onStoreChange)
+    },
+    () => window.matchMedia('(min-width: 1024px)').matches,
+    () => true, // no SSR in this Vite SPA; default to desktop for the server snapshot
   )
-  useEffect(() => {
-    const mq = window.matchMedia('(min-width: 1024px)')
-    const onChange = (e: MediaQueryListEvent) => setIsDesktop(e.matches)
-    mq.addEventListener('change', onChange)
-    setIsDesktop(mq.matches)
-    return () => mq.removeEventListener('change', onChange)
-  }, [])
   // Hidden to assistive tech + keyboard only when it's the closed mobile drawer.
   const drawerHidden = !isDesktop && !mobileOpen
   const location = useLocation()

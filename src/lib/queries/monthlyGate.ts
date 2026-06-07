@@ -203,11 +203,11 @@ export function usePipelineFinancials() {
           continue
         }
 
-        // Shared open-pipeline definition (pipelineFinancials.ts) so this bar
-        // and the dashboard pipeline-value tile agree on which deals are "open".
-        // isLost keeps the extra stage-name guard for legacy rows whose outcome
-        // was never set but whose stage reads "...Lost".
-        if (isOpenPipeline({ stage: r.stage, outcome: r.outcome }) && !isLost) {
+        // Sole shared open-pipeline definition (pipelineFinancials.ts) — same
+        // helper, same inputs (incl. closed_at + stage name), as the dashboard
+        // pipeline-value tile, so the two can never diverge. The lost stage-name
+        // guard now lives inside the helper.
+        if (isOpenPipeline({ stage: r.stage, outcome: r.outcome, closed_at: r.closed_at })) {
           pipelineAcvOpen += acv
           pipelineTcvOpen += tcv
         }

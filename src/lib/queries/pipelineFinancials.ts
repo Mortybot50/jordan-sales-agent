@@ -19,19 +19,32 @@ export interface DealFinancialRow {
   acv?: number | string | null
   tcv?: number | string | null
   outcome?: 'won' | 'lost' | null
-  stage?: { is_closed?: boolean | null } | null
+  closed_at?: string | null
+  stage?: { is_closed?: boolean | null; name?: string | null } | null
 }
 
 const num = (v: number | string | null | undefined): number =>
   v == null ? 0 : Number(v) || 0
 
 /**
- * Authoritative "open pipeline" test: a deal is open iff its stage is not a
- * closed stage AND it has not been marked lost. This is the same definition
- * the monthly-gate financial bar uses (`!stage.is_closed && outcome !== 'lost'`).
+ * Authoritative — and SOLE — "open pipeline" test. Every dashboard tile that
+ * reports open-pipeline money must pass each candidate through this and nothing
+ * else, so the figures can never diverge. A deal is open iff ALL hold:
+ *   - it has no close timestamp (`closed_at` is null),
+ *   - its stage is not a closed stage,
+ *   - it is not marked lost (`outcome`), and
+ *   - its stage name doesn't read "...Lost" (legacy rows where `outcome` was
+ *     never set but the stage is a lost stage).
+ * Callers must NOT pre-filter the candidate set on their own (e.g. a query-level
+ * `closed_at IS NULL`) with a different rule — that's what produced the
+ * dashboard-vs-monthly-gate divergence. Pass the full set through here.
  */
 export function isOpenPipeline(d: DealFinancialRow): boolean {
-  return !d.stage?.is_closed && d.outcome !== 'lost'
+  if (d.closed_at) return false
+  if (d.stage?.is_closed) return false
+  if (d.outcome === 'lost') return false
+  if (d.stage?.name && /lost/i.test(d.stage.name)) return false
+  return true
 }
 
 /**

@@ -300,7 +300,11 @@ export function useJordanAnchorMetrics() {
       ] = await Promise.all([
         supabase
           .from('deals')
-          .select('contract_value, acv, outcome, stage_id, created_at, closed_at, stage:pipeline_stages(is_closed)')
+          // closed_at IS NULL is the same direction as isOpenPipeline (which
+          // also excludes closed_at-set rows), so prefiltering here yields an
+          // identical financial set to running the helper over all deals — it
+          // just keeps the fetch small for the velocity/stage-meter reuse below.
+          .select('contract_value, acv, outcome, stage_id, created_at, closed_at, stage:pipeline_stages(is_closed, name)')
           .is('closed_at', null),
         supabase
           .from('activities')
