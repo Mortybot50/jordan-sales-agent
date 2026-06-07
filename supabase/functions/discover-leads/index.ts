@@ -204,7 +204,6 @@ async function fetchGooglePlaces(
     })
 
     let pageToken: string | undefined
-    let fetched = 0
 
     do {
       if (pageToken) params.set('pagetoken', pageToken)
@@ -241,7 +240,6 @@ async function fetchGooglePlaces(
           emails_and_contacts: [],
         }
         results.push(venue)
-        fetched++
         if (results.length >= limit) break
       }
 

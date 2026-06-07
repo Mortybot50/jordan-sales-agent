@@ -56,8 +56,8 @@ const MAX_ACCEPTED_EMAILS = 4
 const HOMEPAGE_TIMEOUT_MS = 10_000
 const SUBPAGE_TIMEOUT_MS = 8_000
 
-const EMAIL_REGEX = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g
-const MAILTO_REGEX = /mailto:([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/gi
+const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
+const MAILTO_REGEX = /mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/gi
 const HREF_REGEX = /href=["']([^"']+)["']/gi
 
 const ASSET_EXT = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'js', 'css']

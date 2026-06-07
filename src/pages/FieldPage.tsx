@@ -97,9 +97,13 @@ export function FieldPage() {
     })
   }, [pins, suburbFilter, showKinds])
 
+  // "Now" captured once at mount (lazy useState init) so the staleness
+  // threshold below stays a pure value during render rather than a Date.now()
+  // call (which React's lint flags as impure-in-render).
+  const [nowMs] = useState(() => Date.now())
   // Smart-suggestion: contacts not visited 6mo+ AND reopenings within 1km of any contact
   const suggestion = useMemo(() => {
-    const sixMo = Date.now() - 1000 * 60 * 60 * 24 * 180
+    const sixMo = nowMs - 1000 * 60 * 60 * 24 * 180
     const stale = (pins ?? []).filter(
       (p) => p.source === 'contact' && (!p.last_activity_at || new Date(p.last_activity_at).getTime() < sixMo),
     ).length
@@ -112,7 +116,7 @@ export function FieldPage() {
       }
     }
     return { stale, nearby }
-  }, [pins])
+  }, [pins, nowMs])
 
   // Init map (once).
   useEffect(() => {
