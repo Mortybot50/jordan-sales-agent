@@ -44,6 +44,20 @@ export const packageDealSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   follow_up_due: z.string().optional(),
   notes: z.string().optional(),
+}).superRefine((v, ctx) => {
+  // The DB caps acv/tcv at DEAL_VALUE_MAX (migration 20260605113000). Package
+  // deals derive acv = weekly*52 and tcv = acv*term/12, so a large weekly_price
+  // or long term can blow past the ceiling and pass this form but fail the DB
+  // insert. Enforce the same ceiling on the derived figures up front.
+  const acv = v.weekly_price * 52
+  const tcv = (acv * v.term_months) / 12
+  if (acv > DEAL_VALUE_MAX || tcv > DEAL_VALUE_MAX) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['weekly_price'],
+      message: `This package computes to $${Math.round(Math.max(acv, tcv)).toLocaleString()} — above the $${DEAL_VALUE_MAX.toLocaleString()} ceiling. Double-check the weekly price and term.`,
+    })
+  }
 })
 
 export type PackageDealValues = z.infer<typeof packageDealSchema>

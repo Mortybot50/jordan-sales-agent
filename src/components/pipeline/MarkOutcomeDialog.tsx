@@ -14,6 +14,7 @@ import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 import type { Deal } from '@/lib/queries/deals'
 import { useMarkDealOutcome } from '@/lib/queries/deals'
+import { DEAL_VALUE_MAX } from '@/lib/schemas/deal'
 
 interface MarkOutcomeDialogProps {
   deal: Deal | null
@@ -71,7 +72,8 @@ function Body({
   const [lostReason, setLostReason] = useState<string>(deal.lost_reason ?? '')
 
   const valueNum = finalValue.trim() === '' ? null : Number(finalValue)
-  const valueInvalid = finalValue.trim() !== '' && (Number.isNaN(valueNum) || (valueNum ?? 0) < 0)
+  const valueTooHigh = (valueNum ?? 0) > DEAL_VALUE_MAX
+  const valueInvalid = finalValue.trim() !== '' && (Number.isNaN(valueNum) || (valueNum ?? 0) < 0 || valueTooHigh)
 
   async function handleConfirm() {
     if (valueInvalid) return
@@ -147,7 +149,11 @@ function Body({
               className={cn(valueInvalid && 'border-destructive')}
             />
             {valueInvalid ? (
-              <p className="text-xs text-destructive">Enter a non-negative number.</p>
+              <p className="text-xs text-destructive">
+                {valueTooHigh
+                  ? `Value can't exceed $${DEAL_VALUE_MAX.toLocaleString()} — double-check the figure.`
+                  : 'Enter a non-negative number.'}
+              </p>
             ) : (
               <p className="text-[11px] text-ink-faint">
                 Pre-filled from {deal.final_value != null ? 'previous final value' : deal.acv != null ? 'computed ACV' : 'contract value'}.
