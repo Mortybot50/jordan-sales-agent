@@ -90,3 +90,9 @@ create trigger trg_email_drafts_approve_ready
   before update on public.email_drafts
   for each row
   execute function public.assert_draft_approve_ready();
+
+-- This is a trigger-only function; it never needs to be callable via PostgREST
+-- RPC. Revoke EXECUTE so it isn't exposed at /rest/v1/rpc (it would error
+-- outside a trigger anyway, but this keeps the API surface clean). Trigger
+-- invocation is unaffected by EXECUTE grants.
+revoke execute on function public.assert_draft_approve_ready() from public, anon, authenticated;
