@@ -1,12 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 
-// Untyped client for the two tables not yet in the generated Database type
-// (email_signature_templates landed 26/05, email_accounts 19/05). Mirrors the
-// pattern queries/signatures.ts and queries/notifications.ts already use.
-const sb = supabase as unknown as SupabaseClient
+// email_signature_templates + email_accounts are both in the generated Database
+// type now, so the typed client is used directly (no cast).
+const sb = supabase
 
 export interface OutboundReadiness {
   profileNameSet: boolean

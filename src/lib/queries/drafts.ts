@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { getSuppressionSet, isSuppressed } from '@/lib/suppression'
@@ -203,11 +202,11 @@ export function useApproveDraft() {
       {
         const [profileRes, sigRes, inboxRes] = await Promise.all([
           supabase.from('users').select('full_name').eq('id', user.id).maybeSingle(),
-          (supabase as unknown as SupabaseClient)
+          supabase
             .from('email_signature_templates')
             .select('id', { count: 'exact', head: true })
             .eq('user_id', user.id),
-          (supabase as unknown as SupabaseClient)
+          supabase
             .from('email_accounts')
             .select('id', { count: 'exact', head: true })
             .eq('user_id', user.id)
