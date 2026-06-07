@@ -190,8 +190,17 @@ export function useApproveDraft() {
       // draft flips to 'approved', the worker picks it up, can't send, and
       // the failure is invisible to Jordan until the next morning briefing.
       // Same check the dashboard SetupChecklist surfaces.
-      const { user } = (await supabase.auth.getUser()).data
-      if (user?.id) {
+      // Fail CLOSED if we can't resolve the current user — never skip the
+      // readiness gate on an auth hiccup (the previous `if (user?.id)` silently
+      // let approval through when getUser() returned null). The DB trigger
+      // trg_email_drafts_approve_ready is the authoritative backstop, but the
+      // client should surface a clear retry rather than a later DB rejection.
+      const { data: authData, error: authErr } = await supabase.auth.getUser()
+      const user = authData?.user
+      if (authErr || !user?.id) {
+        throw new Error('Could not confirm your sign-in — refresh the page and try approving again.')
+      }
+      {
         const [profileRes, sigRes, inboxRes] = await Promise.all([
           supabase.from('users').select('full_name').eq('id', user.id).maybeSingle(),
           (supabase as unknown as SupabaseClient)
