@@ -31,6 +31,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { classifyEmailTier } from '../_shared/email-tier.ts'
 import { requireServiceRoleAuth } from '../_shared/auth.ts'
+import { deriveContactName } from '../_shared/contact-name.ts'
 
 // @ts-expect-error Deno globals
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -55,8 +56,8 @@ const MAX_ACCEPTED_EMAILS = 4
 const HOMEPAGE_TIMEOUT_MS = 10_000
 const SUBPAGE_TIMEOUT_MS = 8_000
 
-const EMAIL_REGEX = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g
-const MAILTO_REGEX = /mailto:([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/gi
+const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
+const MAILTO_REGEX = /mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/gi
 const HREF_REGEX = /href=["']([^"']+)["']/gi
 
 const ASSET_EXT = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'js', 'css']
@@ -305,7 +306,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: venue, error: vErr } = await supabase
     .from('venues')
-    .select('id, org_id, website')
+    .select('id, org_id, name, website')
     .eq('id', venueId)
     .single()
 
@@ -361,7 +362,7 @@ Deno.serve(async (req: Request) => {
     const rows = [...crawl.emails.keys()].map((email) => ({
       org_id: venue.org_id,
       venue_id: venue.id,
-      full_name: email.split('@')[0],
+      full_name: deriveContactName({ email, venueName: venue.name }),
       email,
       email_tier: classifyEmailTier(email),
       source: 'website_crawl',

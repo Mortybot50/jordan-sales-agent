@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ClaudeCommandBar } from '@/components/claude/ClaudeCommandBar'
@@ -120,6 +120,15 @@ function DraftQueueBadge() {
   )
 }
 
+// Precompute, per nav item, whether any other nav item is a child route of it.
+// Settings (/settings) has a sibling Email inboxes (/settings/email-accounts);
+// without `end` the parent stayed lit on every child route alongside the
+// child. NavLink's `end` prop forces an exact pathname match for those.
+const NAV_ITEMS_FLAT = NAV_SECTIONS.flatMap((s) => s.items)
+function hasChildRoute(to: string): boolean {
+  return NAV_ITEMS_FLAT.some((other) => other.to !== to && other.to.startsWith(`${to}/`))
+}
+
 function NavItems({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <nav className="flex-1 overflow-y-auto px-3 pb-3 space-y-5">
@@ -133,6 +142,7 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
               <NavLink
                 key={to}
                 to={to}
+                end={hasChildRoute(to)}
                 onClick={onNavigate}
                 className={({ isActive }) =>
                   cn(
@@ -189,47 +199,31 @@ function TargetWidget() {
 
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  // Track the lg breakpoint (Tailwind lg = 1024px) so the off-canvas drawer can
+  // be made truly inert (not just translated offscreen) on mobile when closed,
+  // while staying fully interactive on desktop where it's a static column.
+  // useSyncExternalStore subscribes to matchMedia without a setState-in-effect
+  // (which React's lint flags as a cascading-render risk).
+  const isDesktop = useSyncExternalStore(
+    (onStoreChange) => {
+      const mq = window.matchMedia('(min-width: 1024px)')
+      mq.addEventListener('change', onStoreChange)
+      return () => mq.removeEventListener('change', onStoreChange)
+    },
+    () => window.matchMedia('(min-width: 1024px)').matches,
+    () => true, // no SSR in this Vite SPA; default to desktop for the server snapshot
+  )
+  // Hidden to assistive tech + keyboard only when it's the closed mobile drawer.
+  const drawerHidden = !isDesktop && !mobileOpen
   const location = useLocation()
 
   async function handleSignOut() {
     await supabase.auth.signOut()
   }
 
-  const SidebarContent = () => (
-    <>
-      <div className="p-4">
-        <h1 className="text-lg font-semibold tracking-tight">LeadFlow</h1>
-        <p className="text-[11px] text-ink-faint">Jordan's Sales Agent</p>
-      </div>
-
-      <div className="pb-4">
-        <TargetWidget />
-      </div>
-
-      <NavItems onNavigate={() => setMobileOpen(false)} />
-
-      <div className="p-3 border-t border-hairline">
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full justify-center gap-2 rounded-full h-9 border-hairline text-ink-muted hover:text-ink hover:bg-surface-3"
-          onClick={handleSignOut}
-        >
-          <LogOut className="size-4" />
-          Sign out
-        </Button>
-      </div>
-    </>
-  )
-
   return (
     <div className="min-h-screen flex bg-[color:var(--jordan-surface-bg)]">
-      {/* Desktop sidebar */}
-      <aside className="hidden lg:flex w-60 shrink-0 border-r border-hairline bg-surface-1 flex-col">
-        <SidebarContent />
-      </aside>
-
-      {/* Mobile overlay */}
+      {/* Mobile overlay — only renders while drawer is open and only at <lg */}
       {mobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/50 lg:hidden"
@@ -237,19 +231,32 @@ export function AppShell() {
         />
       )}
 
-      {/* Mobile sidebar drawer */}
+      {/* Single sidebar — behaves as a fixed slide-in drawer on mobile and a
+          static flex column on desktop. Previously this lived as two separate
+          <aside> regions which left a duplicate <nav> in the DOM at every
+          viewport and made screen-reader / Cmd-F output redundant. */}
       <aside
+        aria-hidden={drawerHidden || undefined}
+        inert={drawerHidden || undefined}
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-64 bg-surface-1 border-r border-hairline flex flex-col transition-transform duration-150 lg:hidden',
+          'fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-hairline bg-surface-1 transition-transform duration-150',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
+          'lg:static lg:z-auto lg:w-60 lg:shrink-0 lg:translate-x-0 lg:transition-none',
         )}
       >
-        <div className="flex items-center justify-between p-4">
+        <div className="flex items-start justify-between p-4">
           <div>
             <h1 className="text-lg font-semibold tracking-tight">LeadFlow</h1>
             <p className="text-[11px] text-ink-faint">Jordan's Sales Agent</p>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => setMobileOpen(false)}>
+          {/* Close button — mobile drawer only */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setMobileOpen(false)}
+            className="lg:hidden"
+            aria-label="Close menu"
+          >
             <X className="size-4" />
           </Button>
         </div>

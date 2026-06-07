@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { startOfMonth, endOfMonth, subMonths, differenceInCalendarDays, format } from 'date-fns'
 import { useAuth } from '@/hooks/useAuth'
+import { isOpenPipeline } from '@/lib/queries/pipelineFinancials'
 
 export interface MonthlyGate {
   id: string
@@ -137,7 +138,7 @@ export function usePipelineFinancials() {
       const { data: dealRows, error } = await supabase
         .from('deals')
         .select(`
-          id, title, acv, tcv, commission_amount, commission_pct,
+          id, title, acv, tcv, contract_value, commission_amount, commission_pct,
           close_won_at, closed_at, outcome, final_value,
           install_scheduled_for, install_confirmed_at, install_completed_at,
           stage:pipeline_stages(id, name, is_closed),
@@ -163,6 +164,7 @@ export function usePipelineFinancials() {
         title: string | null
         acv: number | string | null
         tcv: number | string | null
+        contract_value: number | string | null
         commission_amount: number | string | null
         commission_pct: number | string | null
         close_won_at: string | null
@@ -177,13 +179,21 @@ export function usePipelineFinancials() {
         venue: { id: string; name: string | null } | null
         product: { id: string; label: string | null } | null
       }>) {
-        const acv = r.acv != null ? Number(r.acv) : 0
-        const tcv = r.tcv != null ? Number(r.tcv) : 0
+        // ACV/TCV are computed by trigger from weekly_price * 52 * term/12 * pct
+        // for catalogue-priced deals (since 26/04/2026). Legacy / manually-entered
+        // deals only carry contract_value — those would aggregate to $0 on the
+        // ACV/TCV tiles, which is what produced the "Pipeline value $X / ACV $0"
+        // dashboard contradiction. Fall back to contract_value as the best
+        // single-figure approximation for those rows.
+        const contractValue = r.contract_value != null ? Number(r.contract_value) : 0
+        const acvRaw = r.acv != null ? Number(r.acv) : 0
+        const tcvRaw = r.tcv != null ? Number(r.tcv) : 0
+        const acv = acvRaw > 0 ? acvRaw : contractValue
+        const tcv = tcvRaw > 0 ? tcvRaw : contractValue
         const commission = r.commission_amount != null ? Number(r.commission_amount) : 0
         const finalValue = r.final_value != null ? Number(r.final_value) : null
         const commissionPct = r.commission_pct != null ? Number(r.commission_pct) : null
         const stageName = r.stage?.name ?? ''
-        const isClosed = !!r.stage?.is_closed
         const isHeld = stageName === 'Hold for Next Month'
         const isLost = r.outcome === 'lost' || /lost/i.test(stageName)
 
@@ -193,7 +203,11 @@ export function usePipelineFinancials() {
           continue
         }
 
-        if (!isClosed && !isLost) {
+        // Sole shared open-pipeline definition (pipelineFinancials.ts) — same
+        // helper, same inputs (incl. closed_at + stage name), as the dashboard
+        // pipeline-value tile, so the two can never diverge. The lost stage-name
+        // guard now lives inside the helper.
+        if (isOpenPipeline({ stage: r.stage, outcome: r.outcome, closed_at: r.closed_at })) {
           pipelineAcvOpen += acv
           pipelineTcvOpen += tcv
         }

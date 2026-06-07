@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from '@/components/ui/sonner'
 import { useAuth } from '@/hooks/useAuth'
+import { supabase } from '@/lib/supabase'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { LoginPage } from '@/pages/LoginPage'
 import { AppShell } from '@/components/layout/AppShell'
@@ -33,7 +34,7 @@ import { PrivacyPolicyPage } from '@/pages/PrivacyPolicyPage'
 import { UnsubscribePage } from '@/pages/UnsubscribePage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { session, loading } = useAuth()
+  const { session, user, loading, profileError } = useAuth()
 
   if (loading) {
     return (
@@ -45,6 +46,35 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
   if (!session) {
     return <Navigate to="/login" replace />
+  }
+
+  // Authenticated session but no usable app profile (fetch error or no users
+  // row). Never render the app shell against user=null — downstream queries
+  // would all break silently. Offer a recoverable retry + sign-out instead.
+  if (!user) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-6 text-center">
+        <p className="max-w-sm text-sm text-muted-foreground">
+          {profileError
+            ? 'We couldn’t load your account just now. This is usually a brief network or connection hiccup.'
+            : 'Your sign-in worked, but we couldn’t find your account profile. Try signing in again, or contact support if this keeps happening.'}
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => window.location.reload()}
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+          >
+            Retry
+          </button>
+          <button
+            onClick={() => { void supabase.auth.signOut().then(() => window.location.replace('/login')) }}
+            className="rounded-md border px-4 py-2 text-sm font-medium"
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return <>{children}</>

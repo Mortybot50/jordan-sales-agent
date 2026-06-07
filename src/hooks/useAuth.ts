@@ -28,19 +28,20 @@ interface AuthState {
   session: Session | null
   user: AppUser | null
   loading: boolean
+  /**
+   * True when there IS a Supabase session but the app profile could not be
+   * loaded — either the users-row fetch errored (DB/RLS/network) or no row
+   * exists. Either way the app shell must not render against `user=null`;
+   * RequireAuth surfaces a recoverable error screen instead.
+   */
+  profileError: boolean
 }
 
-const SESSION_RESTORE_TIMEOUT_MS = 5_000
 // Hard cap for the case where Supabase's internal session restore truly hangs
-// (no resolution and no rejection). Both getSession() and onAuthStateChange
-// INITIAL_SESSION wait on the same internal _initialize() path, so if it never
-// settles neither soft-recovery wins. After this cap we treat it as the original
-// 22/04/2026 corrupt-token failure mode: wipe storage and redirect to /login.
+// (no INITIAL_SESSION ever delivered). After this we treat it as the 22/04/2026
+// corrupt-token failure mode: wipe storage and redirect to /login.
 const SESSION_RESTORE_HARD_CAP_MS = 25_000
 
-/** Derive the Supabase project ref from VITE_SUPABASE_URL.
- *  Supabase v2 SDK persists the session under `sb-<projectRef>-auth-token`.
- */
 function projectRefFromUrl(url: string | undefined): string | null {
   if (!url) return null
   try {
@@ -53,8 +54,6 @@ function projectRefFromUrl(url: string | undefined): string | null {
 
 function clearStaleSupabaseAuthStorage() {
   const ref = projectRefFromUrl(import.meta.env.VITE_SUPABASE_URL)
-  // Clear the canonical key, plus any other sb-*-auth-token keys lingering
-  // from previous projects/refs (defensive).
   try {
     if (ref) {
       localStorage.removeItem(`sb-${ref}-auth-token`)
@@ -76,14 +75,21 @@ function redirectToLogin() {
   }
 }
 
-async function fetchUserProfile(userId: string): Promise<AppUser | null> {
+// Distinguish the three outcomes so the caller can react correctly:
+//   AppUser  — profile loaded
+//   'error'  — the fetch failed (DB/RLS/network); recoverable via retry
+//   null     — no users row for this auth id (misconfiguration)
+type ProfileResult = AppUser | 'error' | null
+
+async function fetchUserProfile(userId: string): Promise<ProfileResult> {
   const { data, error } = await supabase
     .from('users')
     .select('id, org_id, full_name, email, role, email_signature, voice_rules, icp_config, email_notifications, default_commission_pct, notify_whatsapp_e164, notify_warm_replies, notify_quiet_hours_start, notify_quiet_hours_end')
     .eq('id', userId)
     .maybeSingle()
 
-  if (error || !data) return null
+  if (error) return 'error'
+  if (!data) return null
 
   const d = data as unknown as Record<string, unknown>
   return {
@@ -112,24 +118,19 @@ export function useAuth(): AuthState {
   const [session, setSession] = useState<Session | null>(null)
   const [user, setUser] = useState<AppUser | null>(null)
   const [loading, setLoading] = useState(true)
+  const [profileError, setProfileError] = useState(false)
 
   useEffect(() => {
     let mounted = true
     let settled = false
 
-    // Race getSession() against a 5s soft timeout. iOS Safari PWA cold-start
-    // has been observed to hang on a stale/corrupt persisted token; this lets
-    // us notice slowness without redirecting on a still-recoverable session.
-    const sessionPromise = supabase.auth.getSession()
-    const timeoutPromise = new Promise<{ timedOut: true }>((resolve) => {
-      setTimeout(() => resolve({ timedOut: true }), SESSION_RESTORE_TIMEOUT_MS)
-    })
-
-    // Hard cap. If neither the in-flight getSession() nor the auth listener
-    // has settled by SESSION_RESTORE_HARD_CAP_MS, Supabase's _initialize() has
-    // truly hung and the user would otherwise sit on "Loading…" forever. At
-    // that point we fall back to the original 22/04/2026 behaviour: wipe the
-    // persisted token, redirect to /login.
+    // Subscribe-only pattern. Supabase fires INITIAL_SESSION on the first
+    // subscriber with whatever's in storage (or null) once _initialize() has
+    // read the persisted token. We do NOT race a manual getSession() against
+    // a soft timeout — that produced cross-tab navigator-lock contention
+    // (gotrue's "Lock not released within 5000ms" warning) and the UI could
+    // settle in inconsistent states under React 19 StrictMode double-mount.
+    // The hardCapTimer below is the only safety net.
     const hardCapTimer = setTimeout(() => {
       if (!mounted || settled) return
       console.error(
@@ -140,78 +141,41 @@ export function useAuth(): AuthState {
       clearStaleSupabaseAuthStorage()
       setSession(null)
       setUser(null)
+      setProfileError(false)
       setLoading(false)
       toast.error('Session expired, please log in')
       redirectToLogin()
     }, SESSION_RESTORE_HARD_CAP_MS)
 
-    Promise.race([sessionPromise, timeoutPromise])
-      .then(async (result) => {
-        if (!mounted) return
-
-        if ('timedOut' in result) {
-          // Timeout means getSession() is slow, not that the persisted token is corrupt.
-          // We deliberately do NOT setLoading(false) here: with session still null,
-          // RequireAuth would Navigate to /login, unmounting this hook and unsubscribing
-          // the auth listener before the in-flight getSession() can settle. Instead we
-          // keep the loading spinner up and let either (a) the still-running
-          // getSession() eventually resolve, or (b) the onAuthStateChange listener below
-          // fire INITIAL_SESSION, populate state, and clear loading naturally. The
-          // .catch() branch below still handles real getSession() failures.
-          console.warn(
-            '[useAuth] getSession exceeded',
-            SESSION_RESTORE_TIMEOUT_MS,
-            'ms — leaving session intact, awaiting onAuthStateChange',
-          )
-          return
-        }
-
-        settled = true
-        const { data: { session: s } } = result
-        try {
-          setSession(s)
-          if (s?.user) {
-            const profile = await fetchUserProfile(s.user.id)
-            if (mounted) setUser(profile)
-          }
-        } catch (err) {
-          console.error('[useAuth] Failed to load session profile:', err)
-        } finally {
-          if (mounted) setLoading(false)
-        }
-      })
-      .catch((err) => {
-        console.error(
-          '[useAuth] getSession failed — clearing persisted session and redirecting to /login:',
-          err,
-        )
-        if (!mounted) return
-        settled = true
-        clearStaleSupabaseAuthStorage()
-        setSession(null)
-        setUser(null)
-        setLoading(false)
-        toast.error('Session expired, please log in')
-        redirectToLogin()
-      })
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, s) => {
       if (!mounted) return
       settled = true
+      clearTimeout(hardCapTimer)
       setSession(s)
       if (s?.user) {
         try {
           const profile = await fetchUserProfile(s.user.id)
-          if (mounted) setUser(profile)
+          if (!mounted) return
+          if (profile === 'error' || profile === null) {
+            // Fetch failed or no profile row — never render the app shell with
+            // a null user. RequireAuth shows a recoverable error screen.
+            setUser(null)
+            setProfileError(true)
+          } else {
+            setUser(profile)
+            setProfileError(false)
+          }
         } catch (err) {
           console.error('[useAuth] Failed to load profile on auth change:', err)
+          if (mounted) {
+            setUser(null)
+            setProfileError(true)
+          }
         }
       } else {
         setUser(null)
+        setProfileError(false)
       }
-      // Clear the loading spinner once any auth event has been observed. Critical for
-      // the timeout branch above, which intentionally leaves loading=true and relies
-      // on Supabase's INITIAL_SESSION event (delivered here) to settle the UI.
       if (mounted) setLoading(false)
     })
 
@@ -222,5 +186,5 @@ export function useAuth(): AuthState {
     }
   }, [])
 
-  return { session, user, loading }
+  return { session, user, loading, profileError }
 }

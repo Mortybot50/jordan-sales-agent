@@ -262,9 +262,32 @@ Deno.serve(async (req: Request) => {
   // daily-cap computation so the cap can use per-tz day boundaries.
   const { data: users } = await supabase
     .from('users')
-    .select('id, send_timezone, working_hours_start_local, working_hours_end_local')
+    .select('id, full_name, send_timezone, working_hours_start_local, working_hours_end_local')
     .in('id', userIds)
   const userCfg = new Map((users ?? []).map((u) => [u.id, u]))
+
+  // 3b2. P2-9 safety net — re-verify outbound-send readiness server-side before
+  // queuing. The DB trigger trg_email_drafts_approve_ready already blocks the
+  // ->approved transition unless the owner is ready, but readiness can lapse
+  // AFTER approval (inbox deactivated, signature deleted). Mirror the same three
+  // checks (profile name + >=1 signature + >=1 active inbox) here as defence in
+  // depth, and park any now-unready draft instead of sending half-configured.
+  const profileNameByUser = new Map(
+    (users ?? []).map((u) => [u.id, !!((u as { full_name?: string | null }).full_name
+      && String((u as { full_name?: string | null }).full_name).trim())]),
+  )
+  const { data: sigRows } = await supabase
+    .from('email_signature_templates')
+    .select('user_id')
+    .in('user_id', userIds)
+  const usersWithSignature = new Set((sigRows ?? []).map((r) => r.user_id))
+  function isSenderReady(userId: string | null | undefined): boolean {
+    if (!userId) return false
+    const hasName = profileNameByUser.get(userId) ?? false
+    const hasSignature = usersWithSignature.has(userId)
+    const hasInbox = ((accountsByUser.get(userId) ?? []) as unknown[]).length > 0
+    return hasName && hasSignature && hasInbox
+  }
 
   // 3c. Per-account day-start (in user's tz). Used by the daily_send_cap
   // computation below — counts rows scheduled at-or-after the account's
@@ -342,6 +365,14 @@ Deno.serve(async (req: Request) => {
   for (const draft of fresh) {
     const contact = contactMap.get(draft.contact_id)
     if (!contact || !contact.email) {
+      skipped++
+      continue
+    }
+    // P2-9 safety net — owner's send-readiness may have lapsed since approval.
+    // Leave the draft 'approved' so it requeues automatically once setup is
+    // restored; do NOT send half-configured.
+    if (!isSenderReady(draft.created_by)) {
+      console.warn(`enqueue-sends: skipping draft ${draft.id} — sender ${draft.created_by ?? 'unknown'} no longer send-ready`)
       skipped++
       continue
     }

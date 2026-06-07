@@ -563,6 +563,47 @@ export type Database = {
           },
         ]
       }
+      email_signature_templates: {
+        Row: {
+          body_html: string
+          body_text: string
+          brand_key: string
+          created_at: string
+          id: string
+          org_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          body_html: string
+          body_text: string
+          brand_key: string
+          created_at?: string
+          id?: string
+          org_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          body_html?: string
+          body_text?: string
+          brand_key?: string
+          created_at?: string
+          id?: string
+          org_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_signature_templates_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_accounts: {
         Row: {
           brand: string | null

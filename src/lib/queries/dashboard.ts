@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { isOpenPipeline, dealHeadlineValue, type DealFinancialRow } from '@/lib/queries/pipelineFinancials'
 import {
   startOfWeek,
   endOfWeek,
@@ -299,7 +300,11 @@ export function useJordanAnchorMetrics() {
       ] = await Promise.all([
         supabase
           .from('deals')
-          .select('contract_value, stage_id, created_at, closed_at')
+          // closed_at IS NULL is the same direction as isOpenPipeline (which
+          // also excludes closed_at-set rows), so prefiltering here yields an
+          // identical financial set to running the helper over all deals — it
+          // just keeps the fetch small for the velocity/stage-meter reuse below.
+          .select('contract_value, acv, outcome, stage_id, created_at, closed_at, stage:pipeline_stages(is_closed, name)')
           .is('closed_at', null),
         supabase
           .from('activities')
@@ -369,10 +374,14 @@ export function useJordanAnchorMetrics() {
       ])
 
       // Pipeline value & rough WoW velocity via created_at buckets.
-      const pipelineValue = (openDeals ?? []).reduce(
-        (s, d) => s + (Number(d.contract_value) || 0),
-        0,
-      )
+      // One source of truth (see pipelineFinancials.ts): sum the headline value
+      // (ACV with contract_value fallback) over genuinely-open deals only —
+      // stage not closed and not lost. This matches the ACV/TCV bar's set + basis
+      // so the two tiles can no longer contradict each other, and excludes
+      // won-stage deals that never had closed_at stamped.
+      const pipelineValue = (openDeals ?? [])
+        .filter((d) => isOpenPipeline(d as unknown as DealFinancialRow))
+        .reduce((s, d) => s + dealHeadlineValue(d as unknown as DealFinancialRow), 0)
       const createdThisWeek = (openDeals ?? []).filter(
         (d) => d.created_at && d.created_at >= weekStart && d.created_at <= weekEnd,
       ).length

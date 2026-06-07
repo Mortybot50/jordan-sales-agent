@@ -16,6 +16,7 @@ import {
   TIMES_PLACEHOLDER,
   useApproveDraft,
   useDrafts,
+  useDraftQueueCount,
 } from '@/lib/queries/drafts'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -37,6 +38,11 @@ import { cn } from '@/lib/utils'
  */
 export function DraftsPage() {
   const { data: drafts, isLoading } = useDrafts()
+  // Single source of truth for the "X pending" headline — same hook the
+  // sidebar badge reads from, so the two numbers can't drift apart even
+  // when local filters (skipped / intent / diary chip) shrink the visible
+  // queue.
+  const { data: queueCount } = useDraftQueueCount()
   const approveDraft = useApproveDraft()
 
   const [searchParams, setSearchParams] = useSearchParams()
@@ -246,7 +252,12 @@ export function DraftsPage() {
     el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [active])
 
-  const pendingCount = queue.filter((d) => !skippedIds.has(d.id)).length
+  // pendingCount = DB-truth (same as sidebar badge). visibleCount = after
+  // local filters/skips. Surface both when they differ so Jordan never sees
+  // "0 pending" in the header while the badge still shows 6.
+  const pendingCount = queueCount?.total ?? (drafts?.length ?? 0)
+  const visibleCount = queue.filter((d) => !skippedIds.has(d.id)).length
+  const filteredOut = pendingCount - visibleCount
 
   return (
     <div className="flex h-full flex-col">
@@ -258,6 +269,13 @@ export function DraftsPage() {
             <span className="flex flex-wrap items-center gap-2 text-ink-muted">
               <span className="jordan-tnum">{pendingCount}</span>
               <span>pending</span>
+              {filteredOut > 0 && (
+                <>
+                  <span className="text-ink-faint">·</span>
+                  <span className="jordan-tnum">{visibleCount}</span>
+                  <span>shown</span>
+                </>
+              )}
               {skippedIds.size > 0 && (
                 <>
                   <span className="text-ink-faint">·</span>

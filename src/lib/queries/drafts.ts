@@ -184,6 +184,48 @@ export function useApproveDraft() {
   const qc = useQueryClient()
   return useMutation<ApproveDraftResult, Error, string>({
     mutationFn: async (id: string) => {
+      // Outbound-readiness pre-flight — block approve when the user is still
+      // missing profile name / signature / sending inbox. Without this, the
+      // draft flips to 'approved', the worker picks it up, can't send, and
+      // the failure is invisible to Jordan until the next morning briefing.
+      // Same check the dashboard SetupChecklist surfaces.
+      // Fail CLOSED if we can't resolve the current user — never skip the
+      // readiness gate on an auth hiccup (the previous `if (user?.id)` silently
+      // let approval through when getUser() returned null). The DB trigger
+      // trg_email_drafts_approve_ready is the authoritative backstop, but the
+      // client should surface a clear retry rather than a later DB rejection.
+      const { data: authData, error: authErr } = await supabase.auth.getUser()
+      const user = authData?.user
+      if (authErr || !user?.id) {
+        throw new Error('Could not confirm your sign-in — refresh the page and try approving again.')
+      }
+      {
+        const [profileRes, sigRes, inboxRes] = await Promise.all([
+          supabase.from('users').select('full_name').eq('id', user.id).maybeSingle(),
+          supabase
+            .from('email_signature_templates')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', user.id),
+          supabase
+            .from('email_accounts')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', user.id)
+            .eq('status', 'active'),
+        ])
+        const profileNameSet = !!(profileRes.data?.full_name && (profileRes.data.full_name as string).trim())
+        const hasSignature = (sigRes.count ?? 0) > 0
+        const hasInbox = (inboxRes.count ?? 0) > 0
+        if (!profileNameSet || !hasSignature || !hasInbox) {
+          const missing: string[] = []
+          if (!profileNameSet) missing.push('your profile name')
+          if (!hasSignature) missing.push('at least one brand signature')
+          if (!hasInbox) missing.push('a connected sending inbox')
+          throw new Error(
+            `Finish setup before approving — still need ${missing.join(' + ')}. Open Settings to fix.`,
+          )
+        }
+      }
+
       // Learning Loop — read current vs original to capture the edit delta.
       // Approve is the "sent" signal in this app today; if Jordan changed
       // subject or body before approving, record the diff for weekly analysis.

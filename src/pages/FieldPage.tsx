@@ -40,6 +40,26 @@ const KIND_LABELS: Record<FieldPin['kind'], string> = {
 
 const VIC_CENTRE: [number, number] = [144.9631, -37.8136] // Melbourne
 
+// MapLibre + OSM raster — per IDENTITY's "no Mapbox, MapLibre + OSM only"
+// constraint. The previous demotiles.maplibre.org style is a low-detail
+// world placeholder that rendered a near-blank canvas at Melbourne suburb
+// zoom levels; the public OSM tile server gives real street detail and
+// requires no API key. Tile-usage policy is fine for Jordan's solo cadence;
+// attribution is rendered via maplibregl's built-in AttributionControl.
+const OSM_STYLE: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {
+    osm: {
+      type: 'raster',
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '© OpenStreetMap contributors',
+      maxzoom: 19,
+    },
+  },
+  layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
+}
+
 export function FieldPage() {
   const { data: pins, isLoading } = useFieldPins()
   const { user } = useAuth()
@@ -77,9 +97,13 @@ export function FieldPage() {
     })
   }, [pins, suburbFilter, showKinds])
 
+  // "Now" captured once at mount (lazy useState init) so the staleness
+  // threshold below stays a pure value during render rather than a Date.now()
+  // call (which React's lint flags as impure-in-render).
+  const [nowMs] = useState(() => Date.now())
   // Smart-suggestion: contacts not visited 6mo+ AND reopenings within 1km of any contact
   const suggestion = useMemo(() => {
-    const sixMo = Date.now() - 1000 * 60 * 60 * 24 * 180
+    const sixMo = nowMs - 1000 * 60 * 60 * 24 * 180
     const stale = (pins ?? []).filter(
       (p) => p.source === 'contact' && (!p.last_activity_at || new Date(p.last_activity_at).getTime() < sixMo),
     ).length
@@ -92,14 +116,14 @@ export function FieldPage() {
       }
     }
     return { stale, nearby }
-  }, [pins])
+  }, [pins, nowMs])
 
   // Init map (once).
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: 'https://demotiles.maplibre.org/style.json',
+      style: OSM_STYLE,
       center: VIC_CENTRE,
       zoom: 9,
       attributionControl: { compact: true },
@@ -440,7 +464,7 @@ export function FieldPage() {
             <EmptyState
               icon={Compass}
               title="No pins on the map"
-              body="Geocode your contacts (Settings → Field) to see them here, or wait for a reopening event."
+              body="Add a venue address to a contact to see them here — open Contacts, pick a contact, set the venue address. Reopening Radar pins appear automatically when VCGLR data refreshes."
             />
           ) : (
             <div className="rounded-[10px] border border-dashed border-hairline px-3 py-4 text-[12px] text-ink-faint text-center">

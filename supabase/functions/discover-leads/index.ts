@@ -16,6 +16,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { classifyEmailTier } from '../_shared/email-tier.ts'
 import { requireServiceRoleAuth } from '../_shared/auth.ts'
+import { deriveContactName } from '../_shared/contact-name.ts'
 
 // @ts-expect-error Deno globals
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -203,7 +204,6 @@ async function fetchGooglePlaces(
     })
 
     let pageToken: string | undefined
-    let fetched = 0
 
     do {
       if (pageToken) params.set('pagetoken', pageToken)
@@ -240,7 +240,6 @@ async function fetchGooglePlaces(
           emails_and_contacts: [],
         }
         results.push(venue)
-        fetched++
         if (results.length >= limit) break
       }
 
@@ -505,7 +504,11 @@ Deno.serve(async (req: Request) => {
           .insert({
             org_id: search.org_id,
             venue_id: venueId,
-            full_name: c.full_name ?? normalizedEmail.split('@')[0],
+            full_name: deriveContactName({
+              realName: c.full_name,
+              email: normalizedEmail,
+              venueName: raw.name,
+            }),
             email: normalizedEmail,
             phone: c.phone ?? null,
             email_tier: tier,

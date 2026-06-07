@@ -15,4 +15,24 @@ if (!supabaseUrl || !supabaseAnonKey) {
   )
 }
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
+function projectRef(url: string): string {
+  try {
+    return new URL(url).host.split('.')[0] || 'sb'
+  } catch {
+    return 'sb'
+  }
+}
+
+// Single module-scoped client. Explicit auth config so defaults can't drift
+// between SDK upgrades — the storageKey/storage combo is what useAuth's
+// stale-token cleanup matches against.
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    flowType: 'pkce',
+    storageKey: `sb-${projectRef(supabaseUrl)}-auth-token`,
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+  },
+})
