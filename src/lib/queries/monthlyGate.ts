@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { startOfMonth, endOfMonth, subMonths, differenceInCalendarDays, format } from 'date-fns'
 import { useAuth } from '@/hooks/useAuth'
+import { isOpenPipeline } from '@/lib/queries/pipelineFinancials'
 
 export interface MonthlyGate {
   id: string
@@ -193,7 +194,6 @@ export function usePipelineFinancials() {
         const finalValue = r.final_value != null ? Number(r.final_value) : null
         const commissionPct = r.commission_pct != null ? Number(r.commission_pct) : null
         const stageName = r.stage?.name ?? ''
-        const isClosed = !!r.stage?.is_closed
         const isHeld = stageName === 'Hold for Next Month'
         const isLost = r.outcome === 'lost' || /lost/i.test(stageName)
 
@@ -203,7 +203,11 @@ export function usePipelineFinancials() {
           continue
         }
 
-        if (!isClosed && !isLost) {
+        // Shared open-pipeline definition (pipelineFinancials.ts) so this bar
+        // and the dashboard pipeline-value tile agree on which deals are "open".
+        // isLost keeps the extra stage-name guard for legacy rows whose outcome
+        // was never set but whose stage reads "...Lost".
+        if (isOpenPipeline({ stage: r.stage, outcome: r.outcome }) && !isLost) {
           pipelineAcvOpen += acv
           pipelineTcvOpen += tcv
         }
