@@ -75,6 +75,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const unauthorized = await requireServiceRoleAuth(req)
   if (unauthorized) return unauthorized
 
+  // The pg_cron caller's Authorization header carries the vault-sourced
+  // service-role JWT that has just passed this function's verify_jwt gate.
+  // Forward THAT exact token to discover-leads (also verify_jwt=true) rather
+  // than the injected SUPABASE_SERVICE_ROLE_KEY env var: on projects using the
+  // new API-key format the env var is not a verifiable JWT, so discover-leads'
+  // gateway rejected it with 401 and every scheduled search silently failed.
+  // (Fixed 2026-06-02.)
+  const callerAuth = req.headers.get('Authorization') ?? `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+
   // Optional body: { now?: ISO8601 } for deterministic tests. Production
   // pg_cron sends '{}'.
   let bodyNow: Date | null = null
@@ -160,7 +169,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // EdgeRuntime.waitUntil so the runtime keeps them alive after we return.
   if (toDispatch.length > 0) {
     const work = Promise.allSettled(
-      toDispatch.map((id) => dispatchDiscoverLeads(id)),
+      toDispatch.map((id) => dispatchDiscoverLeads(id, callerAuth)),
     )
     // @ts-expect-error EdgeRuntime is a Supabase-specific global
     const er = typeof EdgeRuntime !== 'undefined' ? EdgeRuntime : null
@@ -184,14 +193,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
   })
 })
 
-async function dispatchDiscoverLeads(searchId: string): Promise<void> {
+async function dispatchDiscoverLeads(searchId: string, authHeader: string): Promise<void> {
   const url = `${SUPABASE_URL}/functions/v1/discover-leads`
   try {
     await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        Authorization: authHeader,
       },
       body: JSON.stringify({ search_id: searchId, triggered_by: 'cron' }),
     })
