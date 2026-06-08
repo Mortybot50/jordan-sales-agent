@@ -90,6 +90,18 @@ Deno.test('selectVariant: hospitality venue_type with NO suburb falls back to li
   assertEq(selectVariant(day0Config, ctx).id, 'linkedin')
 })
 
+Deno.test('selectVariant: hospitality venue_type with WHITESPACE-ONLY suburb falls back to linkedin', () => {
+  // Whitespace-only is functionally absent — picking walk-by here would
+  // render "I was down in the area recently and walked past your venue"
+  // which gives the game away as a template.
+  const ctx: SelectionContext = {
+    contactSuburb: '   ',
+    venueType: 'cafe',
+    recentVisitSuburbs: [],
+  }
+  assertEq(selectVariant(day0Config, ctx).id, 'linkedin')
+})
+
 Deno.test('selectVariant: non-hospitality venue with no field visit falls back to linkedin', () => {
   const ctx: SelectionContext = {
     contactSuburb: 'Richmond',
@@ -298,6 +310,27 @@ Deno.test('looksLikeGenericMailboxAlias: negative matches (real names)', () => {
       throw new Error(`expected "${t}" to be NON-generic`)
     }
   }
+})
+
+Deno.test('looksLikeGenericMailboxAlias: catches email-local-part shapes with generic prefix', () => {
+  assertEq(looksLikeGenericMailboxAlias('bookings.richmond'), true)
+  assertEq(looksLikeGenericMailboxAlias('events-team'), true)
+  assertEq(looksLikeGenericMailboxAlias('info+venue'), true)
+  assertEq(looksLikeGenericMailboxAlias('manager_james'), true)
+  assertEq(looksLikeGenericMailboxAlias('hello.world'), true)
+})
+
+Deno.test('looksLikeGenericMailboxAlias: does NOT mistake compound personal handles for generic', () => {
+  assertEq(looksLikeGenericMailboxAlias('samantha-thompson'), false)
+  assertEq(looksLikeGenericMailboxAlias('marco.polo'), false)
+  assertEq(looksLikeGenericMailboxAlias('jordan_marziale'), false)
+})
+
+Deno.test('firstNameFromFullName: alias-prefix detection handles email-local-part separators', () => {
+  // Outscraper sometimes leaks the full local-part as the first token.
+  assertEq(firstNameFromFullName('bookings.richmond'), '')
+  assertEq(firstNameFromFullName('events-team'), '')
+  assertEq(firstNameFromFullName('info+venue'), '')
 })
 
 // ── venue_suburb_present_only rule ─────────────────────────────────

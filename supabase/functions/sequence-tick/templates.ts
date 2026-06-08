@@ -85,23 +85,35 @@ function matchesPredicate(p: VariantPredicate, ctx: SelectionContext): boolean {
 }
 
 function evaluateRule(rule: VariantRule, ctx: SelectionContext): boolean {
-  if (rule.kind === 'field_visit_suburb_match') {
-    if (!ctx.contactSuburb) return false
-    const target = normaliseSuburb(ctx.contactSuburb)
-    return ctx.recentVisitSuburbs
-      .map(normaliseSuburb)
-      .some((s) => s === target)
+  switch (rule.kind) {
+    case 'field_visit_suburb_match': {
+      if (!hasSuburb(ctx)) return false
+      const target = normaliseSuburb(ctx.contactSuburb as string)
+      return ctx.recentVisitSuburbs
+        .map(normaliseSuburb)
+        .some((s) => s === target)
+    }
+    case 'venue_type_in': {
+      if (!ctx.venueType) return false
+      if (!rule.values.includes(ctx.venueType)) return false
+      if (rule.and_suburb_present && !hasSuburb(ctx)) return false
+      return true
+    }
+    case 'venue_suburb_present_only': {
+      return hasSuburb(ctx)
+    }
+    default: {
+      // Exhaustiveness check — adding a new VariantRule kind without
+      // handling it here is a compile error, not a silent false.
+      const _exhaustive: never = rule
+      void _exhaustive
+      return false
+    }
   }
-  if (rule.kind === 'venue_type_in') {
-    if (!ctx.venueType) return false
-    if (!rule.values.includes(ctx.venueType)) return false
-    if (rule.and_suburb_present && !ctx.contactSuburb) return false
-    return true
-  }
-  if (rule.kind === 'venue_suburb_present_only') {
-    return !!ctx.contactSuburb && ctx.contactSuburb.trim() !== ''
-  }
-  return false
+}
+
+function hasSuburb(ctx: SelectionContext): boolean {
+  return !!ctx.contactSuburb && ctx.contactSuburb.trim() !== ''
 }
 
 function normaliseSuburb(s: string): string {
@@ -146,13 +158,22 @@ const GENERIC_MAILBOX_ALIASES: ReadonlySet<string> = new Set([
 
 /** True when a token is so generic it cannot stand in for a first name.
  * Covers common venue-inbox aliases plus tokens with no letters at all
- * (digits, punctuation, the empty string). Case-insensitive. */
+ * (digits, punctuation, the empty string). Case-insensitive.
+ *
+ * Also catches the email-local-part shape: `bookings.richmond`,
+ * `events-team`, `info+venue`, `manager_james` all have a generic alias
+ * as a leading alphabetic prefix terminated by an email-style separator
+ * (`.`, `-`, `+`, `_`) — treat them as generic too. Personal handles like
+ * `samantha-thompson` are unaffected (the leading prefix isn't in the set). */
 export function looksLikeGenericMailboxAlias(token: string | null | undefined): boolean {
   if (!token) return true
   const t = token.trim().toLowerCase()
   if (!t) return true
   if (!/[a-z]/.test(t)) return true
-  return GENERIC_MAILBOX_ALIASES.has(t)
+  if (GENERIC_MAILBOX_ALIASES.has(t)) return true
+  const prefixMatch = t.match(/^([a-z]+)(?=[.\-+_])/)
+  if (prefixMatch && GENERIC_MAILBOX_ALIASES.has(prefixMatch[1])) return true
+  return false
 }
 
 /** Extract the first name from a `full_name` string.

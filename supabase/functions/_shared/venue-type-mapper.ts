@@ -137,9 +137,14 @@ export function classifyVenueType(
 ): VenueType | null {
   if (!categories || categories.length === 0) return null
 
+  // Lowercase + join with " | " between sources. Also collapse underscores
+  // to spaces so Google Places snake_case types (`night_club`,
+  // `fast_food_restaurant`, `meal_takeaway`) match the same multi-word
+  // needles as the Outscraper user-facing strings. The SQL backfill
+  // migration mirrors this normalisation.
   const haystack = categories
     .filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
-    .map((c) => c.toLowerCase())
+    .map((c) => c.toLowerCase().replace(/_/g, ' '))
     .join(' | ')
 
   if (!haystack) return null

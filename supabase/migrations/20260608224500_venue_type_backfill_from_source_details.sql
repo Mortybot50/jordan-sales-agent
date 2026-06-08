@@ -52,15 +52,26 @@ begin
   --   \m  = word-boundary start (transition non-word → word)
   --   \M  = word-boundary end   (transition word → non-word)
   --   ~   = case-sensitive match (we lowercase the haystack first)
+  --
+  -- Underscore normalisation: PostgreSQL's POSIX regex treats `_` as a word
+  -- character, so `\mclub\M` would NOT match inside `night_club`. The TS
+  -- mapper's matchesNeedle() uses `\p{L}\p{N}` for word chars (no underscore)
+  -- and treats `_` as a separator. We normalise underscores to spaces here so
+  -- the two engines classify Google Places types like `night_club` /
+  -- `meal_takeaway` consistently.
   with candidates as (
     select
       id,
-      lower(
-        concat_ws(
-          ' | ',
-          source_details ->> 'category',
-          source_details ->> 'subtypes'
-        )
+      replace(
+        lower(
+          concat_ws(
+            ' | ',
+            source_details ->> 'category',
+            source_details ->> 'subtypes'
+          )
+        ),
+        '_',
+        ' '
       ) as blob
     from venues
     where venue_type is null

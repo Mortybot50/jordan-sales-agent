@@ -142,3 +142,13 @@ Deno.test('mapper: token-boundary — punctuation-adjacent matches still work', 
   assertEq(classifyVenueTypeFromCategory('Restaurant, bar'), 'bar')
   assertEq(classifyVenueTypeFromCategory('(Italian restaurant)'), 'restaurant')
 })
+
+Deno.test('mapper: Google Places snake_case types (underscore as separator)', () => {
+  // Google Places `types` array uses snake_case like `night_club`,
+  // `meal_takeaway`. The mapper treats `_` as a non-word char so the
+  // boundary check still passes. The SQL backfill migration normalises
+  // underscores to spaces to keep parity — see migration comment.
+  assertEq(classifyVenueTypeFromCategory('night_club'), 'club')
+  assertEq(classifyVenueTypeFromCategory('meal_takeaway'), 'qsr')
+  assertEq(classifyVenueTypeFromCategory('fast_food_restaurant'), 'qsr')
+})

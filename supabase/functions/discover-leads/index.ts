@@ -458,10 +458,14 @@ Deno.serve(async (req: Request) => {
 
         // Persist the raw category signals so a future re-classification has
         // material to work with even if the source response is gone.
+        // `category` and `subtypes` are the verbatim Outscraper / Places fields;
+        // `category_signals` is the derived array we actually fed the mapper
+        // (the comma-split union) — distinct from a true `place_types` array,
+        // which Outscraper doesn't surface.
         const sourceDetails: Record<string, unknown> = {
           category: raw.category ?? null,
           subtypes: raw.subtypes ?? null,
-          place_types: categorySignals.length > 0 ? categorySignals : null,
+          category_signals: categorySignals.length > 0 ? categorySignals : null,
         }
 
         // New venue — insert
