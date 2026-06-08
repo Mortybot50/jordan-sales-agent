@@ -57,7 +57,7 @@ export function useDashboardKPIs() {
         supabase.from('activities').select('id', { count: 'exact', head: true })
           .in('activity_type', ['meeting_note', 'meeting_booked'])
           .gte('occurred_at', monthStart).lte('occurred_at', monthEnd),
-        supabase.from('deals').select('contract_value, stage:pipeline_stages(is_closed)')
+        supabase.from('deals').select('contract_value, acv, outcome, closed_at, stage:pipeline_stages(is_closed, name)')
           .is('closed_at', null),
         supabase.from('tasks').select('id', { count: 'exact', head: true })
           .gte('due_at', todayStart).lte('due_at', todayEnd)
@@ -74,12 +74,13 @@ export function useDashboardKPIs() {
             .gte('updated_at', monthStart).lte('updated_at', monthEnd)
         : { count: 0 }
 
-      // Pipeline value = sum of open (non-closed) deals
-      const pipelineValue = (openDeals ?? []).reduce((sum, d) => {
-        const stage = d.stage as { is_closed: boolean } | null
-        if (!stage || !stage.is_closed) return sum + (Number(d.contract_value) || 0)
-        return sum
-      }, 0)
+      // Pipeline value = open deals only, via the shared single source of truth
+      // (pipelineFinancials.ts) so this KPI card reconciles with the monthly ACV
+      // bar and the pipeline hero. Open = stage not closed AND not closed_at AND
+      // not lost; value = acv with contract_value fallback.
+      const pipelineValue = (openDeals ?? [])
+        .filter((d) => isOpenPipeline(d as unknown as DealFinancialRow))
+        .reduce((sum, d) => sum + dealHeadlineValue(d as unknown as DealFinancialRow), 0)
 
       const emailsSent = emailsSentThisWeek ?? 0
       const replies = repliesThisWeek ?? 0
@@ -183,7 +184,7 @@ export function usePipelineHeroMetrics() {
     queryKey: ['pipeline', 'hero-metrics'],
     queryFn: async (): Promise<PipelineHeroMetrics> => {
       const [{ data: openDeals }, { data: stages }, { data: closedDeals }] = await Promise.all([
-        supabase.from('deals').select('contract_value').is('closed_at', null),
+        supabase.from('deals').select('contract_value, acv, outcome, closed_at, stage:pipeline_stages(is_closed, name)').is('closed_at', null),
         supabase.from('pipeline_stages').select('id, name, is_closed'),
         supabase
           .from('deals')
@@ -202,10 +203,12 @@ export function usePipelineHeroMetrics() {
           .map((s) => s.id),
       )
 
-      const pipelineValue = (openDeals ?? []).reduce(
-        (s, d) => s + (Number(d.contract_value) || 0),
-        0,
-      )
+      // Shared single source of truth (pipelineFinancials.ts) — same open
+      // definition + monetary basis as the dashboard KPI card and the monthly
+      // ACV bar, so the pipeline hero can't show a contradicting figure.
+      const pipelineValue = (openDeals ?? [])
+        .filter((d) => isOpenPipeline(d as unknown as DealFinancialRow))
+        .reduce((s, d) => s + dealHeadlineValue(d as unknown as DealFinancialRow), 0)
 
       const dealsWon = (closedDeals ?? []).filter(
         (d) => d.stage_id && wonStageIds.has(d.stage_id),
