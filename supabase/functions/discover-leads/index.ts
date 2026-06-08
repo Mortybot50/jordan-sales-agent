@@ -17,6 +17,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { classifyEmailTier } from '../_shared/email-tier.ts'
 import { requireServiceRoleAuth } from '../_shared/auth.ts'
 import { deriveContactName } from '../_shared/contact-name.ts'
+import { classifyVenueType } from '../_shared/venue-type-mapper.ts'
 
 // @ts-expect-error Deno globals
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -442,6 +443,27 @@ Deno.serve(async (req: Request) => {
       }
 
       if (!venueId) {
+        // Collect every category signal we have so the mapper can pick the
+        // best venue_type from any of them. subtypes is sometimes a comma-
+        // separated string (Outscraper v3) — split before passing in.
+        const categorySignals: Array<string | null | undefined> = []
+        if (raw.category) categorySignals.push(raw.category)
+        if (raw.subtypes) {
+          for (const piece of raw.subtypes.split(',')) {
+            const trimmed = piece.trim()
+            if (trimmed) categorySignals.push(trimmed)
+          }
+        }
+        const mappedVenueType = classifyVenueType(categorySignals)
+
+        // Persist the raw category signals so a future re-classification has
+        // material to work with even if the source response is gone.
+        const sourceDetails: Record<string, unknown> = {
+          category: raw.category ?? null,
+          subtypes: raw.subtypes ?? null,
+          place_types: categorySignals.length > 0 ? categorySignals : null,
+        }
+
         // New venue — insert
         const { data: inserted, error: insErr } = await supabase
           .from('venues')
@@ -469,6 +491,8 @@ Deno.serve(async (req: Request) => {
             social_linkedin: raw.linkedin ?? null,
             social_twitter: raw.twitter ?? null,
             source: search.source_engine,
+            source_details: sourceDetails,
+            venue_type: mappedVenueType,
           })
           .select('id')
           .single()

@@ -32,6 +32,13 @@ export type VariantRule =
       values: string[]
       and_suburb_present: boolean
     }
+  | {
+      /** Safety net for venues whose venue_type is null but we still want
+       * walk-by phrasing as long as we have a suburb to mention in the body.
+       * Picks the variant solely on suburb presence — useful for Outscraper-
+       * sourced venues where venue_type isn't always populated. */
+      kind: 'venue_suburb_present_only'
+    }
 
 export interface TemplateVariantsConfig {
   selection: 'rule_based' | 'single'
@@ -91,6 +98,9 @@ function evaluateRule(rule: VariantRule, ctx: SelectionContext): boolean {
     if (rule.and_suburb_present && !ctx.contactSuburb) return false
     return true
   }
+  if (rule.kind === 'venue_suburb_present_only') {
+    return !!ctx.contactSuburb && ctx.contactSuburb.trim() !== ''
+  }
   return false
 }
 
@@ -107,12 +117,15 @@ export interface RenderContext {
 
 /** Render `{{first_name}}` / `{{venue_name}}` / `{{suburb}}` placeholders.
  * Unknown placeholders are left untouched. Missing context values fall back
- * to a sensible neutral substitute (e.g. "there" for first_name) so cold
- * opens never read like a broken template. */
+ * to a sensible neutral substitute so cold opens never read like a broken
+ * template. When `first_name` is empty we pick "team" if we know a venue
+ * (cold-to-venue-inbox idiom — "Hi team,") and "there" otherwise. */
 export function renderTemplate(template: string, ctx: RenderContext): string {
+  const trimmedFirst = ctx.first_name?.trim() ?? ''
+  const trimmedVenue = ctx.venue_name?.trim() ?? ''
   const safe = {
-    first_name: ctx.first_name?.trim() || 'there',
-    venue_name: ctx.venue_name?.trim() || 'your venue',
+    first_name: trimmedFirst || (trimmedVenue ? 'team' : 'there'),
+    venue_name: trimmedVenue || 'your venue',
     suburb: ctx.suburb?.trim() || 'the area',
   }
   return template.replace(/\{\{\s*(first_name|venue_name|suburb)\s*\}\}/g, (_m, key: string) => {
@@ -120,12 +133,52 @@ export function renderTemplate(template: string, ctx: RenderContext): string {
   })
 }
 
-/** Convenience helper — extract the first token of a full name. */
+/** Common generic mailbox-alias local-parts. When `full_name` is just one of
+ * these (or has one of these as the bit before the em-dash that Outscraper
+ * stamps on its scraped contacts), there is no useful real first name to
+ * surface — the helper returns '' and the renderer falls back to "team". */
+const GENERIC_MAILBOX_ALIASES: ReadonlySet<string> = new Set([
+  'hello', 'info', 'bookings', 'enquiries', 'enquiry', 'reservations',
+  'events', 'functions', 'admin', 'office', 'hi', 'hey', 'team', 'staff',
+  'eat', 'dine', 'ciao', 'food', 'kitchen', 'bar', 'manager', 'gm', 'owner',
+  'contact', 'customerservice', 'marketing', 'accounts', 'sales', 'support',
+])
+
+/** True when a token is so generic it cannot stand in for a first name.
+ * Covers common venue-inbox aliases plus tokens with no letters at all
+ * (digits, punctuation, the empty string). Case-insensitive. */
+export function looksLikeGenericMailboxAlias(token: string | null | undefined): boolean {
+  if (!token) return true
+  const t = token.trim().toLowerCase()
+  if (!t) return true
+  if (!/[a-z]/.test(t)) return true
+  return GENERIC_MAILBOX_ALIASES.has(t)
+}
+
+/** Extract the first name from a `full_name` string.
+ *
+ * Outscraper auto-stamps scraped contacts with `"<local-part> [—–-] <venue-name>"`
+ * where `<local-part>` is the email's local-part (which may be a real first
+ * name like "Sarah" or a generic mailbox alias like "hello"/"bookings"/"info").
+ * We strip that preamble first so we evaluate only the alias, then fall back
+ * to whitespace tokenisation for normal names. Returns '' whenever the result
+ * would be a generic mailbox alias — the renderer will substitute "team". */
 export function firstNameFromFullName(fullName: string | null | undefined): string {
   if (!fullName) return ''
   const trimmed = fullName.trim()
   if (!trimmed) return ''
-  return trimmed.split(/\s+/)[0]
+
+  // Match "<alias> [—–-] <rest>" (em-dash, en-dash, hyphen — all three).
+  // The dash MUST be whitespace-separated to avoid matching hyphenated names
+  // like "Mary-Jane" or surnames like "O'Connor".
+  const aliasPrefix = trimmed.match(/^([^\s—–-]+)\s+[—–-]\s+\S/)
+  if (aliasPrefix) {
+    const alias = aliasPrefix[1]
+    return looksLikeGenericMailboxAlias(alias) ? '' : alias
+  }
+
+  const first = trimmed.split(/\s+/)[0]
+  return looksLikeGenericMailboxAlias(first) ? '' : first
 }
 
 export const HOSPITALITY_VENUE_TYPES = HOSPITALITY_VENUE_TYPES_DEFAULT
