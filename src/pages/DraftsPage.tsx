@@ -114,7 +114,16 @@ export function DraftsPage() {
   // (follow_up, follow_up_soft, follow_up_close) so Jordan sees the whole
   // follow-up funnel in one filter rather than three.
   type TypeFilter = 'all' | 'cold_outreach' | 'follow_up' | 'reply'
-  const typeFilter = (searchParams.get('type') ?? 'all') as TypeFilter
+  const VALID_TYPE_FILTERS: ReadonlySet<TypeFilter> = new Set([
+    'all',
+    'cold_outreach',
+    'follow_up',
+    'reply',
+  ])
+  const rawTypeFilter = searchParams.get('type') ?? 'all'
+  const typeFilter: TypeFilter = VALID_TYPE_FILTERS.has(rawTypeFilter as TypeFilter)
+    ? (rawTypeFilter as TypeFilter)
+    : 'all'
   const setTypeFilter = useCallback(
     (next: TypeFilter) => {
       setSearchParams(

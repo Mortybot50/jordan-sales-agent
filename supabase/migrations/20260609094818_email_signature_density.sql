@@ -93,20 +93,29 @@ BEGIN
     'E-mail communication may be vulnerable to occurrences such as viruses, unauthorized amendment, unauthorized monitoring, tampering and data corruption. We correspond via e-mail subject to the condition that we are not liable for any such viruses, unauthorized amendments, unauthorized monitoring, tampering and/or data corruption or any consequences thereof.'
   );
 
-  -- Idempotency guard: only update rows that still contain the literal
-  -- placeholder. After this migration runs, the placeholder is gone and a
-  -- re-run is a no-op.
+  -- Scope to Jordan's user_id + org_id (per Codex round 2 [P1]). The
+  -- replacement copy is Jordan's identity (name, phone, brand line) so we
+  -- must NOT touch any other user's signature row even if they happen to
+  -- share the placeholder text. user_id + org_id are the same values seeded
+  -- in 20260526120000_email_signature_templates.sql.
+  --
+  -- Idempotency: the placeholder LIKE guard means a re-run is a no-op once
+  -- the migration has applied.
   UPDATE public.email_signature_templates
   SET    body_html  = v_html_purezza,
          body_text  = v_text_purezza,
          updated_at = now()
-  WHERE  brand_key  = 'purezza'
+  WHERE  user_id    = '3b31e455-92c7-4507-8b4b-0e274c27009c'::uuid
+    AND  org_id     = '5557189e-5c2d-4990-afad-6aa1861826cd'::uuid
+    AND  brand_key  = 'purezza'
     AND  body_html LIKE '%[Culligan 90 Years logo]%';
 
   UPDATE public.email_signature_templates
   SET    body_html  = v_html_culligan,
          body_text  = v_text_culligan,
          updated_at = now()
-  WHERE  brand_key  = 'culligan_zip'
+  WHERE  user_id    = '3b31e455-92c7-4507-8b4b-0e274c27009c'::uuid
+    AND  org_id     = '5557189e-5c2d-4990-afad-6aa1861826cd'::uuid
+    AND  brand_key  = 'culligan_zip'
     AND  body_html LIKE '%[Culligan 90 Years logo]%';
 END $$;
