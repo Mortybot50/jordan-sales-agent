@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card'
 
 export function LoginPage() {
   const navigate = useNavigate()
+  // no defaultValue — see brief 2026-06-09 (demo creds prefill explicitly out)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
