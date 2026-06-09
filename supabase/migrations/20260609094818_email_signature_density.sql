@@ -99,8 +99,11 @@ BEGIN
   -- share the placeholder text. user_id + org_id are the same values seeded
   -- in 20260526120000_email_signature_templates.sql.
   --
-  -- Idempotency: the placeholder LIKE guard means a re-run is a no-op once
-  -- the migration has applied.
+  -- Idempotency guard: check body_text (NOT body_html) because the outbound
+  -- pipeline reads only body_text — if the two fields ever diverge (e.g. a
+  -- future hand-edit to body_html alone), we still need to catch the rows
+  -- whose plaintext placeholder is still going out to recipients. Per Codex
+  -- round 3 [P2].
   UPDATE public.email_signature_templates
   SET    body_html  = v_html_purezza,
          body_text  = v_text_purezza,
@@ -108,7 +111,7 @@ BEGIN
   WHERE  user_id    = '3b31e455-92c7-4507-8b4b-0e274c27009c'::uuid
     AND  org_id     = '5557189e-5c2d-4990-afad-6aa1861826cd'::uuid
     AND  brand_key  = 'purezza'
-    AND  body_html LIKE '%[Culligan 90 Years logo]%';
+    AND  body_text LIKE '%[Culligan 90 Years logo]%';
 
   UPDATE public.email_signature_templates
   SET    body_html  = v_html_culligan,
@@ -117,5 +120,5 @@ BEGIN
   WHERE  user_id    = '3b31e455-92c7-4507-8b4b-0e274c27009c'::uuid
     AND  org_id     = '5557189e-5c2d-4990-afad-6aa1861826cd'::uuid
     AND  brand_key  = 'culligan_zip'
-    AND  body_html LIKE '%[Culligan 90 Years logo]%';
+    AND  body_text LIKE '%[Culligan 90 Years logo]%';
 END $$;
