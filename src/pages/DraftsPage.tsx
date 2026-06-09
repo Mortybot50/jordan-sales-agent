@@ -109,6 +109,27 @@ export function DraftsPage() {
     [setSearchParams],
   )
 
+  // Draft-type filter chip — "all" | "cold_outreach" | "follow_up" | "reply".
+  // The "follow_up" bucket matches all three sequence-stage variants
+  // (follow_up, follow_up_soft, follow_up_close) so Jordan sees the whole
+  // follow-up funnel in one filter rather than three.
+  type TypeFilter = 'all' | 'cold_outreach' | 'follow_up' | 'reply'
+  const typeFilter = (searchParams.get('type') ?? 'all') as TypeFilter
+  const setTypeFilter = useCallback(
+    (next: TypeFilter) => {
+      setSearchParams(
+        (prev) => {
+          const p = new URLSearchParams(prev)
+          if (next === 'all') p.delete('type')
+          else p.set('type', next)
+          return p
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
+
   // Collect contact IDs from visible drafts to fetch their intent map
   const allContactIds = useMemo(
     () => [...new Set((drafts ?? []).map((d) => d.contact_id).filter(Boolean))] as string[],
@@ -126,6 +147,14 @@ export function DraftsPage() {
     let source = onlyDiary
       ? drafts.filter((d) => d.draft_kind === 'proposed_meeting')
       : drafts
+
+    // Draft-type filter — column-level, not row-level metadata.
+    if (typeFilter !== 'all') {
+      source = source.filter((d) => {
+        if (typeFilter === 'follow_up') return d.draft_type.startsWith('follow_up')
+        return d.draft_type === typeFilter
+      })
+    }
 
     // Intent filter — match against the contact's most recent inbound intent
     if (intentFilter !== 'all') {
@@ -148,7 +177,7 @@ export function DraftsPage() {
       .filter((d) => skippedIds.has(d.id))
       .sort((a, b) => sortKey(a) - sortKey(b))
     return [...nonSkipped, ...skipped]
-  }, [drafts, skippedIds, onlyDiary, intentFilter, intentMap])
+  }, [drafts, skippedIds, onlyDiary, typeFilter, intentFilter, intentMap])
 
   const diaryCount = useMemo(
     () => (drafts ?? []).filter((d) => d.draft_kind === 'proposed_meeting').length,
@@ -309,6 +338,36 @@ export function DraftsPage() {
         <KbdHint label="Skip">S</KbdHint>
         <KbdHint label="Next">J</KbdHint>
         <KbdHint label="Prev">K</KbdHint>
+      </div>
+
+      {/* Draft-type filter chips — column-level filter (replaces the loud
+          per-row DraftTypeBadge stack that Jordan flagged on 09/06/2026). */}
+      <div className="mt-3 flex flex-wrap items-center gap-2 px-4 sm:px-6">
+        {(
+          [
+            { value: 'all', label: 'All types' },
+            { value: 'cold_outreach', label: 'Cold outreach' },
+            { value: 'follow_up', label: 'Follow-up' },
+            { value: 'reply', label: 'Reply' },
+          ] as const
+        ).map((chip) => (
+          <button
+            key={chip.value}
+            type="button"
+            data-testid={`type-filter-${chip.value}`}
+            data-active={typeFilter === chip.value || undefined}
+            onClick={() => setTypeFilter(chip.value)}
+            className={cn(
+              'inline-flex items-center h-7 rounded-full border px-2.5 text-[11px] font-medium uppercase tracking-[var(--jordan-tracking-label)] transition-colors',
+              typeFilter === chip.value
+                ? 'border-[color:color-mix(in_oklab,var(--jordan-accent)_40%,transparent)] bg-[var(--jordan-accent-soft)] text-[var(--jordan-accent-hover)]'
+                : 'border-hairline bg-surface-2 text-ink-muted hover:bg-surface-3 hover:text-ink',
+            )}
+            aria-pressed={typeFilter === chip.value}
+          >
+            {chip.label}
+          </button>
+        ))}
       </div>
 
       {/* Diary-needed filter chip — only renders when there's at least one

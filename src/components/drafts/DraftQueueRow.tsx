@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { cn, formatRelative } from '@/lib/utils'
-import { DraftTypeBadge, IntentBadge, StatusPill } from '@/components/primitives'
+import { IntentBadge, StatusPill } from '@/components/primitives'
 import { getDraftVariantLabel, type Draft } from '@/lib/queries/drafts'
 
 /**
@@ -61,53 +61,50 @@ export const DraftQueueRow = React.forwardRef<HTMLButtonElement, DraftQueueRowPr
           <div className="mt-0.5 truncate text-[12px] text-ink-muted">
             {draft.subject ?? <span className="italic text-ink-faint">(no subject)</span>}
           </div>
-          <div className="mt-1 flex items-center gap-1.5">
-            <DraftTypeBadge type={draft.draft_type} />
-            {variantLabel && (
-              <StatusPill
-                tone="neutral"
-                uppercase
-                data-testid="variant-pill"
-                title={`Rendered from template variant: ${variantLabel}`}
-              >
-                Variant · {variantLabel}
-              </StatusPill>
-            )}
-            {draft.sequence_enrollment_id && (
-              <StatusPill
-                tone="accent"
-                uppercase
-                title={
-                  draft.sequence_enrollment?.sequence?.name
-                    ? `From sequence: ${draft.sequence_enrollment.sequence.name}`
-                    : 'From a sequence'
-                }
-              >
-                Seq · Step {draft.sequence_step_number ?? '?'}
-              </StatusPill>
-            )}
-            {draft.draft_kind === 'proposed_meeting' && (
-              <StatusPill
-                tone="warm"
-                uppercase
-                data-testid="needs-diary-pill"
-                title="Needs your diary — add real time slots before sending"
-              >
-                <span aria-hidden>📅</span>
-                Needs Your Diary
-              </StatusPill>
-            )}
-            {draft.status === 'edited' && (
-              <StatusPill tone="neutral" uppercase>
-                Edited
-              </StatusPill>
-            )}
-            {isSkipped && (
-              <StatusPill tone="cold" uppercase>
-                Skipped
-              </StatusPill>
-            )}
-          </div>
+          {(draft.sequence_enrollment_id ||
+            draft.draft_kind === 'proposed_meeting' ||
+            draft.status === 'edited' ||
+            isSkipped) && (
+            <div className="mt-1 flex items-center gap-1.5">
+              {draft.sequence_enrollment_id && (
+                <StatusPill
+                  tone="neutral"
+                  uppercase={false}
+                  data-testid="sequence-pill"
+                  title={
+                    draft.sequence_enrollment?.sequence?.name
+                      ? `From sequence: ${draft.sequence_enrollment.sequence.name}`
+                      : 'From a sequence'
+                  }
+                >
+                  {variantLabel
+                    ? `${variantLabel} · Step ${draft.sequence_step_number ?? '?'}`
+                    : `Step ${draft.sequence_step_number ?? '?'}`}
+                </StatusPill>
+              )}
+              {draft.draft_kind === 'proposed_meeting' && (
+                <StatusPill
+                  tone="warm"
+                  uppercase={false}
+                  data-testid="needs-diary-pill"
+                  title="Needs your diary — add real time slots before sending"
+                >
+                  <span aria-hidden>📅</span>
+                  Needs your diary
+                </StatusPill>
+              )}
+              {draft.status === 'edited' && (
+                <StatusPill tone="neutral" uppercase={false}>
+                  Edited
+                </StatusPill>
+              )}
+              {isSkipped && (
+                <StatusPill tone="cold" uppercase={false}>
+                  Skipped
+                </StatusPill>
+              )}
+            </div>
+          )}
         </div>
         <span className="jordan-tnum shrink-0 text-[11px] text-ink-faint">
           {formatRelative(draft.generated_at ?? draft.created_at)}
