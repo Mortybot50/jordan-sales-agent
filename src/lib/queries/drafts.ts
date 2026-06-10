@@ -70,6 +70,13 @@ export interface Draft {
   sequence_step_number: number | null
   sender_inbox_id: string | null
   suppression_reason: string | null
+  /**
+   * User-scheduled send time set from the "Schedule follow-up" CTA in
+   * DealDrawer. NULL = no scheduled send. Auto-send worker (separate PR)
+   * will consume this column; until then the drafts queue surfaces them
+   * as scheduled and Jordan reviews + sends manually.
+   */
+  scheduled_send_at: string | null
   sequence_enrollment?: {
     sequence?: {
       id: string
@@ -479,5 +486,31 @@ export function useGenerateDraft() {
       qc.invalidateQueries({ queryKey: ['drafts'] })
     },
     onError: (err: Error) => toast.error(`Generation failed: ${err.message}`),
+  })
+}
+
+/**
+ * Sets / clears the `scheduled_send_at` column on an existing draft. Pair
+ * with `useGenerateDraft` to implement the "Schedule follow-up" CTA in
+ * DealDrawer — generate first, then schedule on the returned draft id.
+ *
+ * Pass `at: null` to clear a previously scheduled send.
+ */
+export function useScheduleDraft() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, at }: { id: string; at: string | null }) => {
+      const { error } = await supabase
+        .from('email_drafts')
+        .update({ scheduled_send_at: at })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['drafts'] })
+      qc.invalidateQueries({ queryKey: ['draft', vars.id] })
+    },
+    onError: (err: Error) =>
+      toast.error(`Couldn't schedule draft: ${err.message}`),
   })
 }
