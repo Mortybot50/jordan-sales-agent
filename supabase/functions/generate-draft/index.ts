@@ -193,7 +193,13 @@ Deno.serve(async (req) => {
     })
   }
 
-  const { contact_id, draft_type, context_hint } = await req.json()
+  // `deal_id` (optional) — when present, lock generation to that specific deal
+  // instead of falling back to the most-recent-open. Used by the "Schedule
+  // follow-up" CTA in DealDrawer so contacts with multiple open deals get a
+  // draft body tied to the drawer's deal, not the most recent one.
+  // Backwards-compatible — non-scheduled callers omit it and keep the
+  // existing most-recent-open behaviour.
+  const { contact_id, draft_type, context_hint, deal_id } = await req.json()
 
   if (!contact_id || !draft_type) {
     return new Response(JSON.stringify({ error: 'contact_id and draft_type are required' }), {
@@ -303,11 +309,18 @@ Deno.serve(async (req) => {
 
   // Load any open deal for this contact. `product_id` drives signature-brand
   // resolution further down (deal.product_id → products.brand → signature).
-  const { data: deal } = await supabase
+  // If the caller passed `deal_id`, lock the lookup to that specific deal so
+  // the generated body / brand context match what the user is acting from.
+  let dealQuery = supabase
     .from('deals')
     .select('id, title, contract_value, product_id, stage:pipeline_stages(name)')
     .eq('contact_id', contact_id)
-    .is('closed_at', null)
+  if (deal_id) {
+    dealQuery = dealQuery.eq('id', deal_id)
+  } else {
+    dealQuery = dealQuery.is('closed_at', null)
+  }
+  const { data: deal } = await dealQuery
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()

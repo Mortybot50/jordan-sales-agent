@@ -428,10 +428,17 @@ export function useGenerateDraft() {
       contact_id,
       draft_type,
       context_hint,
+      deal_id,
     }: {
       contact_id: string
       draft_type: DraftType
       context_hint?: string
+      /**
+       * Optional deal id — pins generation to a specific deal for contacts
+       * with multiple open deals (DealDrawer Schedule Follow-up CTA). Edge
+       * Function falls back to most-recent-open when omitted (legacy).
+       */
+      deal_id?: string
     }) => {
       // Pre-flight suppression + DNC check — avoids API spend on a hit
       const { data: contact } = await supabase
@@ -457,7 +464,7 @@ export function useGenerateDraft() {
       }
 
       const { data, error } = await supabase.functions.invoke('generate-draft', {
-        body: { contact_id, draft_type, context_hint },
+        body: { contact_id, draft_type, context_hint, deal_id },
       })
 
       if (error) {

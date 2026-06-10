@@ -96,6 +96,10 @@ export function ScheduleFollowUpButton({ deal }: ScheduleFollowUpButtonProps) {
         contact_id: deal.contact_id,
         draft_type: 'follow_up',
         context_hint: contextHintFromDeal() || undefined,
+        // Pin generation to THIS deal so the body / brand context match the
+        // drawer the user is acting from, not the most-recent-open
+        // (Codex Pattern B P2: multi-open-deal contacts).
+        deal_id: deal.id,
       })
       if (!draft?.id) {
         throw new Error('generate-draft returned without a draft id')
