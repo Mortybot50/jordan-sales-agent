@@ -145,6 +145,24 @@ function projectRefFromUrl(url: string | undefined): string | null {
   }
 }
 
+// Routes that render WITHOUT going through RequireAuth. The eager
+// module-load init runs as soon as App imports useAuth — which means it
+// fires on these public pages too. We must NOT redirect a user reading
+// the privacy policy or following an unsubscribe link into auth recovery
+// just because their localStorage has a stale Supabase blob.
+// Kept in sync with the public routes in App.tsx.
+const PUBLIC_PATHS = new Set<string>([
+  '/login',
+  '/privacy',
+  '/unsubscribe',
+  '/__primitives',
+])
+
+function isPublicPath(): boolean {
+  if (typeof window === 'undefined') return true
+  return PUBLIC_PATHS.has(window.location.pathname)
+}
+
 function clearStaleSupabaseAuthStorage(): void {
   if (typeof localStorage === 'undefined') return
   try {
@@ -237,10 +255,19 @@ async function fetchUserProfile(userId: string): Promise<ProfileResult> {
   }
 }
 
-async function loadProfile(session: Session): Promise<void> {
+/**
+ * `mode` controls how profile-fetch failures are surfaced.
+ *
+ * - `initial`  → first load (no user yet, or different user). On failure
+ *                we MUST surface the error UI; the caller has no fallback.
+ * - `refresh`  → background refresh after a TOKEN_REFRESHED / USER_UPDATED
+ *                event. The current authenticated snapshot is still good;
+ *                a failure must NOT disrupt the user — just log and bail.
+ */
+async function loadProfile(session: Session, mode: 'initial' | 'refresh' = 'initial'): Promise<void> {
   const seq = ++profileFetchSeq
   clearProfileTimer()
-  logStep('profile:fetch-start', { userId: session.user.id, seq })
+  logStep('profile:fetch-start', { userId: session.user.id, seq, mode })
 
   let timedOut = false
   const timeoutPromise = new Promise<'timeout'>((resolve) => {
@@ -254,7 +281,7 @@ async function loadProfile(session: Session): Promise<void> {
   try {
     result = await Promise.race([fetchUserProfile(session.user.id), timeoutPromise])
   } catch (err) {
-    logStep('profile:fetch-threw', { error: String(err), seq })
+    logStep('profile:fetch-threw', { error: String(err), seq, mode })
     result = 'error'
   }
   clearProfileTimer()
@@ -264,6 +291,20 @@ async function loadProfile(session: Session): Promise<void> {
   // `unauthenticated` → `authenticated`.
   if (seq !== profileFetchSeq) {
     logStep('profile:fetch-superseded', { seq, current: profileFetchSeq })
+    return
+  }
+
+  const isFailure =
+    timedOut || result === 'timeout' || result === 'error' || result === null
+
+  if (isFailure && mode === 'refresh') {
+    // Background refresh failed — keep the existing authenticated snapshot
+    // intact. Don't bounce a working app to the error screen for a transient
+    // refresh hiccup; the next TOKEN_REFRESHED event will retry.
+    logStep('profile:refresh-failed-keeping-state', {
+      timedOut,
+      result: typeof result === 'string' ? result : result === null ? 'null' : 'profile',
+    })
     return
   }
 
@@ -297,7 +338,7 @@ async function loadProfile(session: Session): Promise<void> {
     })
     return
   }
-  logStep('profile:fetched-ok')
+  logStep('profile:fetched-ok', { mode })
   setSnapshot({
     status: 'authenticated',
     session,
@@ -308,11 +349,28 @@ async function loadProfile(session: Session): Promise<void> {
 }
 
 function onHardCapFire(): void {
+  const onPublic = isPublicPath()
   logStep('init:hard-cap-fired', {
     cap_ms: SESSION_RESTORE_HARD_CAP_MS,
     reauthAttempt: isReauthAttempt(),
+    isPublic: onPublic,
   })
   clearStaleSupabaseAuthStorage()
+
+  if (onPublic) {
+    // On a public page (e.g. /privacy, /unsubscribe). The user isn't trying
+    // to use authenticated features — don't drag them through `?reauth=1`
+    // or kick them to /login. Silent recovery: cleared blob, unauthenticated
+    // snapshot, page keeps rendering.
+    logStep('init:hard-cap-silent-recovery-on-public-path')
+    setSnapshot({
+      status: 'unauthenticated',
+      session: null,
+      user: null,
+      errorReason: null,
+    })
+    return
+  }
 
   if (isReauthAttempt()) {
     // Second consecutive hang after the `?reauth=1` round-trip — the hard
@@ -357,7 +415,8 @@ function initializeAuth(): void {
   // and never deliver INITIAL_SESSION, which would otherwise show 8s of
   // blank "Loading…" before the hard cap recovers it.
   if (cached === 'corrupt') {
-    logStep('init:corrupt-cached-token')
+    const onPublic = isPublicPath()
+    logStep('init:corrupt-cached-token', { isPublic: onPublic })
     clearStaleSupabaseAuthStorage()
     setSnapshot({
       status: 'unauthenticated',
@@ -365,7 +424,12 @@ function initializeAuth(): void {
       user: null,
       errorReason: null,
     })
-    redirectToLogin('reset')
+    // Public pages don't need a session — silently clear the bad blob and
+    // let the page render. Only redirect when the user is on a protected
+    // route that won't work without auth.
+    if (!onPublic) {
+      redirectToLogin('reset')
+    }
     return
   }
 
@@ -388,16 +452,40 @@ function initializeAuth(): void {
       if (isReauthAttempt()) stripReauthFlag()
       return
     }
-    // Optimistic loading snapshot — session is known, profile is loading.
-    // Any consumer that needs the session (e.g. a Supabase RLS query) can
-    // already proceed; only the full AppUser shape is gated on the fetch.
+
+    // TOKEN_REFRESHED / USER_UPDATED on an existing authenticated user
+    // (~50min cadence by default). Keep the current user snapshot visible
+    // and refresh the profile in the background. Without this guard the
+    // app blanks to a full-screen "Loading…" on every token refresh while
+    // the profile refetch completes — an avoidable mid-session disruption.
+    const sameUser =
+      snapshot.status === 'authenticated' &&
+      snapshot.user !== null &&
+      snapshot.user.id === s.user.id
+
+    if (sameUser) {
+      setSnapshot({
+        status: 'authenticated',
+        session: s,
+        user: snapshot.user,
+        errorReason: null,
+      })
+      void loadProfile(s, 'refresh')
+      return
+    }
+
+    // Genuine new session (INITIAL_SESSION on cold mount, SIGNED_IN, or
+    // a different user). Optimistic loading snapshot — session is known,
+    // profile is loading. Any consumer that needs the session (e.g. a
+    // Supabase RLS query) can already proceed; only the full AppUser
+    // shape is gated on the fetch.
     setSnapshot({
       status: 'loading',
       session: s,
       user: null,
       errorReason: null,
     })
-    void loadProfile(s)
+    void loadProfile(s, 'initial')
   })
   subscription = data.subscription
 
