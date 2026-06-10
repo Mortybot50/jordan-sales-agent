@@ -49,6 +49,9 @@ import {
   Clock, Moon, User, Building2,
 } from 'lucide-react'
 import { MarkOutcomeDialog } from './MarkOutcomeDialog'
+import { ConversationRecap } from './ConversationRecap'
+import { WinProbabilityBar } from './WinProbabilityBar'
+import { ScheduleFollowUpButton } from './ScheduleFollowUpButton'
 
 interface DealDrawerProps {
   deal: Deal
