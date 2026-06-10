@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { differenceInDays, parseISO } from 'date-fns'
+import type { ScoreBreakdownRule, ThreadExcerpt } from '@/lib/leadScoring'
 
 export interface Deal {
   id: string
@@ -69,6 +70,27 @@ export interface Deal {
     score: number
     tier: 'hot' | 'warm' | 'cold'
   } | null
+  /**
+   * Explainable rule-based win probability (0-100). Distinct from
+   * `lead_score` above (joined from the lead_scores history table for
+   * hot/warm/cold tiering). NULL when uncomputed — drawer shows
+   * "Score pending" placeholder. See migration
+   * 20260610102316_deal_drawer_rebuild.sql.
+   */
+  win_probability?: number | null
+  /**
+   * JSONB array of { rule, weight, applied, detail? } records describing
+   * which scoring rules fired. Drives the tap-to-expand breakdown popover.
+   * Matches the structure emitted by
+   * scripts/backfill-deal-thread-excerpt.py.
+   */
+  win_probability_breakdown?: ScoreBreakdownRule[] | null
+  /**
+   * Last-message thread context lifted from the PST import — drives the
+   * ConversationRecap panel at the top of DealDrawer. NULL when no thread
+   * context exists (e.g. manually created deal).
+   */
+  thread_excerpt?: ThreadExcerpt | null
   days_in_stage?: number
   /**
    * True when the deal is currently snoozed (snoozed_until is in the future).
