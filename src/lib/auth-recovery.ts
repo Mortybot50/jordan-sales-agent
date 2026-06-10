@@ -58,3 +58,36 @@ export function buildReauthUrl(): string {
     window.location.pathname + `?${params.toString()}` + window.location.hash
   )
 }
+
+/**
+ * True iff `raw` looks like a corrupt Supabase auth-token blob.
+ *
+ * The Supabase JS SDK persists the session as a JSON object under
+ * `sb-<ref>-auth-token`. If the blob is malformed, `gotrue`'s `_initialize()`
+ * can swallow the parse error and never deliver INITIAL_SESSION — useAuth
+ * would otherwise see this only via the 8s hard cap (a full 8s blank).
+ *
+ * Pre-flight detection lets us steer to `/login?reset=1` immediately.
+ *
+ * Inputs:
+ *   null        → not corrupt (absent ≠ corrupt; caller distinguishes).
+ *   ""          → corrupt (JSON.parse throws on empty string).
+ *   "{...}"     → corrupt unless the parsed object has an `access_token` key.
+ *   "garbage"   → corrupt.
+ */
+export function isCorruptCachedSessionBlob(raw: string | null): boolean {
+  if (raw === null) return false
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      'access_token' in (parsed as Record<string, unknown>)
+    ) {
+      return false
+    }
+    return true
+  } catch {
+    return true
+  }
+}

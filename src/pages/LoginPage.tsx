@@ -1,18 +1,35 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 
+// Recovery-flag → banner message. Set by useAuth when it routes the user back
+// to /login after a corrupt cached token (`?reset=1`) or a persistent
+// session-restore failure (`?error=auth-init-failed`). Without these banners
+// the user lands on a blank-feeling /login with no explanation of why their
+// previous session evaporated.
+function recoveryBanner(params: URLSearchParams): string | null {
+  if (params.get('reset') === '1') {
+    return 'Your session expired — please sign in again.'
+  }
+  if (params.get('error') === 'auth-init-failed') {
+    return 'We couldn’t restore your session. Please sign in again.'
+  }
+  return null
+}
+
 export function LoginPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   // no defaultValue — see brief 2026-06-09 (demo creds prefill explicitly out)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const banner = recoveryBanner(searchParams)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -58,6 +75,14 @@ export function LoginPage() {
             <h2 className="text-base font-semibold">Sign in to your account</h2>
           </CardHeader>
           <CardContent className="pb-5">
+            {banner && (
+              <p
+                role="status"
+                className="mb-4 rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-900"
+              >
+                {banner}
+              </p>
+            )}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="email">Email address</Label>

@@ -16,6 +16,7 @@ import assert from 'node:assert/strict'
 import {
   REAUTH_FLAG,
   buildReauthUrl,
+  isCorruptCachedSessionBlob,
   isReauthAttempt,
   stripReauthFlag,
 } from '../src/lib/auth-recovery.ts'
@@ -179,4 +180,51 @@ test('buildReauthUrl: with hash → preserves hash', () => {
 test('buildReauthUrl: already on ?reauth=1 → still just one flag (idempotent)', () => {
   installMockWindow({ pathname: '/dashboard', search: '?reauth=1', hash: '' })
   assert.equal(buildReauthUrl(), '/dashboard?reauth=1')
+})
+
+// --- isCorruptCachedSessionBlob -------------------------------------------
+// Pre-flight tripwire for the corrupt-token failure mode (path A from the
+// 2026-06-10 hotfix brief). The Supabase SDK persists the session as
+// `{ access_token, refresh_token, ... }` JSON; anything else is corrupt.
+
+test('isCorruptCachedSessionBlob: null → not corrupt (absent ≠ corrupt)', () => {
+  assert.equal(isCorruptCachedSessionBlob(null), false)
+})
+
+test('isCorruptCachedSessionBlob: empty string → corrupt (JSON.parse throws)', () => {
+  assert.equal(isCorruptCachedSessionBlob(''), true)
+})
+
+test('isCorruptCachedSessionBlob: garbage → corrupt', () => {
+  assert.equal(isCorruptCachedSessionBlob('not-json-at-all'), true)
+})
+
+test('isCorruptCachedSessionBlob: truncated JSON → corrupt', () => {
+  assert.equal(isCorruptCachedSessionBlob('{"access_token":"abc"'), true)
+})
+
+test('isCorruptCachedSessionBlob: parses to null → corrupt (no access_token)', () => {
+  assert.equal(isCorruptCachedSessionBlob('null'), true)
+})
+
+test('isCorruptCachedSessionBlob: parses to array → corrupt (no access_token)', () => {
+  assert.equal(isCorruptCachedSessionBlob('[1,2,3]'), true)
+})
+
+test('isCorruptCachedSessionBlob: parses to object without access_token → corrupt', () => {
+  assert.equal(isCorruptCachedSessionBlob('{"refresh_token":"x"}'), true)
+})
+
+test('isCorruptCachedSessionBlob: valid session shape → ok', () => {
+  const valid = JSON.stringify({
+    access_token: 'ey...',
+    refresh_token: 'rt-xyz',
+    expires_at: 1_899_999_999,
+    user: { id: 'uuid' },
+  })
+  assert.equal(isCorruptCachedSessionBlob(valid), false)
+})
+
+test('isCorruptCachedSessionBlob: minimal valid shape (just access_token) → ok', () => {
+  assert.equal(isCorruptCachedSessionBlob('{"access_token":"x"}'), false)
 })
