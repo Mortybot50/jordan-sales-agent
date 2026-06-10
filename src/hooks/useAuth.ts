@@ -1,10 +1,9 @@
 import { useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
-import { supabase } from '@/lib/supabase'
+import { supabase, preflightClearedCorruptToken } from '@/lib/supabase'
 import { Sentry } from '@/lib/sentry'
 import {
   buildReauthUrl,
-  isCorruptCachedSessionBlob,
   isReauthAttempt,
   stripReauthFlag,
 } from '@/lib/auth-recovery'
@@ -136,15 +135,6 @@ function logStep(step: string, extra: Record<string, unknown> = {}): void {
   }
 }
 
-function projectRefFromUrl(url: string | undefined): string | null {
-  if (!url) return null
-  try {
-    return new URL(url).host.split('.')[0] || null
-  } catch {
-    return null
-  }
-}
-
 // Routes that render WITHOUT going through RequireAuth. The eager
 // module-load init runs as soon as App imports useAuth — which means it
 // fires on these public pages too. We must NOT redirect a user reading
@@ -179,31 +169,6 @@ function clearStaleSupabaseAuthStorage(): void {
   } catch (err) {
     console.error('[useAuth] localStorage clear failed:', err)
   }
-}
-
-type CachedSessionStatus = 'ok' | 'absent' | 'corrupt'
-
-/**
- * Pre-flight inspection of the persisted auth token. Runs BEFORE the first
- * `supabase.auth.*` call — if the cached blob is unparseable, the SDK's
- * `_initialize()` may swallow the parse error and never deliver
- * INITIAL_SESSION, which would otherwise be caught only by the 8s hard cap
- * (a full 8s blank screen). Detecting it here lets us steer to a clean
- * `/login?reset=1` immediately.
- */
-function inspectCachedSession(): CachedSessionStatus {
-  if (typeof window === 'undefined') return 'absent'
-  const ref = projectRefFromUrl(import.meta.env.VITE_SUPABASE_URL)
-  if (!ref) return 'absent'
-  const key = `sb-${ref}-auth-token`
-  let raw: string | null
-  try {
-    raw = window.localStorage.getItem(key)
-  } catch {
-    return 'absent'
-  }
-  if (raw === null) return 'absent'
-  return isCorruptCachedSessionBlob(raw) ? 'corrupt' : 'ok'
 }
 
 function redirectToLogin(reason?: 'reset' | 'auth-init-failed'): void {
@@ -403,22 +368,22 @@ function initializeAuth(): void {
   initialized = true
   initStartedAt = Date.now()
 
-  const cached = inspectCachedSession()
   logStep('init:start', {
-    cached,
+    preflightClearedCorruptToken,
     reauthAttempt: isReauthAttempt(),
     pathname: window.location.pathname,
   })
 
-  // Corrupt-token tripwire (path A). Detect a malformed cached blob BEFORE
-  // the SDK reads it — gotrue's `_initialize()` may swallow the parse error
-  // and never deliver INITIAL_SESSION, which would otherwise show 8s of
-  // blank "Loading…" before the hard cap recovers it.
+  // Corrupt-token tripwire (path A). The actual detection + clear happens
+  // in supabase.ts BEFORE createClient() — the SDK kicks off
+  // `auth._initialize()` synchronously during client construction, so any
+  // post-construction check would race the SDK's first storage read. Here
+  // we just surface the recovery: redirect protected routes to
+  // /login?reset=1; let public routes fall through to a live subscription.
   let skipHardCap = false
-  if (cached === 'corrupt') {
+  if (preflightClearedCorruptToken) {
     const onPublic = isPublicPath()
-    logStep('init:corrupt-cached-token', { isPublic: onPublic })
-    clearStaleSupabaseAuthStorage()
+    logStep('init:corrupt-cached-token-preflight', { isPublic: onPublic })
     setSnapshot({
       status: 'unauthenticated',
       session: null,
