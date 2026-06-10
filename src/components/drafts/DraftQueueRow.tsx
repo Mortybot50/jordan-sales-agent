@@ -94,6 +94,7 @@ export const DraftQueueRow = React.forwardRef<HTMLButtonElement, DraftQueueRowPr
                   data-testid="needs-diary-pill"
                   className="whitespace-nowrap"
                   title="Needs your diary — add real time slots before sending"
+                  aria-label="Needs your diary — add real time slots before sending"
                 >
                   <span aria-hidden>📅</span>
                   Diary
