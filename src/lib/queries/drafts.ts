@@ -39,6 +39,13 @@ export function hasUnresolvedPlaceholder(body: string | null | undefined): boole
  * and preview chips, or null when the draft wasn't rendered from a variant
  * template (LLM path, manual draft, ad-hoc reply, etc.).
  */
+const FRIENDLY_VARIANT_LABELS: Record<string, string> = {
+  walk_by: 'Walk-by',
+  linkedin: 'LinkedIn',
+  soft_nudge: 'Soft nudge',
+  close_the_loop: 'Close the loop',
+}
+
 export function getDraftVariantLabel(draft: Pick<Draft, 'context_json'>): string | null {
   const ctx = draft.context_json
   if (!ctx || typeof ctx !== 'object') return null
@@ -46,9 +53,9 @@ export function getDraftVariantLabel(draft: Pick<Draft, 'context_json'>): string
   if (productionPath !== 'template') return null
   const variantId = (ctx as { variant_id?: unknown }).variant_id
   if (typeof variantId !== 'string' || variantId.length === 0) return null
-  return variantId
-    .replace(/[_-]+/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase())
+  const friendly = FRIENDLY_VARIANT_LABELS[variantId]
+  if (friendly) return friendly
+  return variantId.replace(/_/g, '-').replace(/^\w/, (c) => c.toUpperCase())
 }
 
 export interface Draft {
