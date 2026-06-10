@@ -348,6 +348,13 @@ export function useUpdateDeal() {
         recently_returned: _recentlyReturned,
         days_since_last_activity: _dsla,
         last_activity_at: _laa,
+        // Drawer-rebuild fields — computed by the backfill script. Strip
+        // from PATCH payloads so the form's handleSave can't overwrite
+        // them, and so the typed Supabase client doesn't choke on the
+        // richer TS types (ThreadExcerpt vs the generated Json shape).
+        win_probability: _wp,
+        win_probability_breakdown: _wpb,
+        thread_excerpt: _te,
         ...dbUpdates
       } = updates
       const { data, error } = await supabase
