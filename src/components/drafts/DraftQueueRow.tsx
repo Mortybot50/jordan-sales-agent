@@ -65,16 +65,21 @@ export const DraftQueueRow = React.forwardRef<HTMLButtonElement, DraftQueueRowPr
             draft.draft_kind === 'proposed_meeting' ||
             draft.status === 'edited' ||
             isSkipped) && (
-            <div className="mt-1 flex items-center gap-1.5">
+            <div className="mt-1 flex min-w-0 items-center gap-1">
               {draft.sequence_enrollment_id && (
                 <StatusPill
                   tone="neutral"
                   uppercase={false}
                   data-testid="sequence-pill"
+                  className="max-w-[140px] truncate whitespace-nowrap"
                   title={
                     draft.sequence_enrollment?.sequence?.name
-                      ? `From sequence: ${draft.sequence_enrollment.sequence.name}`
-                      : 'From a sequence'
+                      ? `From sequence: ${draft.sequence_enrollment.sequence.name}${
+                          variantLabel ? ` — ${variantLabel} · Step ${draft.sequence_step_number ?? '?'}` : ''
+                        }`
+                      : `From a sequence${
+                          variantLabel ? ` — ${variantLabel} · Step ${draft.sequence_step_number ?? '?'}` : ''
+                        }`
                   }
                 >
                   {variantLabel
@@ -87,19 +92,31 @@ export const DraftQueueRow = React.forwardRef<HTMLButtonElement, DraftQueueRowPr
                   tone="warm"
                   uppercase={false}
                   data-testid="needs-diary-pill"
+                  className="whitespace-nowrap"
                   title="Needs your diary — add real time slots before sending"
+                  aria-label="Needs your diary — add real time slots before sending"
                 >
                   <span aria-hidden>📅</span>
-                  Needs your diary
+                  Diary
                 </StatusPill>
               )}
               {draft.status === 'edited' && (
-                <StatusPill tone="neutral" uppercase={false}>
+                <StatusPill
+                  tone="neutral"
+                  uppercase={false}
+                  className="whitespace-nowrap"
+                  title="You edited this draft before approval"
+                >
                   Edited
                 </StatusPill>
               )}
               {isSkipped && (
-                <StatusPill tone="cold" uppercase={false}>
+                <StatusPill
+                  tone="cold"
+                  uppercase={false}
+                  className="whitespace-nowrap"
+                  title="Skipped — press J to return to it later"
+                >
                   Skipped
                 </StatusPill>
               )}
