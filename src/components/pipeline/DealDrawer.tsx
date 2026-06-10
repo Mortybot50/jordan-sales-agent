@@ -49,6 +49,9 @@ import {
   Clock, Moon, User, Building2,
 } from 'lucide-react'
 import { MarkOutcomeDialog } from './MarkOutcomeDialog'
+import { ConversationRecap } from './ConversationRecap'
+import { WinProbabilityBar } from './WinProbabilityBar'
+import { ScheduleFollowUpButton } from './ScheduleFollowUpButton'
 
 interface DealDrawerProps {
   deal: Deal
@@ -340,6 +343,13 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
               )}
             </div>
           </SheetHeader>
+
+          {/* ── Win probability + conversation recap (deal-drawer-rebuild) */}
+          <WinProbabilityBar
+            score={deal.win_probability ?? null}
+            breakdown={deal.win_probability_breakdown ?? null}
+          />
+          <ConversationRecap excerpt={deal.thread_excerpt ?? null} />
 
           {/* ── Financial panel ─────────────────────────────── */}
           {(acv != null || tcv != null || commission != null) && (
@@ -871,6 +881,13 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
               </div>
             </div>
           </form>
+
+          {/* ── Schedule follow-up CTA (deal-drawer-rebuild) ─────────── */}
+          {!isClosedWon && !isLost && !isHeld && deal.contact_id && (
+            <div className="mt-4">
+              <ScheduleFollowUpButton deal={deal} />
+            </div>
+          )}
 
           <Separator className="my-5" />
 

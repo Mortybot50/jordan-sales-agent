@@ -239,6 +239,108 @@ export type Database = {
           },
         ]
       }
+      claude_conversations: {
+        Row: {
+          contact_id: string | null
+          created_at: string
+          id: string
+          org_id: string
+          scope: string
+          title: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          contact_id?: string | null
+          created_at?: string
+          id?: string
+          org_id: string
+          scope: string
+          title?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          contact_id?: string | null
+          created_at?: string
+          id?: string
+          org_id?: string
+          scope?: string
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "claude_conversations_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "claude_conversations_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      claude_messages: {
+        Row: {
+          content: string
+          conversation_id: string
+          cost_usd: number | null
+          created_at: string
+          id: string
+          model: string | null
+          org_id: string
+          role: string
+          tokens_in: number | null
+          tokens_out: number | null
+        }
+        Insert: {
+          content: string
+          conversation_id: string
+          cost_usd?: number | null
+          created_at?: string
+          id?: string
+          model?: string | null
+          org_id: string
+          role: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+        }
+        Update: {
+          content?: string
+          conversation_id?: string
+          cost_usd?: number | null
+          created_at?: string
+          id?: string
+          model?: string | null
+          org_id?: string
+          role?: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "claude_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "claude_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "claude_messages_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_tags: {
         Row: {
           contact_id: string
@@ -407,10 +509,13 @@ export type Database = {
           stage_id: string | null
           tcv: number | null
           term_months: number | null
+          thread_excerpt: Json | null
           title: string | null
           updated_at: string | null
           venue_id: string | null
           weekly_price_override: number | null
+          win_probability: number | null
+          win_probability_breakdown: Json | null
         }
         Insert: {
           acv?: number | null
@@ -441,10 +546,13 @@ export type Database = {
           stage_id?: string | null
           tcv?: number | null
           term_months?: number | null
+          thread_excerpt?: Json | null
           title?: string | null
           updated_at?: string | null
           venue_id?: string | null
           weekly_price_override?: number | null
+          win_probability?: number | null
+          win_probability_breakdown?: Json | null
         }
         Update: {
           acv?: number | null
@@ -475,10 +583,13 @@ export type Database = {
           stage_id?: string | null
           tcv?: number | null
           term_months?: number | null
+          thread_excerpt?: Json | null
           title?: string | null
           updated_at?: string | null
           venue_id?: string | null
           weekly_price_override?: number | null
+          win_probability?: number | null
+          win_probability_breakdown?: Json | null
         }
         Relationships: [
           {
@@ -563,47 +674,6 @@ export type Database = {
           },
         ]
       }
-      email_signature_templates: {
-        Row: {
-          body_html: string
-          body_text: string
-          brand_key: string
-          created_at: string
-          id: string
-          org_id: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          body_html: string
-          body_text: string
-          brand_key: string
-          created_at?: string
-          id?: string
-          org_id: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          body_html?: string
-          body_text?: string
-          brand_key?: string
-          created_at?: string
-          id?: string
-          org_id?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "email_signature_templates_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "orgs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       email_accounts: {
         Row: {
           brand: string | null
@@ -628,6 +698,8 @@ export type Database = {
           status: string
           updated_at: string
           user_id: string
+          warmup_day: number
+          warmup_day_bumped_on: string | null
         }
         Insert: {
           brand?: string | null
@@ -652,6 +724,8 @@ export type Database = {
           status?: string
           updated_at?: string
           user_id: string
+          warmup_day?: number
+          warmup_day_bumped_on?: string | null
         }
         Update: {
           brand?: string | null
@@ -676,6 +750,8 @@ export type Database = {
           status?: string
           updated_at?: string
           user_id?: string
+          warmup_day?: number
+          warmup_day_bumped_on?: string | null
         }
         Relationships: [
           {
@@ -714,6 +790,7 @@ export type Database = {
           org_id: string
           original_body: string | null
           original_subject: string | null
+          scheduled_send_at: string | null
           sender_inbox_id: string | null
           sendgrid_msg_id: string | null
           sent_at: string | null
@@ -742,6 +819,7 @@ export type Database = {
           org_id: string
           original_body?: string | null
           original_subject?: string | null
+          scheduled_send_at?: string | null
           sender_inbox_id?: string | null
           sendgrid_msg_id?: string | null
           sent_at?: string | null
@@ -770,6 +848,7 @@ export type Database = {
           org_id?: string
           original_body?: string | null
           original_subject?: string | null
+          scheduled_send_at?: string | null
           sender_inbox_id?: string | null
           sendgrid_msg_id?: string | null
           sent_at?: string | null
@@ -1005,6 +1084,47 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_signature_templates: {
+        Row: {
+          body_html: string
+          body_text: string
+          brand_key: string
+          created_at: string
+          id: string
+          org_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          body_html: string
+          body_text: string
+          brand_key: string
+          created_at?: string
+          id?: string
+          org_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          body_html?: string
+          body_text?: string
+          brand_key?: string
+          created_at?: string
+          id?: string
+          org_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_signature_templates_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
             referencedColumns: ["id"]
           },
         ]
@@ -1250,6 +1370,7 @@ export type Database = {
           search_id: string
           started_at: string
           status: string
+          triggered_by: string
         }
         Insert: {
           cost_usd?: number | null
@@ -1262,6 +1383,7 @@ export type Database = {
           search_id: string
           started_at?: string
           status?: string
+          triggered_by?: string
         }
         Update: {
           cost_usd?: number | null
@@ -1274,6 +1396,7 @@ export type Database = {
           search_id?: string
           started_at?: string
           status?: string
+          triggered_by?: string
         }
         Relationships: [
           {
@@ -1462,6 +1585,66 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "monthly_gates_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_log: {
+        Row: {
+          activity_id: string | null
+          body: string | null
+          channel: string
+          created_at: string
+          id: string
+          kind: string
+          org_id: string
+          reason: string | null
+          sent_at: string | null
+          status: string
+          target: string
+          user_id: string
+        }
+        Insert: {
+          activity_id?: string | null
+          body?: string | null
+          channel: string
+          created_at?: string
+          id?: string
+          kind: string
+          org_id: string
+          reason?: string | null
+          sent_at?: string | null
+          status: string
+          target: string
+          user_id: string
+        }
+        Update: {
+          activity_id?: string | null
+          body?: string | null
+          channel?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          org_id?: string
+          reason?: string | null
+          sent_at?: string | null
+          status?: string
+          target?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_log_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_log_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
@@ -1714,6 +1897,60 @@ export type Database = {
             columns: ["venue_observation_prior"]
             isOneToOne: false
             referencedRelation: "venue_observations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reply_scan_runs: {
+        Row: {
+          classified_replies: number
+          email_account_id: string
+          errors: string[] | null
+          finished_at: string | null
+          id: string
+          matched_replies: number
+          org_id: string
+          scanned_messages: number
+          started_at: string
+          status: string
+        }
+        Insert: {
+          classified_replies?: number
+          email_account_id: string
+          errors?: string[] | null
+          finished_at?: string | null
+          id?: string
+          matched_replies?: number
+          org_id: string
+          scanned_messages?: number
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          classified_replies?: number
+          email_account_id?: string
+          errors?: string[] | null
+          finished_at?: string | null
+          id?: string
+          matched_replies?: number
+          org_id?: string
+          scanned_messages?: number
+          started_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reply_scan_runs_email_account_id_fkey"
+            columns: ["email_account_id"]
+            isOneToOne: false
+            referencedRelation: "email_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reply_scan_runs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
             referencedColumns: ["id"]
           },
         ]
@@ -2329,6 +2566,10 @@ export type Database = {
           full_name: string | null
           icp_config: Json | null
           id: string
+          notify_quiet_hours_end: number | null
+          notify_quiet_hours_start: number | null
+          notify_warm_replies: boolean
+          notify_whatsapp_e164: string | null
           org_id: string
           public_slug: string | null
           role: string | null
@@ -2352,6 +2593,10 @@ export type Database = {
           full_name?: string | null
           icp_config?: Json | null
           id: string
+          notify_quiet_hours_end?: number | null
+          notify_quiet_hours_start?: number | null
+          notify_warm_replies?: boolean
+          notify_whatsapp_e164?: string | null
           org_id: string
           public_slug?: string | null
           role?: string | null
@@ -2375,6 +2620,10 @@ export type Database = {
           full_name?: string | null
           icp_config?: Json | null
           id?: string
+          notify_quiet_hours_end?: number | null
+          notify_quiet_hours_start?: number | null
+          notify_warm_replies?: boolean
+          notify_whatsapp_e164?: string | null
           org_id?: string
           public_slug?: string | null
           role?: string | null
@@ -2391,6 +2640,101 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "orgs"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      vcglr_licences: {
+        Row: {
+          address: string | null
+          category: string | null
+          council: string | null
+          first_seen_at: string
+          last_seen_at: string
+          lat: number | null
+          licence_number: string
+          licensee: string | null
+          lng: number | null
+          postcode: string | null
+          region: string | null
+          snapshot_date: string
+          status: string
+          suburb: string | null
+          trading_hours: string | null
+          trading_name: string | null
+        }
+        Insert: {
+          address?: string | null
+          category?: string | null
+          council?: string | null
+          first_seen_at?: string
+          last_seen_at?: string
+          lat?: number | null
+          licence_number: string
+          licensee?: string | null
+          lng?: number | null
+          postcode?: string | null
+          region?: string | null
+          snapshot_date: string
+          status?: string
+          suburb?: string | null
+          trading_hours?: string | null
+          trading_name?: string | null
+        }
+        Update: {
+          address?: string | null
+          category?: string | null
+          council?: string | null
+          first_seen_at?: string
+          last_seen_at?: string
+          lat?: number | null
+          licence_number?: string
+          licensee?: string | null
+          lng?: number | null
+          postcode?: string | null
+          region?: string | null
+          snapshot_date?: string
+          status?: string
+          suburb?: string | null
+          trading_hours?: string | null
+          trading_name?: string | null
+        }
+        Relationships: []
+      }
+      vcglr_signals: {
+        Row: {
+          detected_at: string
+          event_type: string
+          id: string
+          licence_number: string
+          payload: Json
+          snapshot_date_after: string
+          snapshot_date_before: string | null
+        }
+        Insert: {
+          detected_at?: string
+          event_type: string
+          id?: string
+          licence_number: string
+          payload?: Json
+          snapshot_date_after: string
+          snapshot_date_before?: string | null
+        }
+        Update: {
+          detected_at?: string
+          event_type?: string
+          id?: string
+          licence_number?: string
+          payload?: Json
+          snapshot_date_after?: string
+          snapshot_date_before?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vcglr_signals_licence_number_fkey"
+            columns: ["licence_number"]
+            isOneToOne: false
+            referencedRelation: "vcglr_licences"
+            referencedColumns: ["licence_number"]
           },
         ]
       }
@@ -2536,6 +2880,11 @@ export type Database = {
           postcode: string | null
           rating: number | null
           review_count: number | null
+          review_decided_at: string | null
+          review_decided_by: string | null
+          review_defer_until: string | null
+          review_notes: string | null
+          review_status: string
           seasonality_window: string | null
           service_style: string | null
           social_facebook: string | null
@@ -2587,6 +2936,11 @@ export type Database = {
           postcode?: string | null
           rating?: number | null
           review_count?: number | null
+          review_decided_at?: string | null
+          review_decided_by?: string | null
+          review_defer_until?: string | null
+          review_notes?: string | null
+          review_status?: string
           seasonality_window?: string | null
           service_style?: string | null
           social_facebook?: string | null
@@ -2638,6 +2992,11 @@ export type Database = {
           postcode?: string | null
           rating?: number | null
           review_count?: number | null
+          review_decided_at?: string | null
+          review_decided_by?: string | null
+          review_defer_until?: string | null
+          review_notes?: string | null
+          review_status?: string
           seasonality_window?: string | null
           service_style?: string | null
           social_facebook?: string | null
@@ -2667,6 +3026,13 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venues_review_decided_by_fkey"
+            columns: ["review_decided_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -2930,6 +3296,8 @@ export type Database = {
           status: string
           updated_at: string
           user_id: string
+          warmup_day: number
+          warmup_day_bumped_on: string | null
         }
         SetofOptions: {
           from: "*"
@@ -3070,4 +3438,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

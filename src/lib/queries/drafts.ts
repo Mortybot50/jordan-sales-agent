@@ -70,6 +70,13 @@ export interface Draft {
   sequence_step_number: number | null
   sender_inbox_id: string | null
   suppression_reason: string | null
+  /**
+   * User-scheduled send time set from the "Schedule follow-up" CTA in
+   * DealDrawer. NULL = no scheduled send. Auto-send worker (separate PR)
+   * will consume this column; until then the drafts queue surfaces them
+   * as scheduled and Jordan reviews + sends manually.
+   */
+  scheduled_send_at: string | null
   sequence_enrollment?: {
     sequence?: {
       id: string
@@ -421,10 +428,17 @@ export function useGenerateDraft() {
       contact_id,
       draft_type,
       context_hint,
+      deal_id,
     }: {
       contact_id: string
       draft_type: DraftType
       context_hint?: string
+      /**
+       * Optional deal id — pins generation to a specific deal for contacts
+       * with multiple open deals (DealDrawer Schedule Follow-up CTA). Edge
+       * Function falls back to most-recent-open when omitted (legacy).
+       */
+      deal_id?: string
     }) => {
       // Pre-flight suppression + DNC check — avoids API spend on a hit
       const { data: contact } = await supabase
@@ -450,7 +464,7 @@ export function useGenerateDraft() {
       }
 
       const { data, error } = await supabase.functions.invoke('generate-draft', {
-        body: { contact_id, draft_type, context_hint },
+        body: { contact_id, draft_type, context_hint, deal_id },
       })
 
       if (error) {
@@ -479,5 +493,46 @@ export function useGenerateDraft() {
       qc.invalidateQueries({ queryKey: ['drafts'] })
     },
     onError: (err: Error) => toast.error(`Generation failed: ${err.message}`),
+  })
+}
+
+/**
+ * Sets / clears the `scheduled_send_at` column on an existing draft. Pair
+ * with `useGenerateDraft` to implement the "Schedule follow-up" CTA in
+ * DealDrawer — generate first, then schedule on the returned draft id.
+ *
+ * Optional `dealId` re-links the draft to a specific deal — needed when the
+ * contact has multiple open deals, because `generate-draft` picks the
+ * most-recent-open as a default and the drawer should always lock to the
+ * deal the user is acting from. Pass `at: null` to clear a scheduled send.
+ */
+export function useScheduleDraft() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      id,
+      at,
+      dealId,
+    }: {
+      id: string
+      at: string | null
+      dealId?: string | null
+    }) => {
+      const patch: { scheduled_send_at: string | null; deal_id?: string | null } = {
+        scheduled_send_at: at,
+      }
+      if (dealId !== undefined) patch.deal_id = dealId
+      const { error } = await supabase
+        .from('email_drafts')
+        .update(patch)
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['drafts'] })
+      qc.invalidateQueries({ queryKey: ['draft', vars.id] })
+    },
+    onError: (err: Error) =>
+      toast.error(`Couldn't schedule draft: ${err.message}`),
   })
 }

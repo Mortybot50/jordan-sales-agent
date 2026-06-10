@@ -209,10 +209,19 @@ Deno.serve(async (req: Request) => {
   // 1. Pull approved drafts that aren't already in the queue.
   // Approved means: drafts.status='approved' AND no email_send_queue row for this draft_id.
   // (A unique index on email_send_queue.draft_id keeps this idempotent at the DB layer too.)
+  //
+  // ALSO skip drafts whose `scheduled_send_at` is still in the future — these
+  // come from the DealDrawer "Schedule follow-up" CTA and shouldn't go out
+  // before their picked time. The dedicated auto-send worker (separate PR)
+  // will own the precise scheduling pass; until then this guard prevents the
+  // approve→immediate-send race that would silently violate the user's
+  // chosen schedule (Codex Pattern B P2 finding).
+  const nowIso = new Date().toISOString()
   const { data: drafts, error: draftsErr } = await supabase
     .from('email_drafts')
-    .select('id, org_id, contact_id, subject, body, edited_subject, edited_body, sender_inbox_id, draft_kind, created_by')
+    .select('id, org_id, contact_id, subject, body, edited_subject, edited_body, sender_inbox_id, draft_kind, created_by, scheduled_send_at')
     .eq('status', 'approved')
+    .or(`scheduled_send_at.is.null,scheduled_send_at.lte.${nowIso}`)
     .order('approved_at', { ascending: true, nullsFirst: true })
     .limit(MAX_DRAFTS_PER_TICK)
 
