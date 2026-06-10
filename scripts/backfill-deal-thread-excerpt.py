@@ -628,7 +628,14 @@ def main():
 
     for email_addr, deal_ids in email_to_deals.items():
         thread = thread_map.get(email_addr)
-        score, breakdown = compute_score(email_addr, thread or {})
+        # Only score when we actually have thread context. Without a thread
+        # match, the base+domain rules would still produce a concrete
+        # MEDIUM/LOW score, which is misleading — the drawer's intended
+        # state for no-thread deals is "Score pending" (Codex round 4 P2).
+        if thread:
+            score, breakdown = compute_score(email_addr, thread)
+        else:
+            score, breakdown = None, None
 
         if thread:
             # `last_date` is the most recent activity on this thread, ANY
@@ -653,7 +660,10 @@ def main():
         else:
             excerpt = None
 
-        if score >= 61:
+        if score is None:
+            score_dist.setdefault("pending", 0)
+            score_dist["pending"] += 1
+        elif score >= 61:
             score_dist["hot"] += 1
         elif score >= 31:
             score_dist["warm"] += 1
@@ -671,10 +681,11 @@ def main():
                 updates_skipped += 1
                 continue
             if args.sql_out:
+                score_lit = "NULL" if score is None else str(score)
                 sql_lines.append(
                     "UPDATE public.deals SET"
                     f" thread_excerpt = {sql_jsonb_literal(excerpt)},"
-                    f" win_probability = {score},"
+                    f" win_probability = {score_lit},"
                     f" win_probability_breakdown = {sql_jsonb_literal(breakdown)}"
                     f" WHERE id = '{deal_id}';"
                 )

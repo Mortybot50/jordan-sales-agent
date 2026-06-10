@@ -113,16 +113,11 @@ export function ScheduleFollowUpButton({ deal }: ScheduleFollowUpButtonProps) {
         dealId: deal.id,
       })
       setOpen(false)
+      // No deep-link action — DraftsPage doesn't honour `?id=` (Codex P3),
+      // and adding that handling is out of scope for this PR. Toast points
+      // the user at the Drafts queue and they navigate manually.
       toast.success(
         `Draft scheduled for ${format(local, 'd MMM, h:mma')} — review in Drafts.`,
-        {
-          action: {
-            label: 'Open',
-            onClick: () => {
-              window.location.href = `/drafts?id=${draft.id}`
-            },
-          },
-        },
       )
     } catch (err) {
       const msg = (err as Error).message
