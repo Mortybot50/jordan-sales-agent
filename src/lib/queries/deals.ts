@@ -352,8 +352,11 @@ export function useUpdateDeal() {
         // from PATCH payloads so the form's handleSave can't overwrite
         // them, and so the typed Supabase client doesn't choke on the
         // richer TS types (ThreadExcerpt vs the generated Json shape).
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         win_probability: _wp,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         win_probability_breakdown: _wpb,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         thread_excerpt: _te,
         ...dbUpdates
       } = updates
