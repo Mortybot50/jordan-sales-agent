@@ -33,16 +33,24 @@ export function ConversationRecap({ excerpt }: ConversationRecapProps) {
   const lastFrom = excerpt.last_from?.trim() ?? null
   const lastBody = excerpt.last_body?.trim() ?? ''
   const lastDate = excerpt.last_date ?? null
+  const lastInboundDate = excerpt.last_inbound_date ?? null
   const inbound = excerpt.msg_count_inbound ?? 0
   const outbound = excerpt.msg_count_outbound ?? 0
 
-  let lastDateLabel: string | null = null
-  if (lastDate) {
-    const parsed = parseISO(lastDate)
-    if (isValid(parsed)) {
-      lastDateLabel = formatDistanceToNowStrict(parsed, { addSuffix: true })
-    }
+  function fmt(iso: string | null): string | null {
+    if (!iso) return null
+    const parsed = parseISO(iso)
+    if (!isValid(parsed)) return null
+    return formatDistanceToNowStrict(parsed, { addSuffix: true })
   }
+
+  // Header date = most recent thread activity (any direction).
+  const lastDateLabel = fmt(lastDate)
+  // When Jordan replied after the contact's last inbound, surface both —
+  // header shows "last touch", the inbound subject/body line shows when
+  // they last reached out.
+  const inboundDateLabel =
+    lastInboundDate && lastInboundDate !== lastDate ? fmt(lastInboundDate) : null
 
   const inboundExceedsOutbound = inbound > outbound && inbound > 0
   const noOutbound = outbound === 0 && inbound > 0
@@ -88,7 +96,10 @@ export function ConversationRecap({ excerpt }: ConversationRecapProps) {
       {lastFrom && (
         <p className="text-[11px] text-ink-faint flex items-center gap-1">
           <Mail className="w-3 h-3 shrink-0" />
-          <span className="truncate">From {lastFrom}</span>
+          <span className="truncate">
+            From {lastFrom}
+            {inboundDateLabel && ` · ${inboundDateLabel}`}
+          </span>
         </p>
       )}
 

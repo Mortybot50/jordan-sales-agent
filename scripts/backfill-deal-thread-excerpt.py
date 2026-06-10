@@ -631,12 +631,21 @@ def main():
         score, breakdown = compute_score(email_addr, thread or {})
 
         if thread:
+            # `last_date` is the most recent activity on this thread, ANY
+            # direction. Codex Pattern B (round 3) flagged that using only
+            # the inbound date misleads when Jordan has sent a newer
+            # outbound — the drawer's "Last contact: X ago" would show the
+            # old inbound date even though the thread has been touched since.
+            # Subject + body stay from last_inbound (the user mock's "Last
+            # message from them: ...") — those describe the latest reply
+            # from them, while `last_date` describes the latest thread touch.
             excerpt = {
                 "subject": (thread.get("last_inbound") or {}).get("subject"),
                 "last_from": email_addr,
                 "last_body": (thread.get("last_inbound") or {}).get("body"),
-                "last_date": (thread.get("last_inbound") or {}).get("date")
-                              or thread.get("last_date_any"),
+                "last_date": thread.get("last_date_any")
+                              or (thread.get("last_inbound") or {}).get("date"),
+                "last_inbound_date": (thread.get("last_inbound") or {}).get("date"),
                 "msg_count_inbound": thread.get("msg_count_inbound", 0),
                 "msg_count_outbound": thread.get("msg_count_outbound", 0),
                 "full_recent": thread.get("recent_messages", []),

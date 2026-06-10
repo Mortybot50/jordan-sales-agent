@@ -39,7 +39,19 @@ export interface ThreadExcerpt {
   subject?: string | null
   last_from?: string | null
   last_body?: string | null
+  /**
+   * Most recent activity on this thread, ANY direction. Drives the
+   * "Last touch X ago" relative-time label in the drawer. Differs from
+   * `last_inbound_date` for follow-up threads where Jordan has replied
+   * after the contact's last inbound.
+   */
   last_date?: string | null
+  /**
+   * Date of the most recent INBOUND message — the subject + last_body
+   * above describe that message. Older than `last_date` when an outbound
+   * has happened since.
+   */
+  last_inbound_date?: string | null
   msg_count_inbound?: number
   msg_count_outbound?: number
   full_recent?: Array<{
