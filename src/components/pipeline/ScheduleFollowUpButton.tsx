@@ -100,7 +100,14 @@ export function ScheduleFollowUpButton({ deal }: ScheduleFollowUpButtonProps) {
       if (!draft?.id) {
         throw new Error('generate-draft returned without a draft id')
       }
-      await schedule.mutateAsync({ id: draft.id, at: local.toISOString() })
+      // Lock the draft to THIS drawer's deal. `generate-draft` picks the
+      // most-recent-open deal by contact, which can differ when the contact
+      // has multiple open deals (Codex Pattern B P2 finding).
+      await schedule.mutateAsync({
+        id: draft.id,
+        at: local.toISOString(),
+        dealId: deal.id,
+      })
       setOpen(false)
       toast.success(
         `Draft scheduled for ${format(local, 'd MMM, h:mma')} — review in Drafts.`,

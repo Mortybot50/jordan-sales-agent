@@ -494,15 +494,30 @@ export function useGenerateDraft() {
  * with `useGenerateDraft` to implement the "Schedule follow-up" CTA in
  * DealDrawer — generate first, then schedule on the returned draft id.
  *
- * Pass `at: null` to clear a previously scheduled send.
+ * Optional `dealId` re-links the draft to a specific deal — needed when the
+ * contact has multiple open deals, because `generate-draft` picks the
+ * most-recent-open as a default and the drawer should always lock to the
+ * deal the user is acting from. Pass `at: null` to clear a scheduled send.
  */
 export function useScheduleDraft() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, at }: { id: string; at: string | null }) => {
+    mutationFn: async ({
+      id,
+      at,
+      dealId,
+    }: {
+      id: string
+      at: string | null
+      dealId?: string | null
+    }) => {
+      const patch: { scheduled_send_at: string | null; deal_id?: string | null } = {
+        scheduled_send_at: at,
+      }
+      if (dealId !== undefined) patch.deal_id = dealId
       const { error } = await supabase
         .from('email_drafts')
-        .update({ scheduled_send_at: at })
+        .update(patch)
         .eq('id', id)
       if (error) throw error
     },
