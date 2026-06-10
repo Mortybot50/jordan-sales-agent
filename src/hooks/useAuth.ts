@@ -414,6 +414,7 @@ function initializeAuth(): void {
   // the SDK reads it — gotrue's `_initialize()` may swallow the parse error
   // and never deliver INITIAL_SESSION, which would otherwise show 8s of
   // blank "Loading…" before the hard cap recovers it.
+  let skipHardCap = false
   if (cached === 'corrupt') {
     const onPublic = isPublicPath()
     logStep('init:corrupt-cached-token', { isPublic: onPublic })
@@ -424,16 +425,25 @@ function initializeAuth(): void {
       user: null,
       errorReason: null,
     })
-    // Public pages don't need a session — silently clear the bad blob and
-    // let the page render. Only redirect when the user is on a protected
-    // route that won't work without auth.
     if (!onPublic) {
+      // Protected route — kick to /login?reset=1. The hard reload re-runs
+      // initializeAuth from scratch on the next page, so no need to wire
+      // the subscription on this dying page.
       redirectToLogin('reset')
+      return
     }
-    return
+    // Public route (e.g. /login itself) — fall through to subscribe so the
+    // singleton picks up a subsequent SIGNED_IN (from the login form on
+    // this very page). Skip the hard cap: storage is already clean, the
+    // SDK has nothing to restore, INITIAL_SESSION will fire promptly with
+    // null. Arming an 8s timer on top would only fire a spurious
+    // recovery path.
+    skipHardCap = true
   }
 
-  hardCapTimer = setTimeout(onHardCapFire, SESSION_RESTORE_HARD_CAP_MS)
+  if (!skipHardCap) {
+    hardCapTimer = setTimeout(onHardCapFire, SESSION_RESTORE_HARD_CAP_MS)
+  }
 
   const { data } = supabase.auth.onAuthStateChange((event, s) => {
     logStep('auth:event', { event, hasSession: !!s })
