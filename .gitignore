@@ -33,3 +33,5 @@ dist-ssr
 .vercel
 .gstack/
 tests/e2e/.auth-state.json
+test-results/
+playwright-report/
