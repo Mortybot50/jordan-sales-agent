@@ -37,7 +37,7 @@ export function ContactsPage() {
   // Legacy unbounded fetch (capped at 2000 — see `useContacts` JSDoc). Used
   // ONLY for facet-option counts + bulk-action selected-row name lookup —
   // the rendered table reads from `useContactsPaginated` below to keep
-  // bandwidth bounded at Apollo scale (FE-P1-04).
+  // bandwidth bounded at bulk-sourcing scale (FE-P1-04).
   const { data: contacts } = useContacts()
 
   const [search, setSearch] = useState('')
@@ -228,7 +228,7 @@ export function ContactsPage() {
   // Selection is page-local (clears on paginate/filter/sort), so the
   // selected IDs are guaranteed to be in the current page rows. Resolve
   // names from `contactsPage.rows` rather than the legacy capped fetch
-  // so this still works correctly once Apollo lands >2000 contacts.
+  // so this still works correctly once sourcing lands >2000 contacts.
   const selectedContacts = useMemo(
     () => (contactsPage?.rows ?? []).filter((c) => selectedIds.has(c.id)),
     [contactsPage, selectedIds],
@@ -378,7 +378,7 @@ export function ContactsPage() {
               ? 'No contacts yet — import a CSV or add your first.'
               : `${totalCount} contact${totalCount === 1 ? '' : 's'} across ${
                   // Venue count is from the legacy capped fetch (≤2000) — at
-                  // Apollo scale this becomes a soft cap on the displayed
+                  // bulk-sourcing scale this becomes a soft cap on the displayed
                   // figure, not an actual constraint on the data.
                   new Set((contacts ?? []).map((c) => c.venue?.name).filter(Boolean)).size
                 } venues`

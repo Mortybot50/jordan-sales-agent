@@ -131,7 +131,6 @@ export function PrivacyPolicyPage() {
             <li><strong>Anthropic</strong> (Claude API for AI draft generation).</li>
             <li><strong>OpenAI</strong> (Whisper API for voice-note transcription).</li>
             <li><strong>Resend</strong> (transactional email delivery — morning briefing, learning digest).</li>
-            <li><strong>Instantly.ai</strong> (cold email sending and warmup) — once configured.</li>
             <li><strong>Proxycurl</strong> (LinkedIn data enrichment) — only when the operator requests enrichment for a specific contact.</li>
           </ul>
           <p>
@@ -196,7 +195,7 @@ export function PrivacyPolicyPage() {
             <li>All network traffic is encrypted in transit (HTTPS / TLS).</li>
             <li>Database access is protected by per-tenant row-level security (PostgreSQL RLS).</li>
             <li>Gmail OAuth refresh tokens are encrypted at rest using AES-256-GCM with a key held in our secrets manager (not in the database).</li>
-            <li>Webhook endpoints verify cryptographic signatures (Instantly HMAC, Google Pub/Sub OIDC JWT).</li>
+            <li>Webhook endpoints verify cryptographic signatures (HMAC-signed callbacks, Google Pub/Sub OIDC JWT).</li>
             <li>OAuth state parameters are HMAC-signed and time-bound to prevent CSRF and account-binding attacks.</li>
           </ul>
           <p>

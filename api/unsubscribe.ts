@@ -3,14 +3,14 @@
  *
  * POST { email, token? }
  *   - If `token` is present and HMAC-valid for `email`, treat as a one-click
- *     unsubscribe (the link Instantly will append to outbound emails).
+ *     unsubscribe (the link the native sender appends to outbound emails).
  *   - If `token` is missing/invalid, treat as a manual unsubscribe — we still
  *     accept it, but only when we can match the email to at least one contact
  *     across our orgs (so the form can't be used to mass-suppress arbitrary
  *     addresses against orgs that never emailed them).
  *
  * On match: insert one `suppression_list` row per org that has a contact with
- * this email, scoped by `reason='unsubscribe'`, `source='instantly_webhook'`.
+ * this email, scoped by `reason='unsubscribe'`, `source='unsubscribe'`.
  *
  * Response is intentionally generic — we never reveal whether the address
  * exists in our DB.
@@ -110,7 +110,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       org_id: orgId,
       email,
       reason: 'unsubscribe',
-      source: 'instantly_webhook',
+      source: 'unsubscribe',
       notes: tokenValid
         ? 'Unsubscribed via signed link'
         : 'Unsubscribed via public form (manual)',

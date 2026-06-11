@@ -200,7 +200,7 @@ function EditModal({
             <div className="space-y-1">
               <Label>Provider</Label>
               <Input
-                placeholder="instantly / google_workspace"
+                placeholder="google_workspace / smtp"
                 value={values.provider}
                 onChange={(e) => set('provider', e.target.value)}
               />
@@ -291,8 +291,8 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
       <Mail className="w-6 h-6 mx-auto text-muted-foreground" />
       <p className="text-sm">No sending domain configured yet.</p>
       <p className="text-xs text-muted-foreground max-w-md mx-auto">
-        Week 5: buy a domain (~$15/yr) + Google Workspace (~$19/mo) + wire to
-        Instantly.ai. Purezza IT blocks your work Gmail for cold volume — a
+        Buy a domain (~$15/yr) + Google Workspace (~$19/mo) and connect it under
+        Email accounts. Purezza IT blocks your work Gmail for cold volume — a
         satellite domain keeps deliverability (and your day job) safe.
       </p>
       <Button size="sm" onClick={onAdd}>Add sending domain</Button>
@@ -346,7 +346,7 @@ function WarmupProgress({ row }: { row: SendingDomain }) {
         />
       </div>
       <p className="text-xs text-muted-foreground">
-        Day {row.warmup_day} of {row.warmup_target_day}. Keep Instantly warmup
+        Day {row.warmup_day} of {row.warmup_target_day}. Keep the warmup ramp
         running. Do not increase send volume until Day {row.warmup_target_day}.
       </p>
     </div>
@@ -441,8 +441,8 @@ export function SendingInfrastructureCard() {
               <ErrorState row={row} />
             ) : (
               <p className="text-xs text-muted-foreground">
-                Paused. Resume sending from Instantly and set status back to
-                active when you're ready.
+                Paused. Set status back to active when you're ready to resume
+                sending from this inbox.
               </p>
             )}
 

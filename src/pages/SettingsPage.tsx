@@ -948,16 +948,22 @@ function IntegrationsTab() {
         </CardContent>
       </Card>
 
-      {/* Instantly.ai */}
+      {/* Native SMTP sender */}
       <Card>
         <CardContent className="flex items-center justify-between gap-3 py-3 px-4">
           <div>
-            <p className="text-sm font-medium">Instantly.ai</p>
-            <p className="text-xs text-muted-foreground">Cold outbound sequencing — Week 4</p>
+            <p className="text-sm font-medium">Native sender</p>
+            <p className="text-xs text-muted-foreground">
+              Cold outbound via your own inboxes — sending, warmup and queue
+            </p>
           </div>
-          <Badge variant="outline" className="text-xs shrink-0 text-muted-foreground">
-            Week 4
-          </Badge>
+          <Link
+            to="/settings/email-accounts"
+            className="shrink-0 inline-flex items-center gap-1 text-sm text-primary hover:underline"
+          >
+            Email accounts
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
         </CardContent>
       </Card>
 
@@ -968,8 +974,8 @@ function IntegrationsTab() {
             <p className="text-sm font-medium">Resend</p>
             <p className="text-xs text-muted-foreground">Morning briefing email digest</p>
           </div>
-          <Badge variant="outline" className="text-xs shrink-0 text-muted-foreground">
-            Not connected
+          <Badge className="bg-green-100 text-green-700 border-0 text-xs shrink-0">
+            Configured
           </Badge>
         </CardContent>
       </Card>

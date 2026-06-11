@@ -1,9 +1,11 @@
 -- =============================================================================
 -- LeadFlow Jordan Sales Agent — Initial Seed Data
 -- =============================================================================
--- HOW TO RUN:
---   Option 1: Paste into Supabase Dashboard → SQL Editor → Run
---   Option 2: psql -h <db-host> -U postgres -d postgres -f supabase/seed/001_initial_org_and_user.sql
+-- ⚠️  LOCAL DEVELOPMENT ONLY. Never run against the production project
+--     (bsevgxhnxlkzkcalevbb). Demo rows were purged from prod on 11/06/2026
+--     (backup: ~/workspace/leadflow-audit/demo-data-backup-2026-06-11.sql).
+-- HOW TO RUN (local sandbox only):
+--   psql postgres://postgres:postgres@127.0.0.1:54322/postgres -f supabase/seed/001_initial_org_and_user.sql
 --
 -- IMPORTANT: Run AFTER Jordan's Supabase Auth account has been created.
 --   Create the auth user in: Supabase Dashboard → Authentication → Users → "Add user"

@@ -41,8 +41,8 @@ export function scoreToTier(score: number | null | undefined): 'hot' | 'warm' | 
 }
 
 /**
- * Defensive ceiling for unbounded fetches. Audit FE-P1-04: post-Apollo
- * (50k–1M imported contacts) an unbounded `from('contacts').select(...)`
+ * Defensive ceiling for unbounded fetches. Audit FE-P1-04: at bulk-sourcing
+ * scale (50k–1M imported contacts) an unbounded `from('contacts').select(...)`
  * times out / blows browser memory. `useContacts()` is used by Pipeline's
  * deal-add picker + VoiceNote fuzzy-match; both are unsuitable for unbounded
  * data anyway. For the heavy Contacts table view, use `useContactsPaginated`.

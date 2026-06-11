@@ -1,6 +1,9 @@
 -- =============================================================================
 -- Jordan Sales Agent — Demo Data Seed
--- Run AFTER 001_initial_org_and_user.sql
+-- ⚠️  LOCAL DEVELOPMENT ONLY. Never run against the production project
+--     (bsevgxhnxlkzkcalevbb). These demo rows were purged from prod on
+--     11/06/2026 (backup: ~/workspace/leadflow-audit/demo-data-backup-2026-06-11.sql).
+-- Run AFTER 001_initial_org_and_user.sql (local sandbox only)
 -- Creates realistic Melbourne hospitality data for demo@jordan-sales-agent.test
 -- =============================================================================
 
