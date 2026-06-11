@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
+import { getSuppressionSet, isSuppressed as isSuppressedInSet } from '@/lib/suppression'
 
 export const MAX_STEPS_PER_SEQUENCE = 5
 
@@ -358,15 +359,15 @@ export function useEnrolContacts() {
       }
       if (contact_ids.length === 0) return result
 
-      const [contactRes, suppressionRes, existingRes] = await Promise.all([
+      // Suppression set comes from the shared paginated loader — an inline
+      // uncapped select silently truncates at PostgREST's 1000-row ceiling
+      // and would let contacts past row 1000 slip through enrolment.
+      const [contactRes, suppressionSet, existingRes] = await Promise.all([
         supabase
           .from('contacts')
           .select('id, email, do_not_contact')
           .in('id', contact_ids),
-        supabase
-          .from('suppression_list')
-          .select('email, domain_suppression')
-          .eq('org_id', org_id),
+        getSuppressionSet(org_id),
         supabase
           .from('sequence_enrollments')
           .select('contact_id')
@@ -376,26 +377,13 @@ export function useEnrolContacts() {
       ])
 
       if (contactRes.error) throw contactRes.error
-      if (suppressionRes.error) throw suppressionRes.error
       if (existingRes.error) throw existingRes.error
 
       const alreadyEnrolled = new Set(
         (existingRes.data ?? []).map((r) => r.contact_id).filter(Boolean) as string[],
       )
-      const suppressionSet = new Set<string>()
-      const domainSet = new Set<string>()
-      for (const row of suppressionRes.data ?? []) {
-        if (row.domain_suppression) domainSet.add(row.email.toLowerCase())
-        else suppressionSet.add(row.email.toLowerCase())
-      }
       function isSuppressed(email: string | null): boolean {
-        if (!email) return false
-        const raw = email.trim().toLowerCase()
-        const at = raw.indexOf('@')
-        if (at < 0) return false
-        const local = raw.slice(0, at).split('+')[0]
-        const domain = raw.slice(at + 1)
-        return suppressionSet.has(`${local}@${domain}`) || domainSet.has(domain)
+        return isSuppressedInSet(email, suppressionSet)
       }
 
       const toInsert: Array<{

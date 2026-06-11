@@ -54,25 +54,35 @@ export function isValidDomain(input: string): boolean {
  * per batch of outbound work and reuse — avoid per-contact roundtrips.
  */
 export async function getSuppressionSet(orgId: string): Promise<SuppressionSet> {
-  const { data, error } = await supabase
-    .from('suppression_list')
-    .select('email, domain_suppression')
-    .eq('org_id', orgId)
-
-  if (error) {
-    // Fail closed — empty set means we'd over-send. Throw so caller decides.
-    throw new Error(`Failed to load suppression list: ${error.message}`)
-  }
-
   const emails = new Set<string>()
   const domains = new Set<string>()
 
-  for (const row of data ?? []) {
-    if (row.domain_suppression) {
-      domains.add(row.email.trim().toLowerCase())
-    } else {
-      emails.add(normaliseEmail(row.email))
+  // PostgREST caps any single select at 1000 rows. The live list is >6,500
+  // entries, so an uncapped select silently loads a partial firewall and
+  // everything past row 1000 would NOT be suppressed. Page until exhausted.
+  const PAGE = 1000
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from('suppression_list')
+      .select('email, domain_suppression')
+      .eq('org_id', orgId)
+      .order('id', { ascending: true })
+      .range(from, from + PAGE - 1)
+
+    if (error) {
+      // Fail closed — empty set means we'd over-send. Throw so caller decides.
+      throw new Error(`Failed to load suppression list: ${error.message}`)
     }
+
+    for (const row of data ?? []) {
+      if (row.domain_suppression) {
+        domains.add(row.email.trim().toLowerCase())
+      } else {
+        emails.add(normaliseEmail(row.email))
+      }
+    }
+
+    if (!data || data.length < PAGE) break
   }
 
   return { emails, domains }

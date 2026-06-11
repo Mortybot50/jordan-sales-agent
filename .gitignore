@@ -32,3 +32,4 @@ dist-ssr
 *.sw?
 .vercel
 .gstack/
+tests/e2e/.auth-state.json

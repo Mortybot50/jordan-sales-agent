@@ -7,10 +7,13 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "test": "node --test --experimental-strip-types --no-warnings tests/*.test.mts",
+    "test": "node --test --experimental-strip-types --no-warnings tests/*.test.mts && vitest run",
     "preview": "vite preview",
     "smoke": "bash scripts/smoke-api.sh",
-    "classify-backlog": "deno run --allow-env --allow-net scripts/classify-backlog.ts"
+    "classify-backlog": "deno run --allow-env --allow-net scripts/classify-backlog.ts",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test tests/e2e/smoke.spec.ts",
+    "ci": "npm run test && npm run build && npm run test:e2e"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -44,6 +47,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@playwright/test": "^1.60.0",
     "@sentry/vite-plugin": "^5.3.0",
     "@tailwindcss/vite": "^4.2.3",
     "@types/node": "^24.12.2",
@@ -59,6 +63,7 @@
     "tailwindcss": "^4.2.3",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.2",
-    "vite": "^8.0.9"
+    "vite": "^8.0.9",
+    "vitest": "^4.1.8"
   }
 }
