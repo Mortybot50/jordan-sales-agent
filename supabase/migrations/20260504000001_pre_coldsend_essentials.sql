@@ -292,9 +292,12 @@ alter table public.activities add constraint activities_activity_type_check
     'call_note', 'meeting_note', 'task_completed', 'stage_change',
     'bounce', 'unsubscribe',
     'email_inbound', 'email_outbound', 'deal_created', 'note', 'meeting_booked',
-    'email_manual', 'import',
+    'email_manual', 'import', 'voice_note',
     'daily_cap_reached', 'draft_suppressed'
   ]));
+-- 'voice_note' was patched into the live constraint at apply time (04/05/2026,
+-- Field Mode dependency) but the source file missed it — added 11/06/2026 so a
+-- fresh-clone replay matches production. Live constraint verified identical.
 
 -- ---------------------------------------------------------------------------
 -- 8. Seed Jordan's two warming inboxes for the demo org.
