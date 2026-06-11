@@ -31,6 +31,11 @@ export interface SuppressionEntry {
   suppressed_at: string | null
 }
 
+// PostgREST caps a single select at 1000 rows. The list view shows the most
+// recent 1000; headline counts come from useSuppressionCounts (exact, head-only)
+// so the displayed total never silently understates the real list size.
+export const SUPPRESSION_LIST_DISPLAY_CAP = 1000
+
 export function useSuppressionList() {
   return useQuery({
     queryKey: ['suppression-list'],
@@ -41,9 +46,28 @@ export function useSuppressionList() {
           'id, org_id, email, reason, source, notes, added_by_user_id, domain_suppression, suppressed_at'
         )
         .order('suppressed_at', { ascending: false })
+        .limit(SUPPRESSION_LIST_DISPLAY_CAP)
 
       if (error) throw error
       return (data ?? []) as SuppressionEntry[]
+    },
+  })
+}
+
+export function useSuppressionCounts() {
+  return useQuery({
+    queryKey: ['suppression-counts'],
+    queryFn: async (): Promise<{ total: number; manual: number }> => {
+      const [total, manual] = await Promise.all([
+        supabase.from('suppression_list').select('id', { count: 'exact', head: true }),
+        supabase
+          .from('suppression_list')
+          .select('id', { count: 'exact', head: true })
+          .eq('reason', 'manual_exclude'),
+      ])
+      if (total.error) throw total.error
+      if (manual.error) throw manual.error
+      return { total: total.count ?? 0, manual: manual.count ?? 0 }
     },
   })
 }
@@ -75,6 +99,7 @@ export function useAddSuppressionEmail() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['suppression-list'] })
+      qc.invalidateQueries({ queryKey: ['suppression-counts'] })
       toast.success('Added to suppression list')
     },
     onError: (err: Error) => toast.error(`Failed to add: ${err.message}`),
@@ -108,6 +133,7 @@ export function useAddSuppressionDomain() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['suppression-list'] })
+      qc.invalidateQueries({ queryKey: ['suppression-counts'] })
       toast.success('Domain suppressed')
     },
     onError: (err: Error) => toast.error(`Failed to add domain: ${err.message}`),
@@ -190,6 +216,7 @@ export function useBulkAddSuppression() {
     },
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['suppression-list'] })
+      qc.invalidateQueries({ queryKey: ['suppression-counts'] })
       toast.success(
         `Added ${result.inserted} — ${result.skippedDuplicate} duplicate, ${result.skippedInvalid} invalid`
       )
@@ -207,6 +234,7 @@ export function useRemoveSuppression() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['suppression-list'] })
+      qc.invalidateQueries({ queryKey: ['suppression-counts'] })
       toast.success('Removed from suppression list')
     },
     onError: (err: Error) => toast.error(`Failed to remove: ${err.message}`),

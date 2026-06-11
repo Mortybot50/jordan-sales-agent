@@ -25,6 +25,8 @@ import {
 import { useAuth } from '@/hooks/useAuth'
 import {
   useSuppressionList,
+  useSuppressionCounts,
+  SUPPRESSION_LIST_DISPLAY_CAP,
   useAddSuppressionEmail,
   useAddSuppressionDomain,
   useBulkAddSuppression,
@@ -66,6 +68,7 @@ export function SuppressionListPage() {
   const { user } = useAuth()
 
   const { data: entries, isLoading, error, refetch } = useSuppressionList()
+  const { data: counts } = useSuppressionCounts()
   const addOne = useAddSuppressionEmail()
   const addDomain = useAddSuppressionDomain()
   const bulkAdd = useBulkAddSuppression()
@@ -327,7 +330,7 @@ export function SuppressionListPage() {
       <PageHeader
         eyebrow="Settings"
         title="Suppression list"
-        description={`${entries?.length ?? 0} entr${(entries?.length ?? 0) === 1 ? 'y' : 'ies'} — these addresses will never receive outbound.`}
+        description={`${counts?.total ?? entries?.length ?? 0} entr${(counts?.total ?? entries?.length ?? 0) === 1 ? 'y' : 'ies'} — these addresses will never receive outbound.${(counts?.total ?? 0) > SUPPRESSION_LIST_DISPLAY_CAP ? ` Showing the most recent ${SUPPRESSION_LIST_DISPLAY_CAP}.` : ''}`}
       />
 
       {/* Single add */}

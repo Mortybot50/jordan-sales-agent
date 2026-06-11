@@ -34,7 +34,7 @@ import { venueTypeLabel, cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { Plus, Trash2, ChevronUp, ChevronDown, CheckCircle2, XCircle, CheckCircle, ExternalLink, ShieldAlert, ArrowRight } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useSuppressionList } from '@/lib/queries/suppression'
+import { useSuppressionCounts } from '@/lib/queries/suppression'
 import { SendingInfrastructureCard } from '@/components/settings/SendingInfrastructureCard'
 import { NotificationsSection } from '@/components/settings/NotificationsSection'
 import { SignaturesSection } from '@/components/settings/SignaturesSection'
@@ -161,7 +161,6 @@ function ProfileTab() {
   }
 
   function onInvalid(errors: FieldErrors<ProfileFormValues>) {
-    console.error('[Settings.ProfileTab] validation failed:', errors)
     const first = Object.entries(errors)[0]
     if (first) {
       const [field, err] = first
@@ -864,6 +863,11 @@ function IntegrationsTab() {
       qc.invalidateQueries({ queryKey: ['gmail-connection'] })
       toast.success('Gmail disconnected')
     },
+    onError: (err) => {
+      toast.error('Could not disconnect Gmail', {
+        description: err instanceof Error ? err.message : 'Try again in a moment.',
+      })
+    },
   })
 
   async function handleConnectGmail() {
@@ -1006,9 +1010,9 @@ function IntegrationsTab() {
 
 // --- Suppression summary tab ---
 function SuppressionTab() {
-  const { data: entries, isLoading } = useSuppressionList()
-  const total = entries?.length ?? 0
-  const manual = (entries ?? []).filter((e) => e.reason === 'manual_exclude').length
+  const { data: counts, isLoading } = useSuppressionCounts()
+  const total = counts?.total ?? 0
+  const manual = counts?.manual ?? 0
   const compliance = total - manual
 
   return (

@@ -96,7 +96,6 @@ export function ContactNewPage() {
   }
 
   function onInvalid(formErrors: FieldErrors<ContactFormValues>) {
-    console.error('[ContactNew] form validation failed:', formErrors)
     const firstError = Object.entries(formErrors)[0]
     if (firstError) {
       const [field, err] = firstError

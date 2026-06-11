@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from 'react'
+import { Suspense, useState, useSyncExternalStore } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ClaudeCommandBar } from '@/components/claude/ClaudeCommandBar'
@@ -21,8 +21,14 @@ import {
   Workflow,
   Compass,
   Building2,
+  BarChart3,
+  ShieldOff,
+  Activity,
+  Inbox,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { canAdmin } from '@/lib/auth'
+import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { CapsLabel, LivePill, MeterRail } from '@/components/primitives'
 import { useJordanAnchorMetrics } from '@/lib/queries/dashboard'
@@ -39,30 +45,37 @@ interface NavItem {
   icon: typeof LayoutDashboard
 }
 
-const NAV_SECTIONS: { id: string; label: string; items: NavItem[] }[] = [
+const NAV_SECTIONS: { id: string; label: string; adminOnly?: boolean; items: NavItem[] }[] = [
   {
-    id: 'sales',
-    label: 'Sales',
+    id: 'crm',
+    label: 'CRM',
     items: [
       { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { to: '/pipeline', label: 'Pipeline', icon: KanbanSquare },
-      { to: '/reopening-radar', label: 'Reopening Radar', icon: Radar },
+      { to: '/contacts', label: 'Contacts', icon: Users },
+      { to: '/venue-groups', label: 'Venue Groups', icon: Building2 },
       { to: '/catalogue', label: 'Catalogue', icon: Package },
       { to: '/field', label: 'Field Mode', icon: MapPin },
       { to: '/route', label: 'Call Cycle', icon: RouteIcon },
-      { to: '/briefing', label: 'Briefing', icon: Sun },
     ],
   },
   {
-    id: 'leads',
-    label: 'Leads',
+    id: 'outbound',
+    label: 'Outbound',
+    items: [
+      { to: '/drafts', label: 'Draft Queue', icon: Mail },
+      { to: '/sequences', label: 'Sequences', icon: Workflow },
+      { to: '/import/contacts', label: 'Import CSV', icon: Upload },
+      { to: '/analytics/sending', label: 'Sending Analytics', icon: BarChart3 },
+    ],
+  },
+  {
+    id: 'intelligence',
+    label: 'Intelligence',
     items: [
       { to: '/sourcing', label: 'Sourcing', icon: Compass },
-      { to: '/contacts', label: 'Contacts', icon: Users },
-      { to: '/venue-groups', label: 'Venue Groups', icon: Building2 },
-      { to: '/import/contacts', label: 'Import CSV', icon: Upload },
-      { to: '/sequences', label: 'Sequences', icon: Workflow },
-      { to: '/drafts', label: 'Draft Queue', icon: Mail },
+      { to: '/reopening-radar', label: 'Reopening Radar', icon: Radar },
+      { to: '/briefing', label: 'Briefing', icon: Sun },
     ],
   },
   {
@@ -71,6 +84,16 @@ const NAV_SECTIONS: { id: string; label: string; items: NavItem[] }[] = [
     items: [
       { to: '/settings', label: 'Settings', icon: Settings },
       { to: '/settings/email-accounts', label: 'Email inboxes', icon: Send },
+      { to: '/settings/suppression-list', label: 'Suppression list', icon: ShieldOff },
+    ],
+  },
+  {
+    id: 'admin',
+    label: 'Admin',
+    adminOnly: true,
+    items: [
+      { to: '/admin/workers', label: 'Workers', icon: Activity },
+      { to: '/settings/postmaster-tools', label: 'Postmaster Tools', icon: Inbox },
     ],
   },
 ]
@@ -130,9 +153,11 @@ function hasChildRoute(to: string): boolean {
 }
 
 function NavItems({ onNavigate }: { onNavigate?: () => void }) {
+  const { user } = useAuth()
+  const sections = NAV_SECTIONS.filter((s) => !s.adminOnly || canAdmin(user))
   return (
     <nav className="flex-1 overflow-y-auto px-3 pb-3 space-y-5">
-      {NAV_SECTIONS.map((section) => (
+      {sections.map((section) => (
         <div key={section.id} className="space-y-1">
           <CapsLabel className="px-3 text-[9px] tracking-[0.12em]">
             {section.label}
@@ -292,7 +317,15 @@ export function AppShell() {
 
         <main className="flex-1 overflow-auto">
           <ErrorBoundary label={`Route (${location.pathname})`} resetKey={location.pathname}>
-            <Outlet />
+            <Suspense
+              fallback={
+                <div className="flex items-center justify-center min-h-[50vh]">
+                  <div className="text-muted-foreground text-sm">Loading…</div>
+                </div>
+              }
+            >
+              <Outlet />
+            </Suspense>
           </ErrorBoundary>
         </main>
       </div>

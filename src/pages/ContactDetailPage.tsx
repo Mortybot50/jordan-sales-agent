@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useForm, type FieldErrors } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
@@ -315,7 +315,6 @@ export function ContactDetailPage() {
   }
 
   function onActivityInvalid(errors: FieldErrors<ActivityFormValues>) {
-    console.error('[ContactDetail.submitActivity] validation failed:', errors)
     const first = Object.entries(errors)[0]
     if (first) {
       const [field, err] = first
@@ -855,9 +854,12 @@ export function ContactDetailPage() {
                         {a.deal?.title && (
                           <>
                             <span className="text-ink-faint">·</span>
-                            <span className="text-[12px] text-ink-muted truncate">
+                            <Link
+                              to={`/pipeline?deal=${a.deal.id}`}
+                              className="text-[12px] text-ink-muted truncate hover:text-ink hover:underline"
+                            >
                               {a.deal.title}
-                            </span>
+                            </Link>
                           </>
                         )}
                         <span className="ml-auto jordan-tnum font-mono text-[11px] text-ink-faint shrink-0">
@@ -920,7 +922,8 @@ export function ContactDetailPage() {
                 {deals.map((d) => (
                   <li
                     key={d.id}
-                    className="px-3 py-2.5 text-[13px] transition-colors hover:bg-surface-3"
+                    className="cursor-pointer px-3 py-2.5 text-[13px] transition-colors hover:bg-surface-3"
+                    onClick={() => navigate(`/pipeline?deal=${d.id}`)}
                   >
                     <div className="flex items-center gap-2">
                       <span className="truncate font-medium text-ink">

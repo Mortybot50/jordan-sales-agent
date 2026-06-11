@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from '@/components/ui/sonner'
 import { useAuth } from '@/hooks/useAuth'
@@ -10,28 +11,40 @@ import { PipelinePage } from '@/pages/PipelinePage'
 import { ContactsPage } from '@/pages/ContactsPage'
 import { ContactDetailPage } from '@/pages/ContactDetailPage'
 import { ContactNewPage } from '@/pages/ContactNewPage'
-import { ContactImportPage } from '@/pages/ContactImportPage'
-import { SalesforceCsvImportPage } from '@/pages/SalesforceCsvImportPage'
 import { DraftsPage } from '@/pages/DraftsPage'
 import { SequencesPage } from '@/pages/SequencesPage'
 import { SequenceEditPage } from '@/pages/SequenceEditPage'
-import { SourcingPage } from '@/pages/SourcingPage'
 import { VenueGroupsPage } from '@/pages/VenueGroupsPage'
 import { ReopeningRadarPage } from '@/pages/ReopeningRadarPage'
 import { CataloguePage } from '@/pages/CataloguePage'
-import { FieldPage } from '@/pages/FieldPage'
-import { RoutePage } from '@/pages/RoutePage'
 import { BriefingPage } from '@/pages/BriefingPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { EmailAccountsPage } from '@/pages/Settings/EmailAccountsPage'
-import { SeedTestPage } from '@/pages/Settings/SeedTestPage'
-import { PostmasterToolsPage } from '@/pages/Settings/PostmasterToolsPage'
-import { SendingPage } from '@/pages/Analytics/SendingPage'
 import { SuppressionListPage } from '@/pages/SuppressionListPage'
-import { AdminWorkersPage } from '@/pages/AdminWorkersPage'
-import PrimitivesPage from '@/pages/_primitives'
 import { PrivacyPolicyPage } from '@/pages/PrivacyPolicyPage'
 import { UnsubscribePage } from '@/pages/UnsubscribePage'
+
+// Heavy / rarely-visited routes are code-split so the first paint of the
+// daily surfaces (dashboard, pipeline, contacts, drafts) doesn't pay for
+// maplibre-gl, CSV parsing, analytics or admin tooling.
+const FieldPage = lazy(() => import('@/pages/FieldPage').then((m) => ({ default: m.FieldPage })))
+const RoutePage = lazy(() => import('@/pages/RoutePage').then((m) => ({ default: m.RoutePage })))
+const SourcingPage = lazy(() => import('@/pages/SourcingPage').then((m) => ({ default: m.SourcingPage })))
+const ContactImportPage = lazy(() => import('@/pages/ContactImportPage').then((m) => ({ default: m.ContactImportPage })))
+const SalesforceCsvImportPage = lazy(() => import('@/pages/SalesforceCsvImportPage').then((m) => ({ default: m.SalesforceCsvImportPage })))
+const SendingPage = lazy(() => import('@/pages/Analytics/SendingPage').then((m) => ({ default: m.SendingPage })))
+const SeedTestPage = lazy(() => import('@/pages/Settings/SeedTestPage').then((m) => ({ default: m.SeedTestPage })))
+const PostmasterToolsPage = lazy(() => import('@/pages/Settings/PostmasterToolsPage').then((m) => ({ default: m.PostmasterToolsPage })))
+const AdminWorkersPage = lazy(() => import('@/pages/AdminWorkersPage').then((m) => ({ default: m.AdminWorkersPage })))
+const PrimitivesPage = lazy(() => import('@/pages/_primitives'))
+
+function RouteFallback() {
+  return (
+    <div className="flex items-center justify-center min-h-[50vh]">
+      <div className="text-muted-foreground text-sm">Loading…</div>
+    </div>
+  )
+}
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { session, user, loading, profileError } = useAuth()
@@ -111,7 +124,14 @@ export default function App() {
           }
         />
         {/* Phase A internal surface — not linked from the main nav. */}
-        <Route path="/__primitives" element={<PrimitivesPage />} />
+        <Route
+          path="/__primitives"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <PrimitivesPage />
+            </Suspense>
+          }
+        />
         <Route
           path="/"
           element={

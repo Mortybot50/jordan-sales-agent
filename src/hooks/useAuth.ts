@@ -122,7 +122,10 @@ function clearProfileTimer(): void {
 
 function logStep(step: string, extra: Record<string, unknown> = {}): void {
   const elapsedMs = initStartedAt === 0 ? 0 : Date.now() - initStartedAt
-  console.error('[useAuth]', step, { elapsed_ms: elapsedMs, ...extra })
+  // Routine auth telemetry — keep out of the error console (and Sentry's
+  // console capture). The Sentry breadcrumb below preserves diagnosability
+  // for the auth-hang class of incidents (#99/#103).
+  console.debug('[useAuth]', step, { elapsed_ms: elapsedMs, ...extra })
   try {
     Sentry.addBreadcrumb({
       category: 'auth',
