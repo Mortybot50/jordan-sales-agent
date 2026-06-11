@@ -25,7 +25,7 @@ import {
   isValidDayOfWeek,
   makeRateLimiter,
   rateLimitOk,
-} from './_helpers'
+} from './_helpers.js'
 
 const limiter = makeRateLimiter(60_000, 30)
 

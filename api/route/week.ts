@@ -20,7 +20,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { authenticate, makeRateLimiter, rateLimitOk } from './_helpers'
+import { authenticate, makeRateLimiter, rateLimitOk } from './_helpers.js'
 
 const limiter = makeRateLimiter(60_000, 60)
 

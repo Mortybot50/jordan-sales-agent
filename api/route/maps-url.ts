@@ -15,8 +15,8 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { authenticate, makeRateLimiter, rateLimitOk } from './_helpers'
-import { buildGoogleMapsUrl, type MapsStop } from './_maps'
+import { authenticate, makeRateLimiter, rateLimitOk } from './_helpers.js'
+import { buildGoogleMapsUrl, type MapsStop } from './_maps.js'
 
 const limiter = makeRateLimiter(60_000, 60)
 

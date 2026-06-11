@@ -22,7 +22,7 @@ import {
   authenticate,
   makeRateLimiter,
   rateLimitOk,
-} from './_helpers'
+} from './_helpers.js'
 
 const limiter = makeRateLimiter(60_000, 5)
 const URBAN_AVG_KMH = 30
