@@ -24,6 +24,7 @@
 
 // @ts-expect-error Deno edge runtime
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requireServiceRoleAuth } from '../_shared/auth.ts'
 
 // @ts-expect-error Deno globals
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -253,6 +254,12 @@ async function linkMultiSite(
 // @ts-expect-error Deno serve
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
+
+  // Service-role only: this function writes venues/venue_groups via the
+  // service-role client from caller-supplied ids, so it must never be
+  // publicly callable. Requires verify_jwt=true at the gateway.
+  const unauthorized = await requireServiceRoleAuth(req)
+  if (unauthorized) return unauthorized
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 

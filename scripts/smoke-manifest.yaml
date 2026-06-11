@@ -6,11 +6,11 @@
 #   svc    → verify_jwt=true. Cron / inter-function only. Handler additionally
 #            calls requireServiceRoleAuth (_shared/auth.ts) to require the
 #            'role' claim == 'service_role'.
-#   public → verify_jwt=false. Anyone can hit. Used for outbound tracking links
-#            (click-redirect, pixel-track), webhook callbacks (gmail-inbound,
-#            unsubscribe-post), demo bootstrap (create-demo-user), and a few
-#            internal helpers that haven't been migrated to requireServiceRoleAuth
-#            yet — flagged in comments below for follow-up.
+#   public → verify_jwt=false. Anyone can hit. Used ONLY for outbound tracking
+#            links (click-redirect, pixel-track) and the unsubscribe callback
+#            (unsubscribe-post). Everything else is jwt or svc — the former
+#            "internal helpers" exemption was closed 11/06/2026 and
+#            create-demo-user was deleted the same day.
 #
 # verify_jwt expected by the smoke script:
 #   jwt + svc → true
@@ -44,25 +44,20 @@ svc:
   - process-bounces        # bounce-processing cron
   - reopening-radar-poll   # radar polling cron
   - send-via-smtp          # SMTP sender, called from drain-send-queue
+  - send-warmup-tick       # warmup-ramp cron
   - sequence-tick          # sequence-engine tick cron
   - sourcing-cron-tick     # saved-search dispatcher cron (PR Wave B/11)
+  - vcglr-sync             # VCGLR licence sync cron (weekly)
+  # Migrated from public on 11/06/2026 — handlers gained requireServiceRoleAuth
+  # (or already had byte-match service-key auth) and verify_jwt flipped to true.
+  - abr-lookup             # ABN lookup — service-role writes, never public
+  - ensure-intent-idx      # pgvector index ensurer (byte-match service-key auth)
+  - generate-learning-digest  # learning-digest cron
+  - publication-poll       # publication-poll cron
+  - send-morning-briefing  # morning-briefing cron (manual mode = user JWT)
 
 public:
   # Public-by-design — outbound email tracking + webhook callbacks.
   - click-redirect         # link redirect + click event capture
   - pixel-track            # tracking pixel for email opens
   - unsubscribe-post       # unsubscribe link callback
-
-  # Demo bootstrap — provisions the demo user, intentionally open.
-  - create-demo-user
-
-  # Internal helpers — currently verify_jwt=false but the handlers do their own
-  # auth (anon-key user client OR service-role guard). Migrating these to
-  # verify_jwt=true + requireServiceRoleAuth is tracked separately; until then
-  # the smoke script accepts them as public so deploys stay green.
-  - abr-lookup             # ABN lookup, called from discover-leads
-  - ensure-intent-idx      # pgvector index ensurer
-  - generate-learning-digest  # learning-digest cron
-  - publication-poll       # publication-poll cron
-  - send-morning-briefing  # morning-briefing cron
-  - vcglr-poll             # VCGLR-poll cron

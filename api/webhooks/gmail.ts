@@ -17,14 +17,13 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
-import { createDecipheriv } from 'crypto'
+import { encryptToken, decryptToken } from '../_lib/token-crypto.js'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 
 const GOOGLE_CLIENT_ID = process.env.VITE_GOOGLE_OAUTH_CLIENT_ID ?? process.env.GOOGLE_OAUTH_CLIENT_ID
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL!
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
-const ENCRYPTION_KEY = process.env.TOKEN_ENCRYPTION_KEY
 const PUBSUB_SERVICE_ACCOUNT_EMAIL = process.env.GMAIL_PUBSUB_SERVICE_ACCOUNT_EMAIL
 const PUBSUB_AUDIENCE_OVERRIDE = process.env.GMAIL_PUBSUB_AUDIENCE
 
@@ -33,18 +32,6 @@ const IS_PRODUCTION =
 
 // Google OIDC JWKS — cached by jose internally (ETag/max-age aware).
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'))
-
-function decryptToken(ciphertext: string): string {
-  if (!ENCRYPTION_KEY || !ciphertext.includes(':')) return ciphertext
-  const [ivHex, authTagHex, encHex] = ciphertext.split(':')
-  const key = Buffer.from(ENCRYPTION_KEY, 'hex')
-  const iv = Buffer.from(ivHex, 'hex')
-  const authTag = Buffer.from(authTagHex, 'hex')
-  const encrypted = Buffer.from(encHex, 'hex')
-  const decipher = createDecipheriv('aes-256-gcm', key, iv)
-  decipher.setAuthTag(authTag)
-  return decipher.update(encrypted).toString('utf8') + decipher.final('utf8')
-}
 
 async function refreshAccessToken(refreshToken: string): Promise<string | null> {
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) return null
@@ -183,7 +170,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await supabase
           .from('gmail_connections')
           .update({
-            access_token_encrypted: accessToken,
+            access_token_encrypted: encryptToken(accessToken),
             access_token_expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),
           })
           .eq('id', connection.id)

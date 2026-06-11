@@ -23,6 +23,7 @@
 
 // @ts-expect-error Deno edge runtime import — not typed in Node tsc
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requireServiceRoleAuth } from '../_shared/auth.ts'
 
 // @ts-expect-error Deno globals
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
@@ -35,7 +36,7 @@ const SUPABASE_URL =
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
 const FROM_ADDRESS = 'Jordan Briefing <briefing@premiumwaterau.com>'
-const APP_URL = 'https://jordan-sales-agent.vercel.app'
+const APP_URL = 'https://premiumwaterau.com.au'
 
 // ── Jordan design tokens (inline — email-safe subset) ──────────────
 const INK = '#0f172a'
@@ -149,6 +150,12 @@ Deno.serve(async (req: Request) => {
       )
     }
     manualUserId = authUid
+  } else {
+    // Scheduled (cron) mode — only the pg_cron vault service-role JWT may
+    // trigger an all-users briefing run. Requires verify_jwt=true at the
+    // gateway (signature) + role claim check here (defence-in-depth).
+    const unauthorized = await requireServiceRoleAuth(req)
+    if (unauthorized) return unauthorized
   }
 
   if (!RESEND_API_KEY) {

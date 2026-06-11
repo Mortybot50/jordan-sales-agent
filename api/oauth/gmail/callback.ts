@@ -10,7 +10,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
-import { createCipheriv, randomBytes } from 'crypto'
+import { encryptToken } from '../../_lib/token-crypto.js'
 import { verifyState } from '../../_lib/oauth-state.js'
 
 const GOOGLE_CLIENT_ID = process.env.VITE_GOOGLE_OAUTH_CLIENT_ID ?? process.env.GOOGLE_OAUTH_CLIENT_ID
@@ -18,18 +18,8 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET
 const GOOGLE_PUBSUB_TOPIC = process.env.GOOGLE_PUBSUB_TOPIC
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL!
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
-const ENCRYPTION_KEY = process.env.TOKEN_ENCRYPTION_KEY // 32-byte hex
 const OAUTH_STATE_SECRET = process.env.OAUTH_STATE_SECRET
 
-function encryptToken(plaintext: string): string {
-  if (!ENCRYPTION_KEY) return plaintext // fallback: store plaintext if no key (dev only)
-  const key = Buffer.from(ENCRYPTION_KEY, 'hex')
-  const iv = randomBytes(12)
-  const cipher = createCipheriv('aes-256-gcm', key, iv)
-  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()])
-  const authTag = cipher.getAuthTag()
-  return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted.toString('hex')}`
-}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { code, state: rawState, error } = req.query

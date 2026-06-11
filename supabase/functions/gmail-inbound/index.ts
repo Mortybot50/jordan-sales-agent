@@ -50,15 +50,21 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  // Lightweight token check — prevents random POST abuse
-  if (PUBSUB_TOKEN) {
-    const token = req.headers.get('x-pubsub-token') ?? new URL(req.url).searchParams.get('token')
-    if (token !== PUBSUB_TOKEN) {
-      return new Response(JSON.stringify({ error: 'Forbidden' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
+  // Shared-token check — prevents random POST abuse. The token is MANDATORY:
+  // when Pub/Sub goes live this function flips to verify_jwt=false, and an
+  // unset env var must fail closed (503), never fall through to unauthenticated.
+  if (!PUBSUB_TOKEN) {
+    return new Response(JSON.stringify({ error: 'GMAIL_PUBSUB_TOKEN not configured' }), {
+      status: 503,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+  const token = req.headers.get('x-pubsub-token') ?? new URL(req.url).searchParams.get('token')
+  if (token !== PUBSUB_TOKEN) {
+    return new Response(JSON.stringify({ error: 'Forbidden' }), {
+      status: 403,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
   }
 
   let pubsub: PubSubMessage

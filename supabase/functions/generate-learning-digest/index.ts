@@ -20,6 +20,7 @@
 
 // @ts-expect-error Deno edge runtime import — not typed in Node tsc
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requireServiceRoleAuth } from '../_shared/auth.ts'
 
 // @ts-expect-error Deno globals
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
@@ -95,6 +96,13 @@ Deno.serve(async (req) => {
   }
 
   const isCronRun = payload.all === true
+
+  if (isCronRun) {
+    // All-users run is cron-only: require the vault service-role JWT.
+    // Gateway verify_jwt=true checks the signature; this checks the role claim.
+    const unauthorized = await requireServiceRoleAuth(req)
+    if (unauthorized) return unauthorized
+  }
 
   // Resolve the target user(s)
   let userIds: string[] = []
