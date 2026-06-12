@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-06-13 — Passwordless email-OTP login
+
+Jordan was told a magic-link sign-in exists; it didn't, and he couldn't get
+in. The login page is now a two-step passwordless flow: enter email → receive
+a 6-digit code → enter code → signed in. The code leads (browser-agnostic —
+PKCE emailed links break when opened outside the requesting browser); the
+email still carries a same-device link as a convenience. Unknown addresses
+get the same neutral "a code is on its way" line (no account enumeration),
+`shouldCreateUser: false` plus server-side `disable_signup` keep strangers
+out, and password sign-in stays available behind a de-emphasised toggle
+until demo@ retires.
+
+Server side (all via Management API, nothing left for the dashboard): auth
+email now goes out through Resend SMTP as "LeadFlow <login@premiumwaterau.com>"
+— the **.com** is the Resend-verified domain; .com.au is not (550 on first
+probe). Site URL fixed from `localhost:3000` to `https://premiumwaterau.com.au`
+(emailed links previously deep-linked to localhost), redirect allow-list set,
+OTP length 8 → 6, email rate limit 2/hr → 30/hr, magic-link template rewritten
+to lead with the code. Proven live end-to-end before deploy: OTP requested →
+delivered in 3s → verified → session returned, via a temporary auth user on an
+IMAP-readable cold-send mailbox (created and deleted inside one probe run).
+
+Tests: 6-spec Playwright suite for the two-step UI (runs unauthenticated,
+never consumes the email rate limit); 62/62 unit tests; full prod smoke
+35 passed / 3 known skips. Gotcha for next time: PATCHing a single `smtp_*`
+field on `/config/auth` silently wipes the rest of the SMTP block — always
+send the full block.
+
 ## 2026-06-12 — Jordan feedback build (board, detail, leads inbox, send funnel)
 
 Addresses Jordan's three problems: the pipeline didn't show lead state at a
