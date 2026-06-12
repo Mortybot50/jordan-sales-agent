@@ -1,5 +1,60 @@
 # Changelog
 
+## 2026-06-12 — Jordan feedback build (board, detail, leads inbox, send funnel)
+
+Addresses Jordan's three problems: the pipeline didn't show lead state at a
+glance, the detail panels were data dumps, and the scraper had no front-end.
+
+**Pipeline board (A):** DealCard rebuilt around the business name with a
+temperature chip, last-contact, last-action, sequence/replied status and a
+one-line notes summary — scannable at 65 cards/column. Board filter row
+(heat / outreach / source). 8 stages + de-emphasised Hold. KPI sums + averages
+now exclude NULL-value deals; the $800 quick-add default is gone.
+
+**Temperature + PST re-triage (B):** new `deals.temperature` (hot/warm/cold,
+manual-overridable) with a tested classifier wired into reply-intent. The 317
+PST mailbox-import deals were re-triaged from their thread metadata: correct
+stage (Contacted 61 / Replied 245 / Closed 11), temperature (cold 64 / warm
+148 / hot 105), business-name titles, real last-contact dates, and the $800
+placeholder values nulled (hand-made deals untouched). Full before-state
+backed up; reversible.
+
+**Detail redesign (C):** ContactDetailPage + DealDrawer pass the 3-second
+test — large name with temperature + stage context, a loud next-step banner
+(red when overdue), empty fields collapsed behind an expander, and a real
+chronological interaction timeline (PST contacts surface their mailbox thread).
+
+**Leads inbox (D):** `/leads/inbox` gives the scraper a face — pending venues
+with source, ICP, contact + verification status, and Approve/Discard/Defer
+(row + bulk). Approve runs the full chain server-side (crawl → internal
+verify → deal → enrol → first draft) with per-step feedback. Discard suppresses
+the venue's emails under a distinct `lead_rejected` source. The legacy
+`auto_sourced_candidates` table was consolidated into `venues.review_status`
+and dropped — one review model.
+
+**Approve = sent, visibly (E):** approved drafts no longer vanish — an Outbox
+rail shows queued → sending ~time → sent. Bulk approve, plus loud
+pending-count nudges on the dashboard and morning briefing. Fixed a regression
+where approve falsely reported "daily cap reached" (a locked-down RPC called
+from the client); sender selection is now owned solely by the enqueue cron.
+Proven with a live end-to-end send — first real send since 19/05.
+
+**Stage rename:** Closed Won → Closed, Closed Lost → Lost; Demo Completed /
+Negotiation / Pending Install / Installed retired (deals remapped).
+
+**Login migration (F1):** `jordan@purezza.com.au` now has a full profile and
+owns all the data; the old `demo@` login stays valid until Jordan confirms
+the switch.
+
+**Security (F3):** per-IP rate limit on the manual unsubscribe form;
+click-redirect destinations moved server-side (open-redirect closed, `?url=`
+no longer trusted) via a new `tracked_links` table; process-bounces only acts
+on DSNs that link to a real send (no more inbox-driven mass-suppression).
+
+**Internal fix:** `requireServiceRoleAuth` now accepts Supabase's new non-JWT
+secret-key format — it had been silently 401-ing every Edge-Function→Edge-
+Function internal call since the platform key migration.
+
 ## 2026-06-11 — Production-readiness sweep (security, demo purge, tests, UX)
 
 **Decisions on record:**
