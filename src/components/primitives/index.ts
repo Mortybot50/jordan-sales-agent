@@ -45,6 +45,7 @@ export { MeterRail, type MeterRailProps } from './MeterRail'
 export { DeltaBadge, type DeltaBadgeProps } from './DeltaBadge'
 export { DotSeries, type DotSeriesProps } from './DotSeries'
 export { LivePill, type LivePillProps } from './LivePill'
+export { TemperatureChip, type TemperatureChipProps, type DealTemperature } from './TemperatureChip'
 export {
   DarkMetricCard,
   type DarkMetricCardProps,

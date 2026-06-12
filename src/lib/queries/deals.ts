@@ -40,6 +40,9 @@ export interface Deal {
   // Next step (added 2026-04-26 — Quick Wins Batch 2)
   next_step_note: string | null
   next_step_due_at: string | null
+  // Temperature (added 2026-06-12 — Jordan's at-a-glance board)
+  temperature: 'hot' | 'warm' | 'cold' | null
+  temperature_source: 'auto' | 'manual'
   contact?: {
     id: string
     full_name: string
@@ -91,6 +94,23 @@ export interface Deal {
    * tooltip can show "Last touched: <date>".
    */
   last_activity_at?: string | null
+  /**
+   * Last actual CONTACT with the lead (email/call/meeting either direction) —
+   * max of last_touch_at and the latest contact-type activity. Distinct from
+   * last_activity_at, which counts any touch incl. stage shuffles.
+   */
+  last_contact_at?: string | null
+  /** Latest activity of any type — "last action" line on the card. */
+  last_action?: { type: string; at: string } | null
+  /** An inbound reply exists (live activity or PST import verdict). */
+  has_replied?: boolean
+  /** Active/most-recent sequence enrollment for the card chip. */
+  enrollment?: {
+    sequence_name: string
+    current_step: number
+    total_steps: number
+    status: string
+  } | null
 }
 
 export interface UseDealsOptions {
@@ -149,25 +169,70 @@ export function useDeals(options: UseDealsOptions = {}) {
         }
       }
 
-      // Pull the latest activity timestamp per deal so we can derive
-      // days_since_last_activity client-side. We only care about the most
-      // recent occurred_at — Supabase doesn't do GROUP BY directly so we
-      // fold the rows ourselves. Cheap because activities are paged and we
-      // only request (deal_id, occurred_at) columns.
+      // Pull activity rows per deal and fold client-side (Supabase has no
+      // GROUP BY): latest occurred_at (aging), latest of any type ("last
+      // action" line), latest CONTACT-type activity (last-contact column) and
+      // whether an inbound reply exists (Replied badge).
+      const CONTACT_TYPES = new Set([
+        'email_sent', 'email_outbound', 'email_manual', 'email_inbound',
+        'reply_received', 'call_note', 'meeting_note', 'meeting_booked', 'voice_note',
+      ])
+      const INBOUND_TYPES = new Set(['reply_received', 'email_inbound'])
       const lastActivityMap: Record<string, string> = {}
+      const lastActionMap: Record<string, { type: string; at: string }> = {}
+      const lastContactActMap: Record<string, string> = {}
+      const repliedSet = new Set<string>()
       if (dealIds.length > 0) {
         const { data: acts } = await supabase
           .from('activities')
-          .select('deal_id, occurred_at')
+          .select('deal_id, occurred_at, activity_type')
           .in('deal_id', dealIds)
           .not('occurred_at', 'is', null)
           .order('occurred_at', { ascending: false })
 
         if (acts) {
           for (const a of acts) {
-            if (a.deal_id && !lastActivityMap[a.deal_id] && a.occurred_at) {
-              lastActivityMap[a.deal_id] = a.occurred_at
+            if (!a.deal_id || !a.occurred_at) continue
+            if (!lastActivityMap[a.deal_id]) lastActivityMap[a.deal_id] = a.occurred_at
+            if (!lastActionMap[a.deal_id] && a.activity_type) {
+              lastActionMap[a.deal_id] = { type: a.activity_type, at: a.occurred_at }
             }
+            if (!lastContactActMap[a.deal_id] && a.activity_type && CONTACT_TYPES.has(a.activity_type)) {
+              lastContactActMap[a.deal_id] = a.occurred_at
+            }
+            if (a.activity_type && INBOUND_TYPES.has(a.activity_type)) {
+              repliedSet.add(a.deal_id)
+            }
+          }
+        }
+      }
+
+      // Sequence enrollment per deal — drives the "Hospitality 3-Touch ·
+      // step 2/3" chip. Latest enrollment wins; total steps counted from
+      // sequence_steps (a handful of rows org-wide).
+      const enrollmentMap: Record<string, NonNullable<Deal['enrollment']>> = {}
+      if (dealIds.length > 0) {
+        const [{ data: enrolls }, { data: steps }] = await Promise.all([
+          supabase
+            .from('sequence_enrollments')
+            .select('deal_id, status, current_step, enrolled_at, sequence:sequences(id, name)')
+            .in('deal_id', dealIds)
+            .order('enrolled_at', { ascending: false }),
+          supabase.from('sequence_steps').select('sequence_id'),
+        ])
+        const stepCount: Record<string, number> = {}
+        for (const s of steps ?? []) {
+          if (s.sequence_id) stepCount[s.sequence_id] = (stepCount[s.sequence_id] ?? 0) + 1
+        }
+        for (const e of enrolls ?? []) {
+          if (!e.deal_id || enrollmentMap[e.deal_id]) continue
+          const seq = e.sequence as unknown as { id: string; name: string } | null
+          if (!seq) continue
+          enrollmentMap[e.deal_id] = {
+            sequence_name: seq.name,
+            current_step: e.current_step ?? 1,
+            total_steps: stepCount[seq.id] ?? 0,
+            status: e.status ?? 'active',
           }
         }
       }
@@ -199,6 +264,25 @@ export function useDeals(options: UseDealsOptions = {}) {
         const lastActivityAt =
           lastTouchMs != null ? new Date(lastTouchMs).toISOString() : null
 
+        // Last CONTACT — latest of the deal's own last_touch_at (set by the
+        // PST re-triage from the mailbox metadata) and any contact-type
+        // activity. Stage shuffles don't count as contact.
+        const touchMs = d.last_touch_at ? new Date(d.last_touch_at).getTime() : null
+        const contactActMs = lastContactActMap[d.id]
+          ? new Date(lastContactActMap[d.id]).getTime()
+          : null
+        const lastContactMs =
+          touchMs != null && contactActMs != null
+            ? Math.max(touchMs, contactActMs)
+            : (touchMs ?? contactActMs)
+
+        // Replied = a live inbound activity OR the PST importer's WARM verdict
+        // (those threads predate the activities table).
+        const isPstWarm =
+          typeof d.notes === 'string' &&
+          d.notes.includes('[purezza-pst-promote]') &&
+          /warm lead/i.test(d.notes)
+
         return {
           ...d,
           outcome: (d.outcome as Deal['outcome']) ?? null,
@@ -208,6 +292,10 @@ export function useDeals(options: UseDealsOptions = {}) {
           recently_returned: recentlyReturned,
           days_since_last_activity: daysSinceLastActivity,
           last_activity_at: lastActivityAt,
+          last_contact_at: lastContactMs != null ? new Date(lastContactMs).toISOString() : null,
+          last_action: lastActionMap[d.id] ?? null,
+          has_replied: repliedSet.has(d.id) || isPstWarm,
+          enrollment: enrollmentMap[d.id] ?? null,
         }
       }) as Deal[]
     },
@@ -326,6 +414,10 @@ export function useUpdateDeal() {
         recently_returned: _recentlyReturned,
         days_since_last_activity: _dsla,
         last_activity_at: _laa,
+        last_contact_at: _lca,
+        last_action: _lact,
+        has_replied: _hr,
+        enrollment: _enr,
         ...dbUpdates
       } = updates
       const { data, error } = await supabase

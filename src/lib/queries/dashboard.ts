@@ -225,7 +225,15 @@ export function usePipelineHeroMetrics() {
         decidedTotal > 0 ? Math.round((dealsWon / decidedTotal) * 100) : null
 
       const openCount = (openDeals ?? []).length
-      const avgDealSize = openCount > 0 ? Math.round(pipelineValue / openCount) : 0
+      // KPI integrity: deals without a value (e.g. the PST import, value
+      // intentionally NULL) are excluded from the average's denominator —
+      // otherwise 300 unvalued leads crush the figure to ~$0.
+      const valuedOpenCount = (openDeals ?? []).filter(
+        (d) =>
+          isOpenPipeline(d as unknown as DealFinancialRow) &&
+          dealHeadlineValue(d as unknown as DealFinancialRow) > 0,
+      ).length
+      const avgDealSize = valuedOpenCount > 0 ? Math.round(pipelineValue / valuedOpenCount) : 0
 
       return {
         pipelineValue,

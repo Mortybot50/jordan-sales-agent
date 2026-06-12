@@ -44,6 +44,7 @@ import { useForm, type FieldErrors } from 'react-hook-form'
 import { toast } from 'sonner'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { dealFormSchema, DEAL_VALUE_WARN, type DealFormValues } from '@/lib/schemas/deal'
+import { dealHeadlineValue, type DealFinancialRow } from '@/lib/queries/pipelineFinancials'
 
 export interface KanbanBoardProps {
   /** Filter kanban to a single stage column (deep-link from Pipeline Health). */
@@ -112,15 +113,35 @@ export function KanbanBoard({
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   )
 
+  // No default deal value — the $800 placeholder polluted every import and
+  // KPI. Value stays empty until Jordan actually knows the number.
   const form = useForm<DealFormValues>({
     resolver: zodResolver(dealFormSchema),
-    defaultValues: { contract_value: 800 },
   })
+
+  // Board-level filters: temperature, outreach status, source.
+  const [tempFilter, setTempFilter] = useState<'all' | 'hot' | 'warm' | 'cold'>('all')
+  const [outreachFilter, setOutreachFilter] = useState<'all' | 'enrolled' | 'replied' | 'not_contacted'>('all')
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'pst' | 'other'>('all')
+  const filtersActive = tempFilter !== 'all' || outreachFilter !== 'all' || sourceFilter !== 'all'
+
+  const filteredDeals = useMemo(() => {
+    return displayDeals.filter((d) => {
+      if (tempFilter !== 'all' && d.temperature !== tempFilter) return false
+      if (outreachFilter === 'enrolled' && !(d.enrollment && (d.enrollment.status === 'active' || d.enrollment.status === 'paused'))) return false
+      if (outreachFilter === 'replied' && !d.has_replied) return false
+      if (outreachFilter === 'not_contacted' && (d.last_contact_at || d.has_replied || d.enrollment)) return false
+      const isPst = !!d.notes?.includes('[purezza-pst-promote]')
+      if (sourceFilter === 'pst' && !isPst) return false
+      if (sourceFilter === 'other' && isPst) return false
+      return true
+    })
+  }, [displayDeals, tempFilter, outreachFilter, sourceFilter])
 
   const dealsByStage = useMemo(() => {
     const map: Record<string, Deal[]> = {}
     for (const stage of stages ?? []) {
-      const cards = displayDeals.filter((d) => d.stage_id === stage.id)
+      const cards = filteredDeals.filter((d) => d.stage_id === stage.id)
       if (sortBy === 'stalest') {
         cards.sort(
           (a, b) =>
@@ -130,7 +151,7 @@ export function KanbanBoard({
       map[stage.id] = cards
     }
     return map
-  }, [displayDeals, stages, sortBy])
+  }, [filteredDeals, stages, sortBy])
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
@@ -231,7 +252,7 @@ export function KanbanBoard({
     setQuickAddStageId(null)
     setQuickAddProductId(null)
     setQuickAddProductTouched(false)
-    form.reset({ contract_value: 800 })
+    form.reset({})
   }
 
   function handleQuickAddProduct(productId: string, product: Product) {
@@ -305,6 +326,55 @@ export function KanbanBoard({
 
   return (
     <>
+      {/* Board-level filter row */}
+      <div className="flex items-center gap-2 flex-wrap px-4 sm:px-6 pb-2">
+        <FilterChipGroup
+          label="Heat"
+          value={tempFilter}
+          onChange={(v) => setTempFilter(v as typeof tempFilter)}
+          options={[
+            { value: 'all', label: 'All' },
+            { value: 'hot', label: '🔥 Hot' },
+            { value: 'warm', label: 'Warm' },
+            { value: 'cold', label: 'Cold' },
+          ]}
+        />
+        <FilterChipGroup
+          label="Outreach"
+          value={outreachFilter}
+          onChange={(v) => setOutreachFilter(v as typeof outreachFilter)}
+          options={[
+            { value: 'all', label: 'All' },
+            { value: 'enrolled', label: 'In sequence' },
+            { value: 'replied', label: 'Replied' },
+            { value: 'not_contacted', label: 'Not contacted' },
+          ]}
+        />
+        <FilterChipGroup
+          label="Source"
+          value={sourceFilter}
+          onChange={(v) => setSourceFilter(v as typeof sourceFilter)}
+          options={[
+            { value: 'all', label: 'All' },
+            { value: 'pst', label: 'Mailbox import' },
+            { value: 'other', label: 'Other' },
+          ]}
+        />
+        {filtersActive && (
+          <button
+            type="button"
+            className="text-[11px] text-ink-muted underline hover:text-ink"
+            onClick={() => {
+              setTempFilter('all')
+              setOutreachFilter('all')
+              setSourceFilter('all')
+            }}
+          >
+            Clear ({filteredDeals.length}/{displayDeals.length} shown)
+          </button>
+        )}
+      </div>
+
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -317,11 +387,16 @@ export function KanbanBoard({
         <div className="flex gap-3 overflow-x-auto pb-4 px-4 sm:px-6 h-full min-h-0">
           {visibleStages.map((stage) => {
             const stageDeals = dealsByStage[stage.id] ?? []
+            // NULL-valued deals contribute nothing to the column sum (KPI
+            // integrity) — headline basis matches the dashboard (acv fallback).
             const totalValue = stageDeals.reduce(
-              (sum, d) => sum + (d.contract_value ?? 0),
+              (sum, d) => sum + dealHeadlineValue(d as unknown as DealFinancialRow),
               0
             )
             const isActiveTarget = activeDeal != null && activeDeal.stage_id !== stage.id
+            // "Hold for Next Month" is a utility column, not a pipeline stage —
+            // visually de-emphasised so the 8 real stages carry the eye.
+            const isUtilityColumn = stage.name === 'Hold for Next Month'
 
             return (
               <div
@@ -331,6 +406,7 @@ export function KanbanBoard({
                   isActiveTarget
                     ? 'border-brand bg-brand-soft'
                     : 'border-hairline',
+                  isUtilityColumn && !isActiveTarget && 'border-dashed opacity-65 hover:opacity-100',
                 )}
               >
                 {/* Column header */}
@@ -529,5 +605,46 @@ export function KanbanBoard({
         </DialogContent>
       </Dialog>
     </>
+  )
+}
+
+/**
+ * Compact labelled chip-toggle group for the board filter row. Single-select;
+ * "All" clears. Kept local — Pipeline is the only board-density surface.
+ */
+function FilterChipGroup({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  options: Array<{ value: string; label: string }>
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <span className="text-[10px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
+        {label}
+      </span>
+      <div className="inline-flex rounded-[6px] border border-hairline bg-surface-1 p-0.5">
+        {options.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => onChange(o.value)}
+            className={cn(
+              'h-6 rounded-[4px] px-2 text-[11px] font-medium transition-colors',
+              value === o.value
+                ? 'bg-[color:var(--jordan-accent-soft)] text-[color:var(--jordan-accent-hover)]'
+                : 'text-ink-muted hover:text-ink hover:bg-surface-3',
+            )}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }
