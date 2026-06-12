@@ -29,6 +29,7 @@ const AUTH_ROUTES = [
   '/drafts',
   '/sequences',
   '/sourcing',
+  '/leads/inbox',
   '/venue-groups',
   '/briefing',
   '/settings',
@@ -123,5 +124,32 @@ test.describe('authenticated routes', () => {
       await page.waitForURL('**/contacts/*', { timeout: 15_000 })
       await expectRouteRenders(page, page.url(), errors)
     }
+  })
+
+  // Jordan's at-a-glance board: cards must show business names, never raw
+  // email addresses, and carry temperature chips (session-2 redesign).
+  test('pipeline cards show business names + temperature, never raw emails', async ({ page }) => {
+    await page.goto('/pipeline')
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
+    // Force kanban (cards) on desktop viewport.
+    const body = await page.locator('body').innerText()
+    // No raw email address should appear as a card title anywhere on the board.
+    const cardTitles = await page.locator('[role="button"][tabindex="0"] p').allInnerTexts()
+    const emailLike = cardTitles.filter((t) => /^\s*\S+@\S+\.\S+\s*$/.test(t))
+    expect(emailLike, `raw email titles on cards: ${emailLike.join(', ')}`).toHaveLength(0)
+    // Temperature chips render (Hot/Warm/Cold present somewhere on the board).
+    expect(body).toMatch(/Hot|Warm|Cold/)
+  })
+
+  // Leads inbox: the scraper's face renders pending venues with actions.
+  test('leads inbox lists pending venues with approve action', async ({ page }) => {
+    await page.goto('/leads/inbox')
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
+    const body = await page.locator('body').innerText()
+    expect(body).toContain('Leads inbox')
+    // Either rows with an Approve button, or a clean inbox-zero empty state.
+    const approveButtons = await page.getByRole('button', { name: /approve/i }).count()
+    const emptyState = body.includes('Inbox zero')
+    expect(approveButtons > 0 || emptyState, 'inbox shows rows or empty state').toBeTruthy()
   })
 })
