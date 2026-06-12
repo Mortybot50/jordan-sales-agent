@@ -270,7 +270,23 @@ Deno.serve(async (req: Request) => {
             .limit(1)
             .maybeSingle()
 
-          if (queueRow) {
+          // P2-6 (12/06): a DSN only suppresses when it links to one of OUR
+          // actual sends — a matching email_send_queue row (this sender
+          // account + recipient, last 7d). Without that link the "bounce"
+          // could be a forged/misdirected mailer-daemon message landing in the
+          // inbox; acting on it would let anyone with inbox access mass-suppress
+          // arbitrary addresses. No queue match -> log and skip, never suppress.
+          if (!queueRow) {
+            console.info('process-bounces: DSN with no matching send — ignored', {
+              account: account.id,
+              to_hashed: await redactEmail(recipient),
+              status: dsn.statusCode,
+            })
+            await imapCmd(imap, `STORE ${uid} +FLAGS (\\Seen)`)
+            continue
+          }
+
+          {
             // NOTE: email_send_queue.status CHECK constraint allows only
             // queued/sending/sent/failed/cancelled — no 'bounced'. We mark
             // the row 'failed' with a `bounce:` prefix in last_error so the
@@ -299,8 +315,9 @@ Deno.serve(async (req: Request) => {
           }
 
           // Auto-suppress (idempotent — unique (org_id, email) suppression).
-          // If we don't have a queue row but we know the org via account, still suppress.
-          const orgId = queueRow?.org_id ?? account.org_id
+          // Reached only with a confirmed queueRow (verified above), so the
+          // org is the verified send's org — never the account fallback.
+          const orgId = queueRow.org_id
           const { data: alreadyS } = await supabase
             .from('suppression_list')
             .select('id')

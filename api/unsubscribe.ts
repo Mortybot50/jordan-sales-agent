@@ -53,6 +53,36 @@ function isValidEmailShape(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 320
 }
 
+// Per-IP token bucket for the MANUAL form path (P2-1). The one-click signed
+// path is HMAC-gated and exempt. In-memory is sufficient: the manual form is
+// low-volume, and the bucket only needs to blunt a scripted enumeration burst
+// from a single source within a Lambda's lifetime. Map is pruned on overflow.
+const RATE_WINDOW_MS = 60_000
+const RATE_MAX = 5
+const ipBuckets = new Map<string, { count: number; resetAt: number }>()
+
+function manualRateLimitOk(ip: string): boolean {
+  const now = Date.now()
+  const b = ipBuckets.get(ip)
+  if (!b || now > b.resetAt) {
+    if (ipBuckets.size > 5000) {
+      for (const [k, v] of ipBuckets) if (now > v.resetAt) ipBuckets.delete(k)
+    }
+    ipBuckets.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS })
+    return true
+  }
+  if (b.count >= RATE_MAX) return false
+  b.count += 1
+  return true
+}
+
+function callerIp(req: VercelRequest): string {
+  const xff = req.headers['x-forwarded-for']
+  if (typeof xff === 'string' && xff.length > 0) return xff.split(',')[0].trim()
+  if (Array.isArray(xff) && xff.length > 0) return xff[0]
+  return req.socket?.remoteAddress ?? 'unknown'
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
@@ -70,6 +100,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let tokenValid = false
   if (rawToken && UNSUBSCRIBE_SIGNING_KEY) {
     tokenValid = verifyUnsubscribeToken(email, rawToken, UNSUBSCRIBE_SIGNING_KEY)
+  }
+
+  // Rate-limit the manual (no/invalid token) path only — signed one-click
+  // links carry their own proof and shouldn't be throttled.
+  if (!tokenValid && !manualRateLimitOk(callerIp(req))) {
+    return res.status(429).json({ error: 'Too many requests — try again shortly.' })
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)

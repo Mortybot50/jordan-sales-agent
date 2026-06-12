@@ -1,15 +1,14 @@
 /**
  * click-redirect — records a click event then 302s to the real URL.
  *
- * URL:  GET /functions/v1/click-redirect/:send_queue_id?url=<encoded>
+ * URL:  GET /functions/v1/click-redirect/:token
  *
- * For Week 1 we keep this trivial: trust the `url` query param verbatim,
- * but require it to be http:// or https:// to prevent open-redirect abuse
- * via `javascript:` or `data:` schemes. A more polished version (Week 2+)
- * would store a per-link token and look the destination up server-side so
- * the URL never leaks in the email body — but Week 1's scope is "we can
- * count clicks", and the link visibility was always going to be there
- * anyway because email clients display the href on hover.
+ * The destination is stored server-side in public.tracked_links and resolved
+ * by `token`; the ?url= query param is NO LONGER read (P2-2, 12/06). An opaque
+ * token can't be repointed on the wire, and the destination never leaves our
+ * DB. An unknown/malformed token redirects to the app — there is no
+ * attacker-controllable destination path. (Safe to drop the legacy param:
+ * verified nothing in the send pipeline ever emitted ?url= links.)
  *
  * Click event semantics:
  *   - Inserts one `email_send_events` row of type='clicked' PER click. We
@@ -32,7 +31,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? Deno.env.get('VITE_SUPABASE
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 // @ts-expect-error Deno globals
 const FALLBACK_URL =
-  Deno.env.get('PUBLIC_APP_URL') ?? 'https://jordan-sales-agent.vercel.app'
+  Deno.env.get('PUBLIC_APP_URL') ?? 'https://premiumwaterau.com.au'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -74,13 +73,11 @@ Deno.serve(async (req: Request) => {
 
   const url = new URL(req.url)
   const segments = url.pathname.split('/').filter(Boolean)
-  const sendQueueId = segments[segments.length - 1] ?? ''
-  const destination = safeDestination(url.searchParams.get('url'))
+  const token = segments[segments.length - 1] ?? ''
 
-  // If the queue id is malformed, still redirect — never strand the user on
-  // an error page just because our analytics link rotted.
-  if (!UUID_RE.test(sendQueueId)) {
-    return redirectTo(destination)
+  if (!UUID_RE.test(token)) {
+    // Malformed token — straight to the app. Never read a wire-supplied URL.
+    return redirectTo(FALLBACK_URL)
   }
 
   const userAgent = req.headers.get('user-agent')
@@ -89,30 +86,45 @@ Deno.serve(async (req: Request) => {
     req.headers.get('cf-connecting-ip') ??
     null
 
-  // Fire-and-forget DB write — don't make the recipient wait on Postgres.
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+  // Resolve the destination from the stored link — NOT from the wire. This is
+  // the open-redirect fix: the URL the recipient lands on is whatever WE stored
+  // at send time, immune to query-param tampering.
+  const { data: link } = await supabase
+    .from('tracked_links')
+    .select('org_id, send_queue_id, destination_url')
+    .eq('token', token)
+    .maybeSingle()
+
+  // Unknown token → app. No wire URL is ever read; no click logged.
+  if (!link) {
+    return redirectTo(FALLBACK_URL)
+  }
+  const destination = safeDestination(link.destination_url)
+
+  // Fire-and-forget click event — don't make the recipient wait on Postgres.
   ;(async () => {
     try {
-      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-      const { data: queueRow } = await supabase
-        .from('email_send_queue')
-        .select('org_id, email_account_id, draft_id')
-        .eq('id', sendQueueId)
-        .maybeSingle()
-
-      if (queueRow) {
-        await supabase.from('email_send_events').insert({
-          org_id: queueRow.org_id,
-          send_queue_id: sendQueueId,
-          draft_id: queueRow.draft_id,
-          email_account_id: queueRow.email_account_id,
-          event_type: 'clicked',
-          metadata: {
-            destination,
-            user_agent: userAgent,
-            ip,
-          },
-        })
+      let acct: string | null = null
+      let draft: string | null = null
+      if (link.send_queue_id) {
+        const { data: queueRow } = await supabase
+          .from('email_send_queue')
+          .select('email_account_id, draft_id')
+          .eq('id', link.send_queue_id)
+          .maybeSingle()
+        acct = queueRow?.email_account_id ?? null
+        draft = queueRow?.draft_id ?? null
       }
+      await supabase.from('email_send_events').insert({
+        org_id: link.org_id,
+        send_queue_id: link.send_queue_id,
+        draft_id: draft,
+        email_account_id: acct,
+        event_type: 'clicked',
+        metadata: { destination, user_agent: userAgent, ip },
+      })
     } catch (err) {
       console.error('click-redirect DB write failed:', (err as Error).message)
     }
