@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { deriveTemperature } from '../_shared/temperature.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -182,6 +183,32 @@ Reply: ${replyBody || '(empty)'}`
       JSON.stringify({ error: 'Failed to write classification to activity' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     )
+  }
+
+  // Keep deal temperature live (upgrade-only, never clobber manual overrides).
+  // An inbound reply just landed, so per _shared/temperature.ts the contact's
+  // open deals are at least warm; positive intent inside the 60d window = hot.
+  // Downgrades are intentionally NOT applied here — heat decay is a derivation
+  // concern, not an event concern.
+  if (activity.contact_id) {
+    const newTemp = deriveTemperature({
+      lastPositiveIntentAt: intent === 'positive' ? new Date().toISOString() : null,
+      lastInboundAt: new Date().toISOString(),
+      hasAnyInbound: true,
+      hasAnyOutbound: true,
+    })
+    let tempQuery = supabase
+      .from('deals')
+      .update({ temperature: newTemp })
+      .eq('contact_id', activity.contact_id)
+      .eq('temperature_source', 'auto')
+      .is('closed_at', null)
+    if (newTemp === 'warm') {
+      // warm never downgrades an existing hot
+      tempQuery = tempQuery.or('temperature.is.null,temperature.eq.cold')
+    }
+    const { error: tempErr } = await tempQuery
+    if (tempErr) console.error('Temperature update failed (non-fatal):', tempErr)
   }
 
   // Real-time warm-reply WhatsApp ping: positive intent with confidence >= 0.8

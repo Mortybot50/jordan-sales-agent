@@ -285,7 +285,8 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
   const commission = deal.commission_amount != null ? Number(deal.commission_amount) : null
   const stageName = deal.stage?.name ?? ''
   const isHeld = stageName === 'Hold for Next Month'
-  const isClosedWon = /won/i.test(stageName) && !/lost/i.test(stageName)
+  // Won = closed stage that isn't Lost ("Closed" post-consolidation).
+  const isClosedWon = !!deal.stage?.is_closed && !/lost/i.test(stageName)
   const contributesToGate = !!deal.close_won_at && isCurrentMonth(deal.close_won_at) && !isHeld
   const isLost = /lost/i.test(stageName)
   const isClosedStage = !!deal.stage?.is_closed
@@ -382,7 +383,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
                   <CapsLabel className="text-[color:var(--jordan-success-text)]">
                     <span className="inline-flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3" />
-                      Closed Won
+                      Closed — Won
                     </span>
                   </CapsLabel>
                   <p className="text-[12px] text-ink-muted mt-0.5">
@@ -414,7 +415,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
           {deal.outcome === 'lost' && (
             <div className="mb-4 rounded-[10px] border border-[color:var(--jordan-danger)]/40 bg-[color:var(--jordan-danger-soft)] p-3 flex items-start justify-between gap-3">
               <div>
-                <CapsLabel className="text-[color:var(--jordan-danger-text)]">Closed Lost</CapsLabel>
+                <CapsLabel className="text-[color:var(--jordan-danger-text)]">Lost</CapsLabel>
                 <p className="text-[12px] text-ink-muted mt-0.5">
                   {deal.lost_reason ? deal.lost_reason : 'No reason captured'}
                   {deal.closed_at ? ` · ${format(new Date(deal.closed_at), 'd MMM yyyy')}` : ''}
@@ -564,21 +565,21 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => moveToStageByName('Negotiation')}
+                  onClick={() => moveToStageByName('Proposal Sent')}
                   disabled={updateStage.isPending}
                   className="flex-1"
                 >
                   <Play className="w-3.5 h-3.5 mr-1" />
-                  Back to Negotiation
+                  Back to Proposal Sent
                 </Button>
                 <Button
                   size="sm"
-                  onClick={() => moveToStageByName('Closed Won')}
+                  onClick={() => moveToStageByName('Closed')}
                   disabled={updateStage.isPending}
                   className="flex-1"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                  Move to Close Won
+                  Move to Closed
                 </Button>
               </div>
             </div>

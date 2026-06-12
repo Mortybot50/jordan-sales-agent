@@ -159,10 +159,12 @@ export function KanbanBoard({
     const fromStage = stages?.find((s) => s.id === movedDeal.stage_id)
     const toStage = stages?.find((s) => s.id === targetStageId)
     const toName = toStage?.name ?? ''
-    const isWonTarget = /won/i.test(toName) && !/lost/i.test(toName)
-    const isLostTarget = /lost/i.test(toName)
+    // Post-consolidation there are exactly two closed stages: Closed (won)
+    // and Lost — so "closed and not lost" IS the won column.
+    const isLostTarget = !!toStage?.is_closed && /lost/i.test(toName)
+    const isWonTarget = !!toStage?.is_closed && !isLostTarget
 
-    // Drop onto a Closed Won/Lost column: defer the stage move and open the
+    // Drop onto a Closed/Lost column: defer the stage move and open the
     // outcome dialog so Jordan confirms final value + close date. The mutation
     // commits the stage_id atomically with the outcome.
     if (isWonTarget || isLostTarget) {

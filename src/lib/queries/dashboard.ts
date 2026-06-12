@@ -62,8 +62,10 @@ export function useDashboardKPIs() {
         supabase.from('tasks').select('id', { count: 'exact', head: true })
           .gte('due_at', todayStart).lte('due_at', todayEnd)
           .is('completed_at', null),
+        // Won stage = closed and not Lost ("Closed" post-consolidation; the
+        // old "Closed Won" name also satisfies this for replay safety).
         supabase.from('pipeline_stages').select('id')
-          .eq('is_closed', true).ilike('name', '%won%'),
+          .eq('is_closed', true).not('name', 'ilike', '%lost%'),
       ])
 
       const closedWonIds = (closedWonStages ?? []).map((s) => s.id)
@@ -194,7 +196,8 @@ export function usePipelineHeroMetrics() {
 
       const wonStageIds = new Set(
         (stages ?? [])
-          .filter((s) => s.is_closed && /won/i.test(s.name ?? ''))
+          // Won = closed and not Lost ("Closed" post-consolidation).
+          .filter((s) => s.is_closed && !/lost/i.test(s.name ?? ''))
           .map((s) => s.id),
       )
       const lostStageIds = new Set(
