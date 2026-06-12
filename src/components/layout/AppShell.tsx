@@ -26,6 +26,7 @@ import {
   Activity,
   Inbox,
 } from 'lucide-react'
+// (Inbox icon shared by Postmaster Tools + Leads Inbox)
 import { supabase } from '@/lib/supabase'
 import { canAdmin } from '@/lib/auth'
 import { useAuth } from '@/hooks/useAuth'
@@ -33,6 +34,7 @@ import { Button } from '@/components/ui/button'
 import { CapsLabel, LivePill, MeterRail } from '@/components/primitives'
 import { useJordanAnchorMetrics } from '@/lib/queries/dashboard'
 import { useDraftQueueCount } from '@/lib/queries/drafts'
+import { usePendingLeadsCount } from '@/lib/queries/leadsInbox'
 import {
   JORDAN_MEETINGS_WEEKLY_TARGET_MIN,
   JORDAN_MEETINGS_WEEKLY_TARGET_MAX,
@@ -73,6 +75,7 @@ const NAV_SECTIONS: { id: string; label: string; adminOnly?: boolean; items: Nav
     id: 'intelligence',
     label: 'Intelligence',
     items: [
+      { to: '/leads/inbox', label: 'Leads Inbox', icon: Inbox },
       { to: '/sourcing', label: 'Sourcing', icon: Compass },
       { to: '/reopening-radar', label: 'Reopening Radar', icon: Radar },
       { to: '/briefing', label: 'Briefing', icon: Sun },
@@ -181,12 +184,27 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
                 <Icon className="size-4 shrink-0" />
                 <span>{label}</span>
                 {to === '/drafts' && <DraftQueueBadge />}
+                {to === '/leads/inbox' && <LeadsInboxBadge />}
               </NavLink>
             ))}
           </div>
         </div>
       ))}
     </nav>
+  )
+}
+
+function LeadsInboxBadge() {
+  const { data: count } = usePendingLeadsCount()
+  if (!count) return null
+  return (
+    <span
+      data-testid="leads-inbox-count"
+      className="ml-auto inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-full bg-[color:var(--jordan-accent-soft)] px-1.5 text-[10px] font-semibold tracking-[0.08em] tabular-nums jordan-tnum text-[color:var(--jordan-accent-hover)]"
+      aria-label={`${count} lead${count === 1 ? '' : 's'} awaiting review`}
+    >
+      {count > 99 ? '99+' : count}
+    </span>
   )
 }
 

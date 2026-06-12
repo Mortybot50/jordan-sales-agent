@@ -156,6 +156,89 @@ export function useDraftQueueCount() {
   })
 }
 
+/**
+ * Recent outbound — the "approve = sent, visibly" rail. Approved drafts used
+ * to vanish from the queue into a silent void; this surfaces the last 48h of
+ * approved/queued/sent drafts with their live send-queue state:
+ *   approved          -> "Approved — queueing within 5 min"
+ *   queued + sched    -> "Queued — sending ~9:04am"
+ *   sent   + sent_at  -> "Sent 9:06am"
+ *   failed            -> the queue row's last_error
+ */
+export interface OutboundDraft {
+  id: string
+  subject: string | null
+  status: string
+  approved_at: string | null
+  sent_at: string | null
+  contact_name: string | null
+  send_status: string | null
+  scheduled_for: string | null
+  queue_sent_at: string | null
+  last_error: string | null
+  smtp_message_id: string | null
+  to_email: string | null
+}
+
+export function useRecentOutbound() {
+  return useQuery({
+    queryKey: ['drafts', 'recent-outbound'],
+    queryFn: async (): Promise<OutboundDraft[]> => {
+      const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
+      const { data: drafts, error } = await supabase
+        .from('email_drafts')
+        .select('id, subject, status, approved_at, sent_at, contact:contacts(full_name)')
+        .in('status', ['approved', 'queued', 'sent'])
+        .gte('approved_at', since)
+        .order('approved_at', { ascending: false })
+        .limit(30)
+      if (error) throw error
+
+      const rows = drafts ?? []
+      const ids = rows.map((d) => d.id)
+      const queueByDraft: Record<string, {
+        status: string | null
+        scheduled_for: string | null
+        sent_at: string | null
+        last_error: string | null
+        smtp_message_id: string | null
+        to_email: string | null
+      }> = {}
+      if (ids.length > 0) {
+        const { data: queue } = await supabase
+          .from('email_send_queue')
+          .select('draft_id, status, scheduled_for, sent_at, last_error, smtp_message_id, to_email')
+          .in('draft_id', ids)
+        for (const q of queue ?? []) {
+          if (q.draft_id) queueByDraft[q.draft_id] = q
+        }
+      }
+
+      return rows.map((d) => {
+        const q = queueByDraft[d.id]
+        const contact = d.contact as unknown as { full_name: string | null } | null
+        return {
+          id: d.id,
+          subject: d.subject,
+          status: d.status ?? 'approved',
+          approved_at: d.approved_at,
+          sent_at: d.sent_at,
+          contact_name: contact?.full_name ?? null,
+          send_status: q?.status ?? null,
+          scheduled_for: q?.scheduled_for ?? null,
+          queue_sent_at: q?.sent_at ?? null,
+          last_error: q?.last_error ?? null,
+          smtp_message_id: q?.smtp_message_id ?? null,
+          to_email: q?.to_email ?? null,
+        }
+      })
+    },
+    // The whole point is watching status flip — keep it fresh.
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  })
+}
+
 export function useDraft(id: string) {
   return useQuery({
     queryKey: ['draft', id],
@@ -250,30 +333,16 @@ export function useApproveDraft() {
         )
       }
 
-      // Pick the next sender inbox via the SQL helper (weighted round-robin
-      // honouring per-inbox daily caps in Australia/Melbourne TZ). Returns
-      // null when every enabled inbox has hit its cap for the day — in that
-      // case the draft still flips to 'approved' (so Jordan can see it),
-      // but with no sender attached, and we log a daily_cap_reached activity
-      // so the cap-hit is visible in the timeline.
-      let senderInboxId: string | null = null
-      let dailyCapReached = false
-      if (current?.org_id) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: senderRow, error: senderErr } = await (supabase.rpc as any)(
-          'select_next_sender',
-          { p_org_id: current.org_id },
-        )
-        if (senderErr) {
-          console.warn('select_next_sender failed', senderErr)
-        }
-        const picked = senderRow as { id: string } | null
-        if (picked?.id) {
-          senderInboxId = picked.id
-        } else {
-          dailyCapReached = true
-        }
-      }
+      // Sender assignment is owned by enqueue-sends (service role): it picks a
+      // sending account honouring per-inbox daily caps + warmup ramp in
+      // Australia/Melbourne TZ, preferring the draft's pinned sender_inbox_id
+      // when one is set. We deliberately do NOT pre-pick the sender here —
+      // select_next_sender is a SECURITY DEFINER function locked to
+      // service_role (see 20260611_function_execute_lockdown), so calling it
+      // from the authenticated client 42501s, which previously surfaced as a
+      // bogus "every inbox has hit its daily cap" toast. Leave sender_inbox_id
+      // null and let the cron own the cap logic — single source of truth.
+      const dailyCapReached = false
 
       const now = new Date().toISOString()
       const subjectChanged = !!current && current.subject !== current.original_subject
@@ -283,7 +352,6 @@ export function useApproveDraft() {
         status: 'approved',
         approved_at: now,
         edit_logged_at: now,
-        sender_inbox_id: senderInboxId,
       }
       if (subjectChanged) updates.edited_subject = current?.subject ?? null
       if (bodyChanged) updates.edited_body = current?.body ?? null
@@ -346,7 +414,8 @@ export function useApproveDraft() {
         )
         return
       }
-      toast.success('Approved — will send when email integration is connected')
+      toast.success('Approved — queued to send. Watch the Outbox for the send time.')
+      qc.invalidateQueries({ queryKey: ['drafts', 'recent-outbound'] })
     },
     onError: (err: Error) => toast.error(`Failed to approve: ${err.message}`),
   })

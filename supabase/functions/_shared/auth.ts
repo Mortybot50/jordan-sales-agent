@@ -51,6 +51,20 @@ export async function requireServiceRoleAuth(req: Request): Promise<Response | n
   const token = auth.slice('Bearer '.length).trim()
   if (!token) return unauthorized()
 
+  // New-format Supabase secret keys (sb_secret_…) are NOT JWTs — the runtime
+  // injects one as SUPABASE_SERVICE_ROLE_KEY, PostgREST and the function
+  // gateway both accept it, but it has no role claim to decode. Constant-time
+  // byte-match against the runtime's own key authorises EF→EF internal calls
+  // (discovered 12/06: every internal hop had been 401-ing since the platform
+  // key migration; masked by the idle send funnel).
+  // @ts-expect-error Deno globals
+  const runtimeKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  if (runtimeKey && token.length === runtimeKey.length) {
+    let diff = 0
+    for (let i = 0; i < runtimeKey.length; i++) diff |= token.charCodeAt(i) ^ runtimeKey.charCodeAt(i)
+    if (diff === 0) return null
+  }
+
   const payload = decodeJwtPayload(token)
   if (!payload) return unauthorized()
   if (payload.role !== 'service_role') return unauthorized()

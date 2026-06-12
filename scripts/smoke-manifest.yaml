@@ -21,6 +21,7 @@
 # non-zero on any MISSING / UNEXPECTED / AUTH_DRIFT finding.
 
 jwt:
+  - approve-lead           # leads-inbox Approve chain (crawl→verify→deal→enroll→tick)
   - claude-chat            # PR #76 — in-app AI chat for sales agent
   - field-route-optimize   # field-day route planner, end-user call
   - generate-draft         # AI email draft generation, end-user call

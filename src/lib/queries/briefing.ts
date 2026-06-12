@@ -147,17 +147,28 @@ export function useNewCandidates() {
   return useQuery({
     queryKey: ['briefing', 'candidates'],
     queryFn: async (): Promise<BriefingCandidate[]> => {
+      // Consolidated 12/06: candidates live in venues.review_status now
+      // (auto_sourced_candidates dropped). Same shape, new home — the
+      // briefing card links into /leads/inbox.
       const since = subDays(new Date(), 1).toISOString()
       const { data, error } = await supabase
-        .from('auto_sourced_candidates')
-        .select('id, name, address, suburb, venue_type_guess, icp_score_guess, created_at')
-        .eq('status', 'pending')
+        .from('venues')
+        .select('id, name, address, suburb, venue_type, icp_score, created_at')
+        .eq('review_status', 'pending')
         .gte('created_at', since)
-        .order('icp_score_guess', { ascending: false })
+        .order('icp_score', { ascending: false, nullsFirst: false })
         .limit(10)
 
       if (error) throw error
-      return data ?? []
+      return (data ?? []).map((v) => ({
+        id: v.id,
+        name: v.name,
+        address: v.address,
+        suburb: v.suburb,
+        venue_type_guess: v.venue_type,
+        icp_score_guess: v.icp_score,
+        created_at: v.created_at,
+      }))
     },
   })
 }

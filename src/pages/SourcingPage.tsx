@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { formatDistanceToNow } from 'date-fns'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 
@@ -269,17 +270,22 @@ export function SourcingPage() {
       <PageHeader
         eyebrow="Lead discovery"
         title="Sourcing"
-        description="Saved searches feed venues + contacts into the funnel. Run on demand — every result gets deduped against existing venues."
+        description="Saved searches feed venues + contacts into the funnel. New finds land in the Leads Inbox for your review — every result gets deduped against existing venues."
         actions={
-          <Button
-            size="sm"
-            className="h-8"
-            onClick={openCreate}
-            disabled={!user}
-          >
-            <Plus className="w-4 h-4 mr-1.5" />
-            New search
-          </Button>
+          <>
+            <Button asChild size="sm" variant="outline" className="h-8">
+              <Link to="/leads/inbox">Leads Inbox</Link>
+            </Button>
+            <Button
+              size="sm"
+              className="h-8"
+              onClick={openCreate}
+              disabled={!user}
+            >
+              <Plus className="w-4 h-4 mr-1.5" />
+              New search
+            </Button>
+          </>
         }
       />
 

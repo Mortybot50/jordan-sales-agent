@@ -30,6 +30,7 @@ import { UnsubscribePage } from '@/pages/UnsubscribePage'
 const FieldPage = lazy(() => import('@/pages/FieldPage').then((m) => ({ default: m.FieldPage })))
 const RoutePage = lazy(() => import('@/pages/RoutePage').then((m) => ({ default: m.RoutePage })))
 const SourcingPage = lazy(() => import('@/pages/SourcingPage').then((m) => ({ default: m.SourcingPage })))
+const LeadsInboxPage = lazy(() => import('@/pages/LeadsInboxPage').then((m) => ({ default: m.LeadsInboxPage })))
 const ContactImportPage = lazy(() => import('@/pages/ContactImportPage').then((m) => ({ default: m.ContactImportPage })))
 const SalesforceCsvImportPage = lazy(() => import('@/pages/SalesforceCsvImportPage').then((m) => ({ default: m.SalesforceCsvImportPage })))
 const SendingPage = lazy(() => import('@/pages/Analytics/SendingPage').then((m) => ({ default: m.SendingPage })))
@@ -156,6 +157,7 @@ export default function App() {
           <Route path="sequences" element={<SequencesPage />} />
           <Route path="sequences/:id" element={<SequenceEditPage />} />
           <Route path="sourcing" element={<SourcingPage />} />
+          <Route path="leads/inbox" element={<LeadsInboxPage />} />
           <Route path="venue-groups" element={<VenueGroupsPage />} />
           <Route path="briefing" element={<BriefingPage />} />
           <Route path="settings" element={<SettingsPage />} />

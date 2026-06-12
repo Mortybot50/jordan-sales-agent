@@ -17,7 +17,11 @@ import {
   useApproveDraft,
   useDrafts,
   useDraftQueueCount,
+  useRecentOutbound,
+  type OutboundDraft,
 } from '@/lib/queries/drafts'
+import { format } from 'date-fns'
+import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -297,6 +301,38 @@ export function DraftsPage() {
   const visibleCount = queue.filter((d) => !skippedIds.has(d.id)).length
   const filteredOut = pendingCount - visibleCount
 
+  // Bulk approve — same per-draft readiness pre-flight (it lives inside the
+  // mutation + the DB trigger backstop), run serially so toasts stay readable.
+  const [bulkApproving, setBulkApproving] = useState(false)
+  const [bulkProgress, setBulkProgress] = useState(0)
+  const handleBulkApprove = useCallback(async () => {
+    const targets = queue.filter((d) => !skippedIds.has(d.id) && !hasUnresolvedPlaceholder(d.body))
+    const blocked = queue.filter((d) => !skippedIds.has(d.id) && hasUnresolvedPlaceholder(d.body)).length
+    if (targets.length === 0) {
+      toast.message('Nothing approvable', {
+        description: blocked > 0 ? `${blocked} draft(s) still need the ${TIMES_PLACEHOLDER} placeholder resolved.` : 'Queue is empty.',
+      })
+      return
+    }
+    if (!window.confirm(`Approve ${targets.length} draft${targets.length === 1 ? '' : 's'}? Each will be queued and sent from your inboxes within minutes.${blocked > 0 ? ` (${blocked} skipped — unresolved placeholders.)` : ''}`)) {
+      return
+    }
+    setBulkApproving(true)
+    setBulkProgress(0)
+    try {
+      for (const d of targets) {
+        await approveDraft.mutateAsync(d.id).catch(() => {})
+        setBulkProgress((n) => n + 1)
+      }
+      toast.success(`Approved ${targets.length} — watch the Outbox below for send times`)
+    } finally {
+      setBulkApproving(false)
+    }
+  }, [queue, skippedIds, approveDraft])
+
+  // Live outbox — what happened after approve (queued → sending ~time → sent).
+  const { data: outbound } = useRecentOutbound()
+
   return (
     <div className="flex h-full flex-col">
       <div className="shrink-0 px-4 pt-4 sm:px-6 sm:pt-6">
@@ -324,13 +360,26 @@ export function DraftsPage() {
             </span>
           }
           actions={
-            <div className="hidden flex-wrap items-center gap-2 md:flex">
-              <KbdHint label="Approve">A</KbdHint>
-              <KbdHint label="Reject">R</KbdHint>
-              <KbdHint label="Edit">E</KbdHint>
-              <KbdHint label="Skip">S</KbdHint>
-              <KbdHint label="Next">J</KbdHint>
-              <KbdHint label="Prev">K</KbdHint>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                className="h-8"
+                disabled={bulkApproving || visibleCount === 0}
+                onClick={handleBulkApprove}
+                data-testid="bulk-approve"
+              >
+                {bulkApproving
+                  ? `Approving ${bulkProgress}/${visibleCount}…`
+                  : `Approve all (${visibleCount})`}
+              </Button>
+              <div className="hidden flex-wrap items-center gap-2 md:flex">
+                <KbdHint label="Approve">A</KbdHint>
+                <KbdHint label="Reject">R</KbdHint>
+                <KbdHint label="Edit">E</KbdHint>
+                <KbdHint label="Skip">S</KbdHint>
+                <KbdHint label="Next">J</KbdHint>
+                <KbdHint label="Prev">K</KbdHint>
+              </div>
             </div>
           }
         />
@@ -338,6 +387,30 @@ export function DraftsPage() {
 
       {/* Learning Loop banner — renders only when a pending digest exists */}
       <LearningBanner digestIdFromUrl={searchParams.get('learning')} />
+
+      {/* OUTBOX — approve is no longer a silent void. Last 48h of approved
+          drafts with live send state, refreshed every 30s. */}
+      {outbound && outbound.length > 0 && (
+        <div className="mx-4 mt-3 rounded-[var(--jordan-radius-md)] border border-hairline bg-surface-1 sm:mx-6" data-testid="outbox-rail">
+          <header className="flex items-center justify-between border-b border-hairline px-3 py-1.5">
+            <span className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
+              Outbox — after you approve
+            </span>
+            <span className="text-[11px] text-ink-faint jordan-tnum">{outbound.length} in last 48h</span>
+          </header>
+          <ul className="max-h-36 overflow-y-auto divide-y divide-hairline">
+            {outbound.map((o) => (
+              <li key={o.id} className="flex items-center gap-2 px-3 py-1.5 text-[12px]">
+                <OutboundStatus o={o} />
+                <span className="truncate text-ink min-w-0">
+                  {o.contact_name ?? o.to_email ?? '—'}
+                </span>
+                <span className="truncate text-ink-faint min-w-0 flex-1">{o.subject}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Mobile kbd summary */}
       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 px-4 text-[11px] text-ink-faint md:hidden sm:px-6">
@@ -514,5 +587,40 @@ export function DraftsPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+/** Live status chip for an outbox row: approved → queued ~time → sent time. */
+function OutboundStatus({ o }: { o: OutboundDraft }) {
+  const pill = 'inline-flex shrink-0 items-center gap-1 rounded-[3px] px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-[var(--jordan-tracking-label)]'
+  if (o.send_status === 'failed' || o.last_error) {
+    return (
+      <span className={`${pill} bg-[color:var(--jordan-danger-soft)] text-[color:var(--jordan-danger-text)]`} title={o.last_error ?? 'Send failed'}>
+        ✗ Failed
+      </span>
+    )
+  }
+  const sentAt = o.queue_sent_at ?? o.sent_at
+  if (o.status === 'sent' || o.send_status === 'sent') {
+    return (
+      <span className={`${pill} bg-[color:var(--jordan-accent-mint-soft)] text-[color:var(--jordan-success-text)]`} title={o.smtp_message_id ? `Message-ID: ${o.smtp_message_id}` : undefined}>
+        ✓ Sent {sentAt ? format(new Date(sentAt), 'h:mma') : ''}
+      </span>
+    )
+  }
+  if (o.send_status === 'sending') {
+    return <span className={`${pill} bg-[color:var(--jordan-accent-soft)] text-[color:var(--jordan-accent-hover)]`}>Sending…</span>
+  }
+  if (o.status === 'queued' || o.send_status === 'queued') {
+    return (
+      <span className={`${pill} bg-[color:var(--jordan-accent-soft)] text-[color:var(--jordan-accent-hover)]`}>
+        Queued{o.scheduled_for ? ` — sending ~${format(new Date(o.scheduled_for), 'h:mma')}` : ''}
+      </span>
+    )
+  }
+  return (
+    <span className={`${pill} bg-surface-3 text-ink-muted`} title="Picked up by the sender within 5 minutes">
+      Approved — queueing
+    </span>
   )
 }

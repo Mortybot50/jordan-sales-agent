@@ -418,16 +418,33 @@ async function buildBriefing(
     .limit(5)
   const tasks: BriefingTaskRow[] = tasksData ?? []
 
-  // 3. New candidates
+  // 3. New leads awaiting review (consolidated 12/06 onto venues.review_status;
+  //    auto_sourced_candidates was dropped)
   const { data: candidatesData } = await supabase
-    .from('auto_sourced_candidates')
-    .select('id, name, suburb, venue_type_guess, icp_score_guess')
+    .from('venues')
+    .select('id, name, suburb, venue_type, icp_score')
     .eq('org_id', orgId)
-    .eq('status', 'pending')
+    .eq('review_status', 'pending')
     .gte('created_at', since1d)
-    .order('icp_score_guess', { ascending: false })
+    .order('icp_score', { ascending: false, nullsFirst: false })
     .limit(5)
-  const candidates: BriefingCandidateRow[] = candidatesData ?? []
+  const candidates: BriefingCandidateRow[] = (candidatesData ?? []).map((v: {
+    id: string; name: string; suburb: string | null; venue_type: string | null; icp_score: number | null
+  }) => ({
+    id: v.id,
+    name: v.name,
+    suburb: v.suburb,
+    venue_type_guess: v.venue_type,
+    icp_score_guess: v.icp_score,
+  }))
+
+  // 3a-bis. Drafts waiting for approval — the funnel starves silently when
+  // these pile up (nothing sends without Jordan's approve).
+  const { count: pendingDraftsCount } = await supabase
+    .from('email_drafts')
+    .select('id', { count: 'exact', head: true })
+    .eq('org_id', orgId)
+    .in('status', ['pending', 'edited'])
 
   // 3b. Reopened this week — undismissed, unconverted reopening_events
   const since7dReopen = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
@@ -767,6 +784,16 @@ async function buildBriefing(
               </table>
             </td>
           </tr>
+
+          <!-- Drafts waiting — approve to start sending -->
+          ${(pendingDraftsCount ?? 0) > 0 ? `
+          <tr>
+            <td style="padding:14px 16px;background:${ACCENT_SOFT};border-top:1px solid ${HAIRLINE};">
+              <span style="font-family:${FONT};font-size:14px;line-height:20px;color:${INK};font-weight:700;">✉️ ${pendingDraftsCount} draft${(pendingDraftsCount ?? 0) === 1 ? '' : 's'} waiting — approve to start sending</span><br/>
+              <span style="font-family:${FONT};font-size:12px;line-height:18px;color:${INK_MUTED};">Nothing goes out without your sign-off. Approved emails send within minutes.</span><br/>
+              <a href="${APP_URL}/drafts" style="font-family:${FONT};font-size:12px;font-weight:600;color:${ACCENT};text-decoration:none;">Review the queue →</a>
+            </td>
+          </tr>` : ''}
 
           <!-- Overnight replies -->
           ${sectionHeader(SUCCESS_SOFT, SUCCESS_TEXT, '💬', 'Overnight Replies', replies.length)}
