@@ -23,7 +23,8 @@ import {
 } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { BrandChip, CapsLabel, IntentBadge, MetricNumber } from '@/components/primitives'
+import { BrandChip, CapsLabel, IntentBadge, MetricNumber, TemperatureChip } from '@/components/primitives'
+import { dealDisplayName } from './DealCard'
 import { ProductPicker } from './ProductPicker'
 import type { Product } from '@/lib/queries/products'
 import {
@@ -311,13 +312,45 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
           side="right"
           className="w-full sm:max-w-[480px] overflow-y-auto pb-6"
         >
-          <SheetHeader className="mb-6">
+          <SheetHeader className="mb-4">
             <SheetTitle
-              className="text-lg truncate"
+              className="text-xl font-semibold truncate"
               title={deal.title ?? 'Untitled deal'}
             >
-              {deal.title ?? 'Untitled deal'}
+              {dealDisplayName(deal)}
             </SheetTitle>
+            <div className="flex items-center gap-1.5 flex-wrap mt-1">
+              <TemperatureChip temperature={deal.temperature} source={deal.temperature_source} />
+              {stageName && (
+                <span className="inline-flex items-center rounded-[3px] bg-[color:var(--jordan-accent-soft)] text-[color:var(--jordan-accent-hover)] px-1.5 h-[18px] text-[11px] font-medium">
+                  {stageName}
+                </span>
+              )}
+              {/* Manual heat override — Jordan's call always beats the classifier */}
+              <select
+                aria-label="Set temperature"
+                className="h-[18px] rounded-[3px] border border-hairline bg-surface-1 text-[10px] text-ink-muted px-1"
+                value={deal.temperature_source === 'manual' ? (deal.temperature ?? '') : 'auto'}
+                onChange={(e) => {
+                  const v = e.target.value
+                  if (v === 'auto') {
+                    updateDeal.mutate({ id: deal.id, org_id: deal.org_id, temperature_source: 'auto' })
+                  } else {
+                    updateDeal.mutate({
+                      id: deal.id,
+                      org_id: deal.org_id,
+                      temperature: v as 'hot' | 'warm' | 'cold',
+                      temperature_source: 'manual',
+                    })
+                  }
+                }}
+              >
+                <option value="auto">Auto heat</option>
+                <option value="hot">Set Hot</option>
+                <option value="warm">Set Warm</option>
+                <option value="cold">Set Cold</option>
+              </select>
+            </div>
             <div className="space-y-1 mt-1">
               {deal.contact?.full_name && (
                 <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
@@ -341,6 +374,34 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
               )}
             </div>
           </SheetHeader>
+
+          {/* ── NEXT STEP — most prominent element after the name ── */}
+          {(deal.next_step_note || deal.next_step_due_at) && (() => {
+            const due = deal.next_step_due_at ? new Date(deal.next_step_due_at) : null
+            const overdue = !!due && due.getTime() < new Date().setHours(0, 0, 0, 0)
+            return (
+              <div
+                className={
+                  overdue
+                    ? 'mb-4 flex items-start gap-2 rounded-[10px] border-2 border-[color:var(--jordan-danger)] bg-[color:var(--jordan-danger-soft)] px-3 py-2.5'
+                    : 'mb-4 flex items-start gap-2 rounded-[10px] border border-[color:var(--jordan-accent)]/40 bg-[color:var(--jordan-accent-soft)] px-3 py-2.5'
+                }
+              >
+                <span aria-hidden className="mt-0.5">{overdue ? '⏰' : '📌'}</span>
+                <div className="min-w-0">
+                  <p className={overdue
+                    ? 'text-[10px] font-bold uppercase tracking-[var(--jordan-tracking-label)] text-[color:var(--jordan-danger-text)]'
+                    : 'text-[10px] font-semibold uppercase tracking-[var(--jordan-tracking-label)] text-[color:var(--jordan-accent-hover)]'}>
+                    {overdue ? 'Next step — OVERDUE' : 'Next step'}
+                    {due && <> · {overdue ? 'was due' : 'due'} {due.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}</>}
+                  </p>
+                  <p className="mt-0.5 text-[13px] font-medium text-ink">
+                    {deal.next_step_note ?? 'Follow up'}
+                  </p>
+                </div>
+              </div>
+            )
+          })()}
 
           {/* ── Financial panel ─────────────────────────────── */}
           {(acv != null || tcv != null || commission != null) && (

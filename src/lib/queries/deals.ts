@@ -43,6 +43,8 @@ export interface Deal {
   // Temperature (added 2026-06-12 — Jordan's at-a-glance board)
   temperature: 'hot' | 'warm' | 'cold' | null
   temperature_source: 'auto' | 'manual'
+  /** PST mailbox import: {subject, last_body} of the original thread. */
+  thread_excerpt: { subject?: string | null; last_body?: string | null } | null
   contact?: {
     id: string
     full_name: string

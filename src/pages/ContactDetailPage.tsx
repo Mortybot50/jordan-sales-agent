@@ -50,6 +50,7 @@ import {
   ScoreBadge,
   SkeletonBlock,
   StatusPill,
+  TemperatureChip,
   getActivityMeta,
 } from '@/components/primitives'
 
@@ -255,6 +256,9 @@ export function ContactDetailPage() {
   type EditableField = 'role' | 'email' | 'phone' | 'linkedin_url' | 'notes'
   const [editingField, setEditingField] = useState<EditableField | null>(null)
   const [fieldDraft, setFieldDraft] = useState<Record<string, string>>({})
+  // Empty fields hide behind an expander — the wall-of-"—" was Jordan's #2
+  // complaint. Expanding reveals them for editing.
+  const [showEmptyFields, setShowEmptyFields] = useState(false)
 
   function openField(name: EditableField) {
     if (!contact) return
@@ -371,6 +375,37 @@ export function ContactDetailPage() {
 
   const score = contact.lead_score?.score ?? null
 
+  // Where-the-lead-is-at context for the header + next-step banner: the
+  // contact's primary OPEN deal (newest open; else newest of any).
+  const primaryDeal =
+    (deals ?? []).find((d) => !d.stage?.is_closed && !d.closed_at) ?? (deals ?? [])[0] ?? null
+  const nextStepDueAt = primaryDeal?.next_step_due_at ?? primaryDeal?.follow_up_due ?? null
+  const nextStepNote = primaryDeal?.next_step_note ?? null
+  const nextStepOverdue =
+    !!nextStepDueAt && new Date(nextStepDueAt).getTime() < new Date().setHours(0, 0, 0, 0)
+
+  // PST-imported contacts predate the activities table — their history lives
+  // in the deal's thread_excerpt. Surface it as timeline entries so the
+  // interaction story isn't empty.
+  const pstThreads = (deals ?? [])
+    .filter((d) => d.thread_excerpt && (d.thread_excerpt.subject || d.thread_excerpt.last_body))
+    .map((d) => ({
+      dealId: d.id,
+      subject: d.thread_excerpt?.subject ?? null,
+      body: d.thread_excerpt?.last_body ?? null,
+      at: d.last_touch_at ?? null,
+    }))
+
+  // Which detail fields are empty (hidden behind the expander).
+  const fieldEmpty = {
+    role: !contact.role,
+    email: !contact.email,
+    phone: !contact.phone,
+    linkedin_url: !contact.linkedin_url,
+    notes: !contact.notes,
+  }
+  const emptyFieldCount = Object.values(fieldEmpty).filter(Boolean).length
+
   return (
     <div className="p-4 sm:p-6 max-w-[1400px] space-y-5">
       {/* Back */}
@@ -383,12 +418,19 @@ export function ContactDetailPage() {
         Back to contacts
       </button>
 
-      {/* Header */}
+      {/* Header — the 3-second test: name, where the lead is at, what's next */}
       <PageHeader
         eyebrow={venue?.name ? `${venue.name}` : 'Contact'}
         title={contact.full_name}
         description={
-          <span className="inline-flex items-center gap-2">
+          <span className="inline-flex items-center gap-2 flex-wrap">
+            <TemperatureChip
+              temperature={primaryDeal?.temperature}
+              source={primaryDeal?.temperature_source}
+            />
+            {primaryDeal?.stage?.name && (
+              <StatusPill tone="accent">{primaryDeal.stage.name}</StatusPill>
+            )}
             {contact.role && (
               <StatusPill tone="neutral">{roleLabel(contact.role)}</StatusPill>
             )}
@@ -464,6 +506,46 @@ export function ContactDetailPage() {
         }
       />
 
+      {/* NEXT STEP — the single most prominent element after the name. */}
+      {(nextStepNote || nextStepDueAt) ? (
+        <div
+          className={
+            nextStepOverdue
+              ? 'flex items-start gap-2.5 rounded-[var(--jordan-radius-md)] border-2 border-[color:var(--jordan-danger)] bg-[color:var(--jordan-danger-soft)] px-4 py-3'
+              : 'flex items-start gap-2.5 rounded-[var(--jordan-radius-md)] border border-[color:var(--jordan-accent)]/40 bg-[color:var(--jordan-accent-soft)] px-4 py-3'
+          }
+          data-testid="next-step-banner"
+        >
+          <span className="text-[18px] leading-none mt-0.5" aria-hidden>
+            {nextStepOverdue ? '⏰' : '📌'}
+          </span>
+          <div className="min-w-0">
+            <p
+              className={
+                nextStepOverdue
+                  ? 'text-[11px] font-bold uppercase tracking-[var(--jordan-tracking-label)] text-[color:var(--jordan-danger-text)]'
+                  : 'text-[11px] font-semibold uppercase tracking-[var(--jordan-tracking-label)] text-[color:var(--jordan-accent-hover)]'
+              }
+            >
+              {nextStepOverdue ? 'Next step — OVERDUE' : 'Next step'}
+              {nextStepDueAt && (
+                <> · {nextStepOverdue ? 'was due' : 'due'} {new Date(nextStepDueAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}</>
+              )}
+            </p>
+            <p className="mt-0.5 text-[14px] font-medium text-ink">
+              {nextStepNote ?? 'Follow up'}
+            </p>
+          </div>
+        </div>
+      ) : (
+        primaryDeal && !primaryDeal.stage?.is_closed && (
+          <div className="flex items-center gap-2 rounded-[var(--jordan-radius-md)] border border-dashed border-hairline px-4 py-2.5 text-[12px] text-ink-muted" data-testid="next-step-banner">
+            <span aria-hidden>📌</span>
+            No next step set — open the deal below and add one so this lead doesn't drift.
+          </div>
+        )
+      )}
+
       {/* Three-pane workbench (collapses to stacked on <lg) */}
       <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
         {/* ─── Pane 1 — Attributes ──────────────────────────────── */}
@@ -477,6 +559,7 @@ export function ContactDetailPage() {
             </span>
           </header>
           <div className="px-3">
+            {(!fieldEmpty.role || showEmptyFields) && (
             <FieldRow
               label="Role"
               value={contact.role ? roleLabel(contact.role) : <span className="text-ink-disabled">—</span>}
@@ -507,7 +590,9 @@ export function ContactDetailPage() {
                 </Select>
               )}
             </FieldRow>
+            )}
 
+            {(!fieldEmpty.email || showEmptyFields) && (
             <FieldRow
               label="Email"
               value={
@@ -540,7 +625,9 @@ export function ContactDetailPage() {
                 />
               )}
             </FieldRow>
+            )}
 
+            {(!fieldEmpty.phone || showEmptyFields) && (
             <FieldRow
               label="Phone"
               value={
@@ -573,7 +660,9 @@ export function ContactDetailPage() {
                 />
               )}
             </FieldRow>
+            )}
 
+            {(!fieldEmpty.linkedin_url || showEmptyFields) && (
             <FieldRow
               label="LinkedIn"
               value={
@@ -616,7 +705,9 @@ export function ContactDetailPage() {
                 />
               )}
             </FieldRow>
+            )}
 
+            {(!fieldEmpty.notes || showEmptyFields) && (
             <FieldRow
               label="Notes"
               value={
@@ -651,6 +742,20 @@ export function ContactDetailPage() {
                 />
               )}
             </FieldRow>
+            )}
+
+            {emptyFieldCount > 0 && (
+              <button
+                type="button"
+                className="w-full py-2 text-left text-[11px] text-ink-faint hover:text-ink-muted transition-colors"
+                onClick={() => setShowEmptyFields((v) => !v)}
+                data-testid="empty-fields-toggle"
+              >
+                {showEmptyFields
+                  ? '− Hide empty fields'
+                  : `+ Show ${emptyFieldCount} empty field${emptyFieldCount === 1 ? '' : 's'}`}
+              </button>
+            )}
           </div>
 
           {venue && (
@@ -816,11 +921,45 @@ export function ContactDetailPage() {
           )}
 
           {(!activities || activities.length === 0) ? (
+            pstThreads.length > 0 ? (
+              <ol className="relative px-3 py-3">
+                <div aria-hidden className="absolute left-[22px] top-3 bottom-3 w-px bg-hairline" />
+                {pstThreads.map((t) => (
+                  <li key={t.dealId} className="relative flex gap-3 py-2">
+                    <div className="relative z-[1] flex h-6 items-start">
+                      <ActivityIcon type="email_inbound" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] text-ink-faint">
+                          Mailbox thread
+                        </span>
+                        <span className="ml-auto jordan-tnum font-mono text-[11px] text-ink-faint shrink-0">
+                          {t.at ? formatRelative(t.at) : 'imported'}
+                        </span>
+                      </div>
+                      {t.subject && (
+                        <p className="mt-0.5 text-[13px] text-ink truncate">{t.subject}</p>
+                      )}
+                      {t.body && (
+                        <p className="mt-0.5 text-[12px] text-ink-muted line-clamp-3 whitespace-pre-wrap">
+                          {t.body}
+                        </p>
+                      )}
+                      <p className="mt-0.5 text-[11px] text-ink-faint italic">
+                        Imported from Jordan's mailbox — full thread lives in email.
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            ) : (
             <EmptyState
               compact
               title={filterEmptyMessage.all.title}
               body={filterEmptyMessage.all.body}
             />
+            )
           ) : filteredActivities.length === 0 ? (
             <EmptyState
               compact
