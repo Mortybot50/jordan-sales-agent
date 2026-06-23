@@ -291,11 +291,11 @@ export function KanbanBoard({
 
   if (isLoading) {
     return (
-      <div className="flex gap-3 p-4 overflow-x-auto">
+      <div className="flex gap-4 p-4 overflow-x-auto">
         {Array.from({ length: 5 }).map((_, i) => (
           <div
             key={i}
-            className="w-72 shrink-0 rounded-[6px] border border-hairline bg-surface-2 animate-pulse"
+            className="w-[300px] shrink-0 rounded-[10px] border border-hairline bg-surface-2 animate-pulse"
           >
             <div className="p-3 border-b border-hairline">
               <div className="h-3 w-24 rounded-[2px] bg-surface-4" />
@@ -384,7 +384,7 @@ export function KanbanBoard({
         }}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-3 overflow-x-auto pb-4 px-4 sm:px-6 h-full min-h-0">
+        <div className="flex gap-4 overflow-x-auto pb-4 px-4 sm:px-6 h-full min-h-0">
           {visibleStages.map((stage) => {
             const stageDeals = dealsByStage[stage.id] ?? []
             // NULL-valued deals contribute nothing to the column sum (KPI
@@ -402,27 +402,36 @@ export function KanbanBoard({
               <div
                 key={stage.id}
                 className={cn(
-                  'flex flex-col w-72 shrink-0 rounded-[6px] border bg-surface-2 transition-colors',
+                  'flex flex-col w-[300px] shrink-0 rounded-[10px] border bg-surface-2 transition-colors',
                   isActiveTarget
                     ? 'border-brand bg-brand-soft'
                     : 'border-hairline',
                   isUtilityColumn && !isActiveTarget && 'border-dashed opacity-65 hover:opacity-100',
                 )}
               >
-                {/* Column header */}
-                <div className="flex items-center justify-between gap-2 px-3 pt-3 pb-2 border-b border-hairline">
+                {/* Column header — softly tinted band using the stage colour at
+                 * low alpha (Notion-calm peach/blue feel), or neutral when the
+                 * stage has no colour. Rounded to match the column top. */}
+                <div
+                  className="flex items-center justify-between gap-2 px-3.5 pt-3 pb-2.5 rounded-t-[10px] border-b border-hairline"
+                  style={
+                    stage.color
+                      ? { backgroundColor: `color-mix(in srgb, ${stage.color} 10%, transparent)` }
+                      : undefined
+                  }
+                >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       {stage.color && (
                         <span
-                          className="size-2 rounded-[2px] shrink-0"
+                          className="size-2 rounded-full shrink-0"
                           style={{ backgroundColor: stage.color }}
                         />
                       )}
                       <span className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] font-semibold text-ink truncate">
                         {stage.name}
                       </span>
-                      <span className="ml-auto inline-flex h-[18px] min-w-[22px] items-center justify-center rounded-[3px] bg-surface-4 px-1 text-[10px] font-semibold jordan-tnum text-ink-muted">
+                      <span className="ml-auto inline-flex h-[18px] min-w-[22px] items-center justify-center rounded-[4px] bg-surface-4 px-1 text-[10px] font-semibold jordan-tnum text-ink-muted">
                         {stageDeals.length}
                       </span>
                     </div>
@@ -445,7 +454,7 @@ export function KanbanBoard({
                 </div>
 
                 {/* Cards */}
-                <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[80px]">
+                <div className="flex-1 overflow-y-auto p-2.5 space-y-2.5 min-h-[80px]">
                   <SortableContext
                     items={stageDeals.map((d) => d.id)}
                     strategy={verticalListSortingStrategy}
