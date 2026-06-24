@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { differenceInDays, parseISO } from 'date-fns'
+import { cleanDealTitle } from '@/lib/dealTitle'
 
 export interface Deal {
   id: string
@@ -350,11 +351,15 @@ export function useCreateDeal() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (input: CreateDealInput) => {
+      // Source-fix: strip status suffixes (" — Purezza intro", " — COLD from
+      // PST", etc) ONCE so they never get baked into deals.title OR the
+      // deal_created activity subject (both render in the UI).
+      const cleanTitle = cleanDealTitle(input.title)
       const { data, error } = await supabase
         .from('deals')
         .insert({
           org_id: input.org_id,
-          title: input.title,
+          title: cleanTitle,
           contact_id: input.contact_id ?? null,
           venue_id: input.venue_id ?? null,
           stage_id: input.stage_id,
@@ -379,7 +384,7 @@ export function useCreateDeal() {
           deal_id: data.id,
           contact_id: input.contact_id ?? null,
           activity_type: 'deal_created',
-          subject: `Deal created: ${input.title}`,
+          subject: `Deal created: ${cleanTitle}`,
         })
       }
 
