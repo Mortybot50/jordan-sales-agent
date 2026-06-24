@@ -59,7 +59,7 @@ const PREFIX_PATTERNS: RegExp[] = [
 ]
 
 // ---------------------------------------------------------------------------
-// Domain detection
+// Domain detection + cleaning
 // ---------------------------------------------------------------------------
 
 const EMAILISH = /\S+@\S+/
@@ -73,6 +73,39 @@ const FREE_MAIL_DOMAINS = new Set([
   'optusnet.com.au', 'iinet.net.au', 'internode.on.net',
   'protonmail.com', 'proton.me',
 ])
+
+/**
+ * cleanDomain — Convert a raw domain/URL into a human-readable Title Case name.
+ * Strips protocol, www, multi-part AU TLDs (.com.au, .net.au, etc.) and
+ * generic TLDs (.com, .net, .org, .io, .co, .au, etc.), replaces separators
+ * (hyphens, underscores, dots) with spaces, then Title Cases each word.
+ *
+ * @example
+ * cleanDomain('twoboysbrew.com.au')    // 'Twoboysbrew'
+ * cleanDomain('industrykitchens.com.au') // 'Industrykitchens'
+ * cleanDomain('two-boys-brew.com')      // 'Two Boys Brew'
+ * cleanDomain('bhbh.com.au')            // 'Bhbh'
+ * cleanDomain('www.someplace.net.au')   // 'Someplace'
+ */
+export function cleanDomain(domain: string): string {
+  // Strip protocol and www prefix
+  let d = domain.replace(/^https?:\/\//i, '').replace(/^www\./, '')
+  // Remove path/query/fragment
+  d = d.split('/')[0].split('?')[0].split('#')[0]
+  // Strip multi-part AU TLDs first (.com.au, .net.au, .org.au, .gov.au, .edu.au)
+  d = d.replace(/\.(com|net|org|gov|edu|id|asn)\.au$/i, '')
+  // Then strip remaining single-part TLDs (.com, .net, .org, .io, .co, .au, .nz, etc.)
+  d = d.replace(/\.[a-z]{2,6}$/i, '')
+  // Replace separators (- _ .) with spaces
+  d = d.replace(/[-_.]+/g, ' ').trim()
+  // Title Case each word
+  return d
+    .split(' ')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ')
+    || domain // never return empty
+}
 
 // ---------------------------------------------------------------------------
 // Core strip util
@@ -203,19 +236,19 @@ export function dealDisplayTitle(deal: DealLike): string {
   // 1. Venue name is always the most authoritative
   if (deal.venue?.name) return deal.venue.name
 
-  // 2. Clean deal title (if not an email or a domain-only freemail placeholder)
+  // 2. Clean deal title (if not an email or a domain-only placeholder)
   if (deal.title) {
     const cleaned = stripTitleSuffixes(deal.title)
     // If the title looks like a full email address, skip it
     if (!EMAILISH.test(cleaned)) {
-      // Domain-only titles (e.g. "industrykitchens.com.au") are valid business names
-      // unless they're a known freemail domain — in that case fall through
       if (DOMAIN_ONLY.test(cleaned)) {
         const lower = cleaned.toLowerCase()
-        if (!FREE_MAIL_DOMAINS.has(lower)) {
-          return cleaned  // e.g. "industrykitchens.com.au" — legitimate business domain
+        if (FREE_MAIL_DOMAINS.has(lower)) {
+          // freemail domain used as title — fall through
+        } else {
+          // Business domain: clean it to a readable name (never render raw TLD)
+          return cleanDomain(cleaned)
         }
-        // freemail domain used as title — fall through
       } else {
         return cleaned
       }
@@ -227,12 +260,12 @@ export function dealDisplayTitle(deal: DealLike): string {
     return deal.contact.full_name
   }
 
-  // 4. Email domain / local part
+  // 4. Email domain / local part — clean the domain rather than returning it raw
   const email = deal.contact?.email
   if (email && email.includes('@')) {
     const [local, domain] = email.split('@')
     if (domain && !FREE_MAIL_DOMAINS.has(domain.toLowerCase())) {
-      return domain  // business domain — readable
+      return cleanDomain(domain)  // business domain — cleaned, no raw TLD
     }
     return local ?? email  // freemail — use local part
   }

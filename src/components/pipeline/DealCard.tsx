@@ -301,32 +301,20 @@ export function DealCard({ deal, onClick }: DealCardProps) {
             ))}
           </div>
 
-          {/* Outreach status: sequence chip / replied / nothing yet */}
-          {(enrolledActive || deal.has_replied || neverContacted || noteLine) && (
-            <div className="flex items-center gap-1 flex-wrap">
-              {enrolledActive && enr && (
-                <span
-                  className={cn(pillBase, 'bg-[color:var(--jordan-accent-soft)] text-[color:var(--jordan-accent-hover)] normal-case tracking-normal font-medium')}
-                  title={`${enr.sequence_name} — step ${enr.current_step}/${enr.total_steps}${enr.status === 'paused' ? ' (paused)' : ''}`}
-                >
-                  <span aria-hidden>➤</span> {enr.sequence_name} · {enr.current_step}/{enr.total_steps}
-                  {enr.status === 'paused' && ' ⏸'}
-                </span>
-              )}
-              {deal.has_replied && (
-                <span className={cn(pillBase, 'bg-[color:var(--jordan-accent-mint-soft)] text-[color:var(--jordan-success-text)]')}>
-                  ↩ Replied
-                </span>
-              )}
-              {neverContacted && (
-                <span className={cn(pillBase, 'bg-surface-3 text-[#b0b0b0] dark:text-ink-faint')}>No outreach yet</span>
-              )}
-              {noteLine && (
-                <span className="truncate italic text-[12px] text-[#8a8a8a] dark:text-ink-muted min-w-0 flex-1" title={noteLine}>
-                  {noteLine.length > 60 ? `${noteLine.slice(0, 60)}…` : noteLine}
-                </span>
-              )}
-            </div>
+          {/* Outreach status — muted grey text line only, no coloured chip */}
+          {(enrolledActive || deal.has_replied || neverContacted) && (
+            <p className="text-[12px] text-[#b0b0b0] dark:text-ink-faint truncate">
+              {enrolledActive && enr
+                ? `In sequence · step ${enr.current_step}/${enr.total_steps}${enr.status === 'paused' ? ' (paused)' : ''}`
+                : deal.has_replied
+                  ? 'Replied'
+                  : 'Not contacted'}
+            </p>
+          )}
+          {noteLine && (
+            <p className="truncate italic text-[12px] text-[#8a8a8a] dark:text-ink-muted" title={noteLine}>
+              {noteLine.length > 60 ? `${noteLine.slice(0, 60)}…` : noteLine}
+            </p>
           )}
 
           {nextStepNote && (

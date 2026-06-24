@@ -413,16 +413,10 @@ export function KanbanBoard({
                   isUtilityColumn && !isActiveTarget && 'border-dashed opacity-65 hover:opacity-100',
                 )}
               >
-                {/* Column header — softly tinted band using the stage colour at
-                 * low alpha (Notion-calm peach/blue feel), or neutral when the
-                 * stage has no colour. Rounded to match the column top. */}
+                {/* Column header — neutral, no per-stage colour wash.
+                 * Stage identity lives in the header text + dot only. */}
                 <div
                   className="flex items-center justify-between gap-2 px-3.5 pt-3 pb-2.5 rounded-t-[10px] border-b border-hairline"
-                  style={
-                    stage.color
-                      ? { backgroundColor: `color-mix(in srgb, ${stage.color} 10%, transparent)` }
-                      : undefined
-                  }
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
