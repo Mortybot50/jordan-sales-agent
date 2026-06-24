@@ -27,6 +27,7 @@ import { CapsLabel } from '@/components/primitives'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
+import { cleanDealTitle } from '@/lib/dealTitle'
 import type { Json } from '@/types/database'
 
 // ---------------------------------------------------------------------------
@@ -439,14 +440,39 @@ export function SalesforceCsvImportPage() {
           // Create deals where stage is mapped
           if (stageCol) {
             const dealRows = newContacts
-              .map((c, i) => ({ c, stageId: toCreate[i]?.stageId ?? null }))
+              .map((c, i) => ({ c, stageId: toCreate[i]?.stageId ?? null, pending: toCreate[i] }))
               .filter(({ stageId }) => stageId !== null)
-              .map(({ c, stageId }) => ({
-                org_id: user.org_id,
-                contact_id: c.id,
-                stage_id: stageId!,
-                title: 'Salesforce Import',
-              }))
+              .map(({ c, stageId, pending }) => {
+                // SOURCE FIX: clean deal title — never bake "Salesforce Import"
+                // or status suffixes into deals.title. Prefer:
+                //   venue name (if already resolved to a record) →
+                //   contact full_name (if not email-ish) →
+                //   email domain (business domain, not freemail) → 'Deal'
+                // Heat/product/source go in their own columns, not the title.
+                const row = pending?.row
+                const contactName = row?.full_name
+                const email = row?.email ?? ''
+                const emailDomain = email.includes('@') ? email.split('@')[1] : ''
+                const freemailDomains = new Set([
+                  'gmail.com','yahoo.com','yahoo.com.au','hotmail.com','hotmail.com.au',
+                  'outlook.com','outlook.com.au','live.com','live.com.au','icloud.com',
+                  'me.com','bigpond.com','bigpond.net.au','protonmail.com','proton.me',
+                ])
+                const businessDomain = emailDomain && !freemailDomains.has(emailDomain.toLowerCase())
+                  ? emailDomain : ''
+                const rawTitle = (contactName && !contactName.includes('@') ? contactName : '')
+                  || businessDomain
+                  || (email.includes('@') ? email.split('@')[0] : '')
+                  || 'Deal'
+                return {
+                  org_id: user.org_id,
+                  contact_id: c.id,
+                  stage_id: stageId!,
+                  // cleanDealTitle strips any suffix patterns in case the
+                  // contact name itself has them (e.g. from a prior bad import)
+                  title: cleanDealTitle(rawTitle),
+                }
+              })
             if (dealRows.length > 0) {
               const { error: dealErr } = await supabase.from('deals').insert(dealRows)
               if (!dealErr) counts.deals += dealRows.length

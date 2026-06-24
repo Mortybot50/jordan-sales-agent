@@ -1,4 +1,4 @@
-import { BrandChip, MetricNumber, ScoreBadge, TemperatureChip, getActivityMeta } from '@/components/primitives'
+import { BrandChip, MetricNumber, ScoreBadge, getActivityMeta } from '@/components/primitives'
 import { GroupChip } from '@/components/venue-groups/GroupChip'
 import { cn } from '@/lib/utils'
 import type { Deal } from '@/lib/queries/deals'
@@ -6,6 +6,7 @@ import { useVenueGroupBadges } from '@/lib/queries/venue-groups'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { format, addMonths } from 'date-fns'
+import { dealDisplayTitle, relDays } from '@/lib/dealTitle'
 
 interface DealCardProps {
   deal: Deal
@@ -19,45 +20,17 @@ function isCurrentMonth(iso: string | null): boolean {
   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
 }
 
-/** "today" / "3d ago" / "11 Mar" (>90d) — compact relative date for cards. */
-export function relDays(iso: string | null | undefined): string | null {
-  if (!iso) return null
-  const t = new Date(iso).getTime()
-  if (Number.isNaN(t)) return null
-  const days = Math.floor((Date.now() - t) / 864e5)
-  if (days <= 0) return 'today'
-  if (days === 1) return '1d ago'
-  if (days <= 90) return `${days}d ago`
-  return format(new Date(iso), 'd MMM')
-}
-
-const EMAILISH = /\S+@\S+/
-
-/**
- * Card title = BUSINESS NAME. Venue name wins; a non-email deal title is
- * trusted (the PST re-triage already rewrote those to business names); a raw
- * email NEVER shows — fall through to the contact's name.
- */
-export function dealDisplayName(deal: Deal): string {
-  if (deal.venue?.name) return deal.venue.name
-  if (deal.title && !EMAILISH.test(deal.title)) return deal.title
-  if (deal.contact?.full_name && !EMAILISH.test(deal.contact.full_name)) {
-    return deal.contact.full_name
-  }
-  const email = deal.contact?.email
-  if (email && email.includes('@')) return email.split('@')[1]
-  return deal.title ?? 'Untitled deal'
-}
+// Re-export from shared util so existing import paths continue to work.
+export { dealDisplayTitle as dealDisplayName, relDays } from '@/lib/dealTitle'
 
 /**
  * One-line notes summary. PST import blocks are machine notes — surface their
  * Action/Trigger line instead of the tag header. Otherwise: first real line.
+ * Exported from DealCard for any component that imported it from here.
  */
 export function notesSummary(notes: string | null | undefined): string | null {
   if (!notes) return null
   if (notes.includes('[purezza-pst-promote]')) {
-    // [ \t]* not \s* — an empty "Trigger:" line must NOT swallow the newline
-    // and surface the next line as a bogus summary.
     const action = /Action:[ \t]*([^\n]+)/.exec(notes)?.[1]?.trim()
     if (action) return action
     const trigger = /Trigger:[ \t]*([^\n]+)/.exec(notes)?.[1]?.trim()
@@ -139,7 +112,7 @@ export function DealCard({ deal, onClick }: DealCardProps) {
     }
   }
 
-  const displayName = dealDisplayName(deal)
+  const displayName = dealDisplayTitle(deal)
   const noteLine = notesSummary(deal.notes)
   const lastContact = relDays(deal.last_contact_at)
   const lastAction = deal.last_action
@@ -153,7 +126,77 @@ export function DealCard({ deal, onClick }: DealCardProps) {
     !deal.last_contact_at && !enrolledActive && !deal.has_replied && !isPstImport
 
   const pillBase =
-    'inline-flex items-center gap-1 rounded-[3px] px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-[var(--jordan-tracking-label)]'
+    'inline-flex items-center gap-1 rounded-[4px] px-1.5 py-[2px] text-[10px] font-semibold uppercase tracking-[var(--jordan-tracking-label)]'
+
+  // ── Pill triage ──────────────────────────────────────────────
+  // Build the full set of applicable state pills in PRIORITY ORDER,
+  // then the chip row renders only the top 2. Calmer cards, no lost
+  // signal: every demoted pill remains visible in the DealDrawer.
+  type PriorityPill = {
+    key: string
+    label: string
+    title?: string
+    icon?: string
+    className: string
+  }
+  const warmPill =
+    'bg-[color:var(--jordan-warm-soft,transparent)] border border-[color:var(--jordan-warm)]/40 text-[color:var(--jordan-warm-text)]'
+  const mintPill = 'bg-[color:var(--jordan-accent-mint-soft)] text-[color:var(--jordan-success-text)]'
+  const dangerPill =
+    'bg-[color:var(--jordan-danger-soft)] border border-[color:var(--jordan-danger)]/40 text-[color:var(--jordan-danger-text)]'
+  const subtlePill = 'bg-surface-3 text-ink-faint'
+  const priorityPills: PriorityPill[] = []
+  // 1. Outcome state (won / lost / needs-outcome)
+  if (isWon && wonAwaitingInstall) {
+    priorityPills.push({
+      key: 'awaiting-install',
+      label: 'Awaiting install',
+      icon: '⏳',
+      className: warmPill,
+      title: deal.closed_at ? `Won ${new Date(deal.closed_at).toLocaleDateString('en-AU')} · awaiting install` : 'Won · awaiting install',
+    })
+  } else if (isWon) {
+    priorityPills.push({
+      key: 'won',
+      label: 'Won',
+      icon: '✓',
+      className: mintPill,
+      title: deal.install_completed_at ? `Won · installed ${new Date(deal.install_completed_at).toLocaleDateString('en-AU')}` : 'Won',
+    })
+  } else if (isLost) {
+    priorityPills.push({ key: 'lost', label: 'Lost', className: subtlePill, title: deal.lost_reason ?? 'Lost' })
+  } else if (needsOutcomeTag) {
+    priorityPills.push({ key: 'mark-outcome', label: 'Mark outcome', icon: '●', className: warmPill, title: 'Open the deal drawer to mark as Won or Lost' })
+  }
+  // 2. Next-step urgency (overdue / today / soon)
+  if (nextStepKind === 'overdue') {
+    priorityPills.push({ key: 'next-overdue', label: nextStepLabel, icon: '⏰', className: dangerPill, title: `Next step was due ${nextStepDue ? nextStepDue.toLocaleDateString('en-AU') : ''}` })
+  } else if (nextStepKind === 'today' || nextStepKind === 'soon') {
+    priorityPills.push({ key: 'next-soon', label: nextStepLabel, icon: '📌', className: mintPill, title: `Next step due ${nextStepDue ? nextStepDue.toLocaleDateString('en-AU') : ''}` })
+  }
+  // 3. Severe aging
+  if (agingTone === 'severe') {
+    priorityPills.push({ key: 'aging-severe', label: `${daysQuiet}d quiet`, icon: '🚨', className: dangerPill, title: `Quiet for ${daysQuiet} days` })
+  }
+  // 4. Lifecycle context (snooze / held / reopened / back-from-snooze)
+  if (isHeld) {
+    priorityPills.push({ key: 'held', label: `Held for ${format(addMonths(new Date(), 1), 'MMM')}`, className: mintPill, title: "Held for next month — does not count toward this month's gate" })
+  }
+  if (recentlyReturned) {
+    priorityPills.push({ key: 'back-from-snooze', label: 'Back from snooze', className: warmPill, title: snoozedUntilDate ? `Auto-woke ${snoozedUntilDate.toLocaleDateString('en-AU')}` : 'Returned from snooze' })
+  } else if (isSnoozed && snoozedUntilDate) {
+    priorityPills.push({ key: 'snoozed', label: format(snoozedUntilDate, 'd MMM'), icon: 'z', className: subtlePill, title: `Snoozed until ${snoozedUntilDate.toLocaleDateString('en-AU')}` })
+  }
+  if (recentlyReopened) {
+    priorityPills.push({ key: 'reopened', label: 'Reopened', className: mintPill, title: 'Venue recently reopened' })
+  }
+  // 5. Future next-step + warn aging (lowest priority — usually demoted)
+  if (nextStepKind === 'future') {
+    priorityPills.push({ key: 'next-future', label: nextStepLabel, icon: '📌', className: 'bg-surface-3 text-ink-muted', title: `Next step due ${nextStepDue ? nextStepDue.toLocaleDateString('en-AU') : ''}` })
+  }
+  if (agingTone === 'warn') {
+    priorityPills.push({ key: 'aging-warn', label: `${daysQuiet}d quiet`, icon: '🕐', className: warmPill, title: `Quiet for ${daysQuiet} days` })
+  }
 
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
@@ -168,132 +211,40 @@ export function DealCard({ deal, onClick }: DealCardProps) {
           }
         }}
         className={cn(
-          'group select-none cursor-pointer rounded-[6px] border bg-surface-1',
-          'px-3 py-2 transition-all duration-150',
-          'hover:shadow-[var(--jordan-shadow-hover)]',
+          // Notion-calm card: white bg, 1px light border, 8-10px radius
+          // Heavy shadow removed — hover-only light shadow via CSS var
+          'group select-none cursor-pointer rounded-[10px] border bg-white dark:bg-surface-1',
+          'px-4 py-4 transition-all duration-150',
+          'shadow-none hover:shadow-[0_1px_6px_0_rgba(0,0,0,0.08)]',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
           isWon
             ? 'border-[color:var(--jordan-accent-mint)]/50 hover:border-[color:var(--jordan-accent-mint)]'
             : isLost
-              ? 'border-hairline opacity-70 hover:border-[color:var(--jordan-danger)]/40'
+              ? 'border-[#E8E8E8] opacity-70 hover:border-[color:var(--jordan-danger)]/40'
               : needsOutcomeTag
                 ? 'border-[color:var(--jordan-warm)]/60 hover:border-[color:var(--jordan-warm)]'
-                : 'border-hairline hover:border-brand',
+                : 'border-[#E8E8E8] hover:border-brand/40',
         )}
         {...listeners}
       >
-        <div className="space-y-1">
-          {/* Chip row — temperature first, then state pills */}
-          <div className="flex items-center gap-1 flex-wrap">
-            <TemperatureChip
-              temperature={deal.temperature}
-              source={deal.temperature_source}
-              className="h-[16px] text-[10px]"
-            />
-            {isWon && wonAwaitingInstall && (
-              <span
-                className={cn(pillBase, 'bg-[color:var(--jordan-warm-soft,transparent)] border border-[color:var(--jordan-warm)]/40 text-[color:var(--jordan-warm-text)]')}
-                title={deal.closed_at ? `Won ${new Date(deal.closed_at).toLocaleDateString('en-AU')} · awaiting install` : 'Won · awaiting install'}
-              >
-                <span aria-hidden>⏳</span> Awaiting install
-              </span>
-            )}
-            {isWon && !wonAwaitingInstall && (
-              <span
-                className={cn(pillBase, 'bg-[color:var(--jordan-accent-mint-soft)] text-[color:var(--jordan-success-text)]')}
-                title={deal.install_completed_at ? `Won · installed ${new Date(deal.install_completed_at).toLocaleDateString('en-AU')}` : 'Won'}
-              >
-                <span aria-hidden>✓</span> Won
-              </span>
-            )}
-            {isLost && (
-              <span className={cn(pillBase, 'bg-surface-3 text-ink-faint')} title={deal.lost_reason ?? 'Lost'}>
-                Lost
-              </span>
-            )}
-            {needsOutcomeTag && (
-              <span
-                className={cn(pillBase, 'bg-[color:var(--jordan-warm-soft,transparent)] border border-[color:var(--jordan-warm)]/40 text-[color:var(--jordan-warm-text)]')}
-                title="Open the deal drawer to mark as Won or Lost"
-              >
-                <span className="size-1.5 rounded-full bg-[color:var(--jordan-warm)]" aria-hidden />
-                Mark outcome
-              </span>
-            )}
-            {recentlyReopened && (
-              <span className={cn(pillBase, 'bg-[color:var(--jordan-accent-mint-soft)] text-[color:var(--jordan-success-text)]')} title="Venue recently reopened">
-                Reopened
-              </span>
-            )}
-            {recentlyReturned && (
-              <span
-                className={cn(pillBase, 'bg-[color:var(--jordan-warm-soft,transparent)] border border-[color:var(--jordan-warm)]/40 text-[color:var(--jordan-warm-text)]')}
-                title={snoozedUntilDate ? `Auto-woke ${snoozedUntilDate.toLocaleDateString('en-AU')}` : 'Returned from snooze'}
-              >
-                Back from snooze
-              </span>
-            )}
-            {isSnoozed && snoozedUntilDate && (
-              <span className={cn(pillBase, 'bg-surface-3 text-ink-faint')} title={`Snoozed until ${snoozedUntilDate.toLocaleDateString('en-AU')}`}>
-                <span aria-hidden>z</span> {format(snoozedUntilDate, 'd MMM')}
-              </span>
-            )}
-            {isHeld && (
-              <span
-                className={cn(pillBase, 'bg-[color:var(--jordan-accent-mint-soft)] text-[color:var(--jordan-success-text)]')}
-                title="Held for next month — does not count toward this month's gate"
-              >
-                Held for {format(addMonths(new Date(), 1), 'MMM')}
-              </span>
-            )}
-            {nextStepKind === 'overdue' && (
-              <span
-                className={cn(pillBase, 'bg-[color:var(--jordan-danger-soft)] border border-[color:var(--jordan-danger)]/40 text-[color:var(--jordan-danger-text)]')}
-                title={`Next step was due ${nextStepDue ? nextStepDue.toLocaleDateString('en-AU') : ''}`}
-              >
-                <span aria-hidden>⏰</span> {nextStepLabel}
-              </span>
-            )}
-            {(nextStepKind === 'today' || nextStepKind === 'soon') && (
-              <span
-                className={cn(pillBase, 'bg-[color:var(--jordan-accent-mint-soft)] text-[color:var(--jordan-success-text)]')}
-                title={`Next step due ${nextStepDue ? nextStepDue.toLocaleDateString('en-AU') : ''}`}
-              >
-                <span aria-hidden>📌</span> {nextStepLabel}
-              </span>
-            )}
-            {nextStepKind === 'future' && (
-              <span
-                className={cn(pillBase, 'bg-surface-3 text-ink-muted')}
-                title={`Next step due ${nextStepDue ? nextStepDue.toLocaleDateString('en-AU') : ''}`}
-              >
-                <span aria-hidden>📌</span> {nextStepLabel}
-              </span>
-            )}
-            {agingTone === 'warn' && (
-              <span
-                className={cn(pillBase, 'bg-[color:var(--jordan-warm-soft,transparent)] border border-[color:var(--jordan-warm)]/40 text-[color:var(--jordan-warm-text)]')}
-                title={`Quiet for ${daysQuiet} days`}
-              >
-                <span aria-hidden>🕐</span> {daysQuiet}d quiet
-              </span>
-            )}
-            {agingTone === 'severe' && (
-              <span
-                className={cn(pillBase, 'bg-[color:var(--jordan-danger-soft)] border border-[color:var(--jordan-danger)]/40 text-[color:var(--jordan-danger-text)]')}
-                title={`Quiet for ${daysQuiet} days`}
-              >
-                <span aria-hidden>🚨</span> {daysQuiet}d quiet
-              </span>
-            )}
-          </div>
+        {/* ── Notion-calm card layout ──────────────────────────────
+         * Top → bottom:
+         *   1. Title (bold ~15px near-black)
+         *   2. Secondary line (source/brand, muted grey ~13px)
+         *   3. Heat pill (small, muted, below title)
+         *   4. State pills row (max 2 — triaged)
+         *   5. Bottom meta row (value left · age right)
+         * No heavy shadow. 1px #E8E8E8 border. Hover shadow only.
+         */}
+        <div className="space-y-2">
 
-          {/* BUSINESS NAME — the title. Product rides along as a chip. */}
+          {/* 1. BUSINESS NAME — the primary title */}
           <div className="flex items-start gap-1.5 min-w-0">
             {deal.product?.brand && <BrandChip brand={deal.product.brand} className="mt-px shrink-0" />}
             <p
               className={cn(
-                'text-[13px] leading-[18px] font-semibold text-ink truncate min-w-0',
+                // ~15px near-black bold — the only heavy ink on the card
+                'text-[15px] leading-[21px] font-semibold text-[#1a1a1a] dark:text-ink truncate min-w-0',
                 isLost && 'line-through text-ink-muted',
               )}
               title={deal.title ?? displayName}
@@ -303,59 +254,89 @@ export function DealCard({ deal, onClick }: DealCardProps) {
             {deal.venue?.id && <DealCardGroupChip venueId={deal.venue.id} />}
           </div>
 
-          {/* Last contact · last action */}
-          <p className="truncate text-[11px] text-ink-muted jordan-tnum">
+          {/* 2. Secondary line — last contact / action, muted grey ~13px */}
+          <p className="truncate text-[13px] text-[#8a8a8a] dark:text-ink-muted jordan-tnum">
             {lastContact ? (
               <>
-                <span className="text-ink-faint">Last contact</span> {lastContact}
+                <span className="text-[#b0b0b0] dark:text-ink-faint">Last contact</span>{' '}
+                {lastContact}
               </>
             ) : (
-              <span className="text-ink-faint">
+              <span className="text-[#b0b0b0] dark:text-ink-faint">
                 {isPstImport ? 'Last contact unknown' : 'Never contacted'}
               </span>
             )}
             {lastActionLabel && lastAction && (
               <>
-                <span className="text-ink-faint"> · </span>
+                <span className="text-[#b0b0b0] dark:text-ink-faint"> · </span>
                 {lastActionLabel} {relDays(lastAction.at)}
               </>
             )}
           </p>
 
-          {/* Outreach status: sequence chip / replied / nothing yet */}
-          <div className="flex items-center gap-1 flex-wrap">
-            {enrolledActive && enr && (
+          {/* 3 + 4. Heat pill + state pills — heat is always first, muted */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Heat pill — small, rounded, muted low-saturation tint */}
+            {deal.temperature && (
               <span
-                className={cn(pillBase, 'bg-[color:var(--jordan-accent-soft)] text-[color:var(--jordan-accent-hover)] normal-case tracking-normal font-medium')}
-                title={`${enr.sequence_name} — step ${enr.current_step}/${enr.total_steps}${enr.status === 'paused' ? ' (paused)' : ''}`}
+                className={cn(
+                  'inline-flex items-center rounded-full px-2 py-[2px] text-[11px] font-semibold uppercase tracking-wide',
+                  deal.temperature === 'hot'
+                    ? 'bg-rose-50 text-rose-500 dark:bg-rose-950/40 dark:text-rose-400'
+                    : deal.temperature === 'warm'
+                      ? 'bg-amber-50 text-amber-500 dark:bg-amber-950/40 dark:text-amber-400'
+                      : 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-400',
+                )}
+                title={deal.temperature_source === 'manual' ? `${deal.temperature} (manual)` : deal.temperature}
               >
-                <span aria-hidden>➤</span> {enr.sequence_name} · {enr.current_step}/{enr.total_steps}
-                {enr.status === 'paused' && ' ⏸'}
+                {deal.temperature}
               </span>
             )}
-            {deal.has_replied && (
-              <span className={cn(pillBase, 'bg-[color:var(--jordan-accent-mint-soft)] text-[color:var(--jordan-success-text)]')}>
-                ↩ Replied
+            {/* State pills — top 2 by priority */}
+            {priorityPills.slice(0, 2).map((pill) => (
+              <span key={pill.key} className={cn(pillBase, pill.className)} title={pill.title}>
+                {pill.icon && <span aria-hidden>{pill.icon}</span>}
+                {pill.label}
               </span>
-            )}
-            {neverContacted && (
-              <span className={cn(pillBase, 'bg-surface-3 text-ink-faint')}>No outreach yet</span>
-            )}
-            {noteLine && (
-              <span className="truncate italic text-[11px] text-ink-muted min-w-0 flex-1" title={noteLine}>
-                {noteLine.length > 60 ? `${noteLine.slice(0, 60)}…` : noteLine}
-              </span>
-            )}
+            ))}
           </div>
 
+          {/* Outreach status: sequence chip / replied / nothing yet */}
+          {(enrolledActive || deal.has_replied || neverContacted || noteLine) && (
+            <div className="flex items-center gap-1 flex-wrap">
+              {enrolledActive && enr && (
+                <span
+                  className={cn(pillBase, 'bg-[color:var(--jordan-accent-soft)] text-[color:var(--jordan-accent-hover)] normal-case tracking-normal font-medium')}
+                  title={`${enr.sequence_name} — step ${enr.current_step}/${enr.total_steps}${enr.status === 'paused' ? ' (paused)' : ''}`}
+                >
+                  <span aria-hidden>➤</span> {enr.sequence_name} · {enr.current_step}/{enr.total_steps}
+                  {enr.status === 'paused' && ' ⏸'}
+                </span>
+              )}
+              {deal.has_replied && (
+                <span className={cn(pillBase, 'bg-[color:var(--jordan-accent-mint-soft)] text-[color:var(--jordan-success-text)]')}>
+                  ↩ Replied
+                </span>
+              )}
+              {neverContacted && (
+                <span className={cn(pillBase, 'bg-surface-3 text-[#b0b0b0] dark:text-ink-faint')}>No outreach yet</span>
+              )}
+              {noteLine && (
+                <span className="truncate italic text-[12px] text-[#8a8a8a] dark:text-ink-muted min-w-0 flex-1" title={noteLine}>
+                  {noteLine.length > 60 ? `${noteLine.slice(0, 60)}…` : noteLine}
+                </span>
+              )}
+            </div>
+          )}
+
           {nextStepNote && (
-            <p className="truncate italic text-[11px] text-ink-muted" title={nextStepNote}>
+            <p className="truncate italic text-[11px] text-[#8a8a8a] dark:text-ink-muted" title={nextStepNote}>
               → {nextStepNote.length > 56 ? `${nextStepNote.slice(0, 56)}…` : nextStepNote}
             </p>
           )}
 
-          {/* Bottom row: value (only when present) · score · days in stage */}
-          <div className="flex items-center justify-between gap-1 pt-0.5">
+          {/* 5. Bottom meta row — value left · age right. Both muted grey ~12px */}
+          <div className="flex items-center justify-between gap-1 pt-1.5 mt-1 border-t border-[#f0f0f0] dark:border-hairline/60">
             <div className="flex items-center gap-1.5 min-w-0">
               {contributesToGate && (
                 <span
@@ -364,20 +345,25 @@ export function DealCard({ deal, onClick }: DealCardProps) {
                   aria-label="Counts toward this month's gate"
                 />
               )}
+              {/* Value: muted grey, not bold — de-emphasised per brief */}
               {headline != null && Number(headline) > 0 ? (
                 <MetricNumber
                   value={headline}
                   format="currency"
-                  className="text-[13px] font-semibold text-ink"
+                  className="text-[12px] font-normal text-[#8a8a8a] dark:text-ink-muted"
                 />
               ) : (
-                <span className="text-[11px] text-ink-faint">No value set</span>
+                <span className="text-[11px] text-[#c0c0c0] dark:text-ink-faint">No value</span>
               )}
             </div>
             <div className="flex items-center gap-1.5">
               {deal.lead_score?.score != null && <ScoreBadge score={deal.lead_score.score} />}
+              {/* Age: muted grey ~12px */}
               <span
-                className={cn('jordan-tnum text-[11px]', days >= 14 ? 'text-warm' : 'text-ink-faint')}
+                className={cn(
+                  'jordan-tnum text-[12px]',
+                  days >= 14 ? 'text-amber-500 dark:text-warm' : 'text-[#b0b0b0] dark:text-ink-faint'
+                )}
                 title={`${days} days in stage`}
               >
                 {days}d

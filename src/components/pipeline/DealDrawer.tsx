@@ -310,9 +310,9 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
       <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
         <SheetContent
           side="right"
-          className="w-full sm:max-w-[480px] overflow-y-auto pb-6"
+          className="w-full sm:max-w-[520px] overflow-y-auto px-1 pb-8"
         >
-          <SheetHeader className="mb-4">
+          <SheetHeader className="mb-6">
             <SheetTitle
               className="text-xl font-semibold truncate"
               title={deal.title ?? 'Untitled deal'}
@@ -405,7 +405,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
 
           {/* ── Financial panel ─────────────────────────────── */}
           {(acv != null || tcv != null || commission != null) && (
-            <div className="mb-4 rounded-[10px] border border-hairline bg-surface-2 p-3 space-y-2">
+            <div className="mb-5 rounded-[10px] border border-hairline bg-surface-2 p-4 space-y-2.5">
               <CapsLabel>Financial</CapsLabel>
               <div className="grid grid-cols-4 gap-3">
                 <div>
@@ -438,7 +438,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
 
           {/* ── Outcome (Won / Lost) panel ─────────────────────── */}
           {deal.outcome === 'won' && (
-            <div className="mb-4 rounded-[10px] border border-[color:var(--jordan-accent-mint)]/40 bg-[color:var(--jordan-accent-mint-soft)] p-3 space-y-2">
+            <div className="mb-5 rounded-[10px] border border-[color:var(--jordan-accent-mint)]/40 bg-[color:var(--jordan-accent-mint-soft)] p-4 space-y-2.5">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <CapsLabel className="text-[color:var(--jordan-success-text)]">
@@ -493,7 +493,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
             </div>
           )}
           {needsOutcomeTag && (
-            <div className="mb-4 rounded-[10px] border border-[color:var(--jordan-warm)]/50 bg-[color:var(--jordan-warm-soft,transparent)] p-3 space-y-2">
+            <div className="mb-5 rounded-[10px] border border-[color:var(--jordan-warm)]/50 bg-[color:var(--jordan-warm-soft,transparent)] p-4 space-y-2.5">
               <div className="flex items-center gap-1.5 text-[color:var(--jordan-warm-text)] text-[12px] font-semibold uppercase tracking-[var(--jordan-tracking-label)]">
                 <AlertTriangle className="w-3.5 h-3.5" />
                 Outcome not set
@@ -528,7 +528,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
 
           {/* ── Install Lifecycle panel ─────────────────────── */}
           {(isClosedWon || deal.outcome === 'won') && (
-            <div className="mb-4 rounded-[10px] border border-hairline bg-surface-2 p-3 space-y-3">
+            <div className="mb-5 rounded-[10px] border border-hairline bg-surface-2 p-4 space-y-3">
               <CapsLabel>Install Lifecycle</CapsLabel>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
@@ -615,7 +615,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
 
           {/* ── Hold-for-next-month CTAs ─────────────────────── */}
           {isHeld && (
-            <div className="mb-4 rounded-[10px] border border-[color:var(--jordan-accent-mint)]/30 bg-[color:var(--jordan-accent-mint-soft)] p-3 space-y-2">
+            <div className="mb-5 rounded-[10px] border border-[color:var(--jordan-accent-mint)]/30 bg-[color:var(--jordan-accent-mint-soft)] p-4 space-y-2.5">
               <CapsLabel className="text-[color:var(--jordan-success-text)]">
                 Held for {nextMonthLabel()}
               </CapsLabel>
@@ -743,7 +743,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
           )}
 
           {/* ── Next step ──────────────────────────────────── */}
-          <div className="mb-4 rounded-[10px] border border-hairline bg-surface-2 p-3 space-y-2.5">
+          <div className="mb-5 rounded-[10px] border border-hairline bg-surface-2 p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <CapsLabel>Next step</CapsLabel>
               {(deal.next_step_note || deal.next_step_due_at) && (
@@ -840,7 +840,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
           </div>
 
           {/* ── Edit form ────────────────────────────────────── */}
-          <form onSubmit={form.handleSubmit(handleSave, onInvalid)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(handleSave, onInvalid)} className="space-y-5">
             <CapsLabel className="block pb-1">Deal details</CapsLabel>
             {Object.keys(form.formState.errors).length > 0 && (
               <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
@@ -912,7 +912,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
               <Textarea {...form.register('notes')} rows={4} className="min-h-[96px]" />
             </div>
 
-            <div className="flex items-center justify-between border-t border-zinc-200 pt-4 mt-4 gap-3">
+            <div className="flex items-center justify-between border-t border-hairline pt-5 mt-1 gap-3">
               <Button
                 type="button"
                 variant="outline"
@@ -937,7 +937,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
           <Separator className="my-5" />
 
           {/* Meta info */}
-          <div className="grid grid-cols-2 gap-3 text-sm mb-4">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3.5 text-sm mb-5">
             <div>
               <p className="text-xs text-muted-foreground">Days in stage</p>
               <p className="font-semibold">{deal.days_in_stage ?? 0}</p>
