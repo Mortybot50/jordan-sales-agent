@@ -1,4 +1,4 @@
-import { BrandChip, MetricNumber, ScoreBadge, TemperatureChip, getActivityMeta } from '@/components/primitives'
+import { BrandChip, MetricNumber, ScoreBadge, getActivityMeta } from '@/components/primitives'
 import { GroupChip } from '@/components/venue-groups/GroupChip'
 import { cn } from '@/lib/utils'
 import type { Deal } from '@/lib/queries/deals'
@@ -6,6 +6,7 @@ import { useVenueGroupBadges } from '@/lib/queries/venue-groups'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { format, addMonths } from 'date-fns'
+import { dealDisplayTitle, relDays } from '@/lib/dealTitle'
 
 interface DealCardProps {
   deal: Deal
@@ -19,45 +20,17 @@ function isCurrentMonth(iso: string | null): boolean {
   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
 }
 
-/** "today" / "3d ago" / "11 Mar" (>90d) — compact relative date for cards. */
-export function relDays(iso: string | null | undefined): string | null {
-  if (!iso) return null
-  const t = new Date(iso).getTime()
-  if (Number.isNaN(t)) return null
-  const days = Math.floor((Date.now() - t) / 864e5)
-  if (days <= 0) return 'today'
-  if (days === 1) return '1d ago'
-  if (days <= 90) return `${days}d ago`
-  return format(new Date(iso), 'd MMM')
-}
-
-const EMAILISH = /\S+@\S+/
-
-/**
- * Card title = BUSINESS NAME. Venue name wins; a non-email deal title is
- * trusted (the PST re-triage already rewrote those to business names); a raw
- * email NEVER shows — fall through to the contact's name.
- */
-export function dealDisplayName(deal: Deal): string {
-  if (deal.venue?.name) return deal.venue.name
-  if (deal.title && !EMAILISH.test(deal.title)) return deal.title
-  if (deal.contact?.full_name && !EMAILISH.test(deal.contact.full_name)) {
-    return deal.contact.full_name
-  }
-  const email = deal.contact?.email
-  if (email && email.includes('@')) return email.split('@')[1]
-  return deal.title ?? 'Untitled deal'
-}
+// Re-export from shared util so existing import paths continue to work.
+export { dealDisplayTitle as dealDisplayName, relDays } from '@/lib/dealTitle'
 
 /**
  * One-line notes summary. PST import blocks are machine notes — surface their
  * Action/Trigger line instead of the tag header. Otherwise: first real line.
+ * Exported from DealCard for any component that imported it from here.
  */
 export function notesSummary(notes: string | null | undefined): string | null {
   if (!notes) return null
   if (notes.includes('[purezza-pst-promote]')) {
-    // [ \t]* not \s* — an empty "Trigger:" line must NOT swallow the newline
-    // and surface the next line as a bogus summary.
     const action = /Action:[ \t]*([^\n]+)/.exec(notes)?.[1]?.trim()
     if (action) return action
     const trigger = /Trigger:[ \t]*([^\n]+)/.exec(notes)?.[1]?.trim()
@@ -139,7 +112,7 @@ export function DealCard({ deal, onClick }: DealCardProps) {
     }
   }
 
-  const displayName = dealDisplayName(deal)
+  const displayName = dealDisplayTitle(deal)
   const noteLine = notesSummary(deal.notes)
   const lastContact = relDays(deal.last_contact_at)
   const lastAction = deal.last_action
@@ -238,47 +211,40 @@ export function DealCard({ deal, onClick }: DealCardProps) {
           }
         }}
         className={cn(
-          'group select-none cursor-pointer rounded-[10px] border bg-surface-1',
-          'px-3.5 py-3 transition-all duration-150',
-          'hover:shadow-[var(--jordan-shadow-hover)]',
+          // Notion-calm card: white bg, 1px light border, 8-10px radius
+          // Heavy shadow removed — hover-only light shadow via CSS var
+          'group select-none cursor-pointer rounded-[10px] border bg-white dark:bg-surface-1',
+          'px-4 py-4 transition-all duration-150',
+          'shadow-none hover:shadow-[0_1px_6px_0_rgba(0,0,0,0.08)]',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
           isWon
             ? 'border-[color:var(--jordan-accent-mint)]/50 hover:border-[color:var(--jordan-accent-mint)]'
             : isLost
-              ? 'border-hairline opacity-70 hover:border-[color:var(--jordan-danger)]/40'
+              ? 'border-[#E8E8E8] opacity-70 hover:border-[color:var(--jordan-danger)]/40'
               : needsOutcomeTag
                 ? 'border-[color:var(--jordan-warm)]/60 hover:border-[color:var(--jordan-warm)]'
-                : 'border-hairline hover:border-brand',
+                : 'border-[#E8E8E8] hover:border-brand/40',
         )}
         {...listeners}
       >
-        <div className="space-y-1.5">
-          {/* Chip row — Notion-calm: temperature anchor + at most TWO
-           * triaged state pills (highest priority only). Every other
-           * signal stays available in the DealDrawer; nothing is lost
-           * from the model — this is visual triage, not deletion.
-           * Priority: outcome/needs-outcome > overdue/due next-step >
-           * severe aging > snooze/held/reopened > warn aging. */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <TemperatureChip
-              temperature={deal.temperature}
-              source={deal.temperature_source}
-              className="h-[18px] text-[10px]"
-            />
-            {priorityPills.slice(0, 2).map((pill) => (
-              <span key={pill.key} className={cn(pillBase, pill.className)} title={pill.title}>
-                {pill.icon && <span aria-hidden>{pill.icon}</span>}
-                {pill.label}
-              </span>
-            ))}
-          </div>
+        {/* ── Notion-calm card layout ──────────────────────────────
+         * Top → bottom:
+         *   1. Title (bold ~15px near-black)
+         *   2. Secondary line (source/brand, muted grey ~13px)
+         *   3. Heat pill (small, muted, below title)
+         *   4. State pills row (max 2 — triaged)
+         *   5. Bottom meta row (value left · age right)
+         * No heavy shadow. 1px #E8E8E8 border. Hover shadow only.
+         */}
+        <div className="space-y-2">
 
-          {/* BUSINESS NAME — the title. Product rides along as a chip. */}
+          {/* 1. BUSINESS NAME — the primary title */}
           <div className="flex items-start gap-1.5 min-w-0">
             {deal.product?.brand && <BrandChip brand={deal.product.brand} className="mt-px shrink-0" />}
             <p
               className={cn(
-                'text-[14px] leading-[20px] font-semibold text-ink truncate min-w-0',
+                // ~15px near-black bold — the only heavy ink on the card
+                'text-[15px] leading-[21px] font-semibold text-[#1a1a1a] dark:text-ink truncate min-w-0',
                 isLost && 'line-through text-ink-muted',
               )}
               title={deal.title ?? displayName}
@@ -288,59 +254,89 @@ export function DealCard({ deal, onClick }: DealCardProps) {
             {deal.venue?.id && <DealCardGroupChip venueId={deal.venue.id} />}
           </div>
 
-          {/* Last contact · last action */}
-          <p className="truncate text-[11px] text-ink-muted jordan-tnum">
+          {/* 2. Secondary line — last contact / action, muted grey ~13px */}
+          <p className="truncate text-[13px] text-[#8a8a8a] dark:text-ink-muted jordan-tnum">
             {lastContact ? (
               <>
-                <span className="text-ink-faint">Last contact</span> {lastContact}
+                <span className="text-[#b0b0b0] dark:text-ink-faint">Last contact</span>{' '}
+                {lastContact}
               </>
             ) : (
-              <span className="text-ink-faint">
+              <span className="text-[#b0b0b0] dark:text-ink-faint">
                 {isPstImport ? 'Last contact unknown' : 'Never contacted'}
               </span>
             )}
             {lastActionLabel && lastAction && (
               <>
-                <span className="text-ink-faint"> · </span>
+                <span className="text-[#b0b0b0] dark:text-ink-faint"> · </span>
                 {lastActionLabel} {relDays(lastAction.at)}
               </>
             )}
           </p>
 
-          {/* Outreach status: sequence chip / replied / nothing yet */}
-          <div className="flex items-center gap-1 flex-wrap">
-            {enrolledActive && enr && (
+          {/* 3 + 4. Heat pill + state pills — heat is always first, muted */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Heat pill — small, rounded, muted low-saturation tint */}
+            {deal.temperature && (
               <span
-                className={cn(pillBase, 'bg-[color:var(--jordan-accent-soft)] text-[color:var(--jordan-accent-hover)] normal-case tracking-normal font-medium')}
-                title={`${enr.sequence_name} — step ${enr.current_step}/${enr.total_steps}${enr.status === 'paused' ? ' (paused)' : ''}`}
+                className={cn(
+                  'inline-flex items-center rounded-full px-2 py-[2px] text-[11px] font-semibold uppercase tracking-wide',
+                  deal.temperature === 'hot'
+                    ? 'bg-rose-50 text-rose-500 dark:bg-rose-950/40 dark:text-rose-400'
+                    : deal.temperature === 'warm'
+                      ? 'bg-amber-50 text-amber-500 dark:bg-amber-950/40 dark:text-amber-400'
+                      : 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-400',
+                )}
+                title={deal.temperature_source === 'manual' ? `${deal.temperature} (manual)` : deal.temperature}
               >
-                <span aria-hidden>➤</span> {enr.sequence_name} · {enr.current_step}/{enr.total_steps}
-                {enr.status === 'paused' && ' ⏸'}
+                {deal.temperature}
               </span>
             )}
-            {deal.has_replied && (
-              <span className={cn(pillBase, 'bg-[color:var(--jordan-accent-mint-soft)] text-[color:var(--jordan-success-text)]')}>
-                ↩ Replied
+            {/* State pills — top 2 by priority */}
+            {priorityPills.slice(0, 2).map((pill) => (
+              <span key={pill.key} className={cn(pillBase, pill.className)} title={pill.title}>
+                {pill.icon && <span aria-hidden>{pill.icon}</span>}
+                {pill.label}
               </span>
-            )}
-            {neverContacted && (
-              <span className={cn(pillBase, 'bg-surface-3 text-ink-faint')}>No outreach yet</span>
-            )}
-            {noteLine && (
-              <span className="truncate italic text-[11px] text-ink-muted min-w-0 flex-1" title={noteLine}>
-                {noteLine.length > 60 ? `${noteLine.slice(0, 60)}…` : noteLine}
-              </span>
-            )}
+            ))}
           </div>
 
+          {/* Outreach status: sequence chip / replied / nothing yet */}
+          {(enrolledActive || deal.has_replied || neverContacted || noteLine) && (
+            <div className="flex items-center gap-1 flex-wrap">
+              {enrolledActive && enr && (
+                <span
+                  className={cn(pillBase, 'bg-[color:var(--jordan-accent-soft)] text-[color:var(--jordan-accent-hover)] normal-case tracking-normal font-medium')}
+                  title={`${enr.sequence_name} — step ${enr.current_step}/${enr.total_steps}${enr.status === 'paused' ? ' (paused)' : ''}`}
+                >
+                  <span aria-hidden>➤</span> {enr.sequence_name} · {enr.current_step}/{enr.total_steps}
+                  {enr.status === 'paused' && ' ⏸'}
+                </span>
+              )}
+              {deal.has_replied && (
+                <span className={cn(pillBase, 'bg-[color:var(--jordan-accent-mint-soft)] text-[color:var(--jordan-success-text)]')}>
+                  ↩ Replied
+                </span>
+              )}
+              {neverContacted && (
+                <span className={cn(pillBase, 'bg-surface-3 text-[#b0b0b0] dark:text-ink-faint')}>No outreach yet</span>
+              )}
+              {noteLine && (
+                <span className="truncate italic text-[12px] text-[#8a8a8a] dark:text-ink-muted min-w-0 flex-1" title={noteLine}>
+                  {noteLine.length > 60 ? `${noteLine.slice(0, 60)}…` : noteLine}
+                </span>
+              )}
+            </div>
+          )}
+
           {nextStepNote && (
-            <p className="truncate italic text-[11px] text-ink-muted" title={nextStepNote}>
+            <p className="truncate italic text-[11px] text-[#8a8a8a] dark:text-ink-muted" title={nextStepNote}>
               → {nextStepNote.length > 56 ? `${nextStepNote.slice(0, 56)}…` : nextStepNote}
             </p>
           )}
 
-          {/* Bottom row: value (only when present) · score · days in stage */}
-          <div className="flex items-center justify-between gap-1 pt-1 mt-0.5 border-t border-hairline/60">
+          {/* 5. Bottom meta row — value left · age right. Both muted grey ~12px */}
+          <div className="flex items-center justify-between gap-1 pt-1.5 mt-1 border-t border-[#f0f0f0] dark:border-hairline/60">
             <div className="flex items-center gap-1.5 min-w-0">
               {contributesToGate && (
                 <span
@@ -349,20 +345,25 @@ export function DealCard({ deal, onClick }: DealCardProps) {
                   aria-label="Counts toward this month's gate"
                 />
               )}
+              {/* Value: muted grey, not bold — de-emphasised per brief */}
               {headline != null && Number(headline) > 0 ? (
                 <MetricNumber
                   value={headline}
                   format="currency"
-                  className="text-[13px] font-semibold text-ink"
+                  className="text-[12px] font-normal text-[#8a8a8a] dark:text-ink-muted"
                 />
               ) : (
-                <span className="text-[11px] text-ink-faint">No value set</span>
+                <span className="text-[11px] text-[#c0c0c0] dark:text-ink-faint">No value</span>
               )}
             </div>
             <div className="flex items-center gap-1.5">
               {deal.lead_score?.score != null && <ScoreBadge score={deal.lead_score.score} />}
+              {/* Age: muted grey ~12px */}
               <span
-                className={cn('jordan-tnum text-[11px]', days >= 14 ? 'text-warm' : 'text-ink-faint')}
+                className={cn(
+                  'jordan-tnum text-[12px]',
+                  days >= 14 ? 'text-amber-500 dark:text-warm' : 'text-[#b0b0b0] dark:text-ink-faint'
+                )}
                 title={`${days} days in stage`}
               >
                 {days}d

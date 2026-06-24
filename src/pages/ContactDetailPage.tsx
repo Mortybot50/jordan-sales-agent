@@ -60,6 +60,7 @@ import { useVenueGroupBadges } from '@/lib/queries/venue-groups'
 import { AssignToGroupCombobox } from '@/components/venue-groups/AssignToGroupCombobox'
 import { GroupChip } from '@/components/venue-groups/GroupChip'
 import { useContactDeals, useCreateDeal } from '@/lib/queries/deals'
+import { cleanDealTitle } from '@/lib/dealTitle'
 import { PackageDealForm } from '@/components/pipeline/PackageDealForm'
 import type { PackageDealValues } from '@/lib/schemas/deal'
 import {
@@ -282,7 +283,9 @@ export function ContactDetailPage() {
     if (!user || !contact) return
     const deal = await createDeal.mutateAsync({
       org_id: user.org_id,
-      title: values.title,
+      // SOURCE FIX: strip suffix patterns from user-typed deal titles
+      // e.g. "The Espy — Purezza intro" → "The Espy"
+      title: cleanDealTitle(values.title),
       contact_id: contact.id,
       venue_id: contact.venue_id ?? undefined,
       stage_id: values.stage_id,

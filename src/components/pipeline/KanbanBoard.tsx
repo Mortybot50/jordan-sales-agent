@@ -45,6 +45,7 @@ import { toast } from 'sonner'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { dealFormSchema, DEAL_VALUE_WARN, type DealFormValues } from '@/lib/schemas/deal'
 import { dealHeadlineValue, type DealFinancialRow } from '@/lib/queries/pipelineFinancials'
+import { cleanDealTitle } from '@/lib/dealTitle'
 
 export interface KanbanBoardProps {
   /** Filter kanban to a single stage column (deep-link from Pipeline Health). */
@@ -243,7 +244,9 @@ export function KanbanBoard({
     }
     await createDeal.mutateAsync({
       org_id: user.org_id,
-      title: values.title,
+      // SOURCE FIX: strip any suffix patterns from user-typed titles
+      // e.g. Jordan might paste "The Espy — Purezza intro" into the quick-add
+      title: cleanDealTitle(values.title),
       stage_id: quickAddStageId,
       contact_id: values.contact_id,
       contract_value: values.contract_value,
@@ -402,10 +405,11 @@ export function KanbanBoard({
               <div
                 key={stage.id}
                 className={cn(
-                  'flex flex-col w-[300px] shrink-0 rounded-[10px] border bg-surface-2 transition-colors',
+                  // Notion-calm columns: soft grey bg, generous gutters, light border
+                  'flex flex-col w-[280px] shrink-0 rounded-[10px] border bg-[#f7f7f6] dark:bg-surface-2 transition-colors',
                   isActiveTarget
                     ? 'border-brand bg-brand-soft'
-                    : 'border-hairline',
+                    : 'border-[#e8e8e8] dark:border-hairline',
                   isUtilityColumn && !isActiveTarget && 'border-dashed opacity-65 hover:opacity-100',
                 )}
               >
@@ -454,7 +458,8 @@ export function KanbanBoard({
                 </div>
 
                 {/* Cards */}
-                <div className="flex-1 overflow-y-auto p-2.5 space-y-2.5 min-h-[80px]">
+                {/* Cards — vertical gap 12px (space-y-3) per Notion-calm brief */}
+                <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-[80px]">
                   <SortableContext
                     items={stageDeals.map((d) => d.id)}
                     strategy={verticalListSortingStrategy}
