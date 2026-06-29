@@ -51,6 +51,7 @@ interface ClaimedRow {
   to_email: string
   subject: string
   body: string
+  body_html: string | null
 }
 
 // @ts-expect-error Deno serve
@@ -241,7 +242,9 @@ async function dispatchOne(supabase: SupabaseClient, row: ClaimedRow, contactId:
   const fromName = account.display_name ?? account.email_address
   const fromHeader = `${fromName} <${account.email_address}>`
   const bodyText = row.body ?? ''
-  const bodyHtml = textToHtml(bodyText)
+  // Prefer the styled HTML body (image-logo signature) carried from the draft.
+  // Fall back to deriving HTML from text for older/text-only queue rows.
+  const bodyHtml = row.body_html ?? textToHtml(bodyText)
 
   const blockText = spamActBlock
   const finalText = `${bodyText}\n\n---\n${blockText}`

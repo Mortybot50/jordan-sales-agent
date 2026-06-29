@@ -142,7 +142,7 @@ Deno.serve(async (req: Request) => {
   // (A unique index on email_send_queue.draft_id keeps this idempotent at the DB layer too.)
   const { data: drafts, error: draftsErr } = await supabase
     .from('email_drafts')
-    .select('id, org_id, contact_id, subject, body, edited_subject, edited_body, sender_inbox_id, draft_kind, created_by')
+    .select('id, org_id, contact_id, subject, body, body_html, edited_subject, edited_body, edited_body_html, sender_inbox_id, draft_kind, created_by')
     .eq('status', 'approved')
     .order('approved_at', { ascending: true, nullsFirst: true })
     .limit(MAX_DRAFTS_PER_TICK)
@@ -408,6 +408,15 @@ Deno.serve(async (req: Request) => {
         to_email: recipient,
         subject: draft.edited_subject ?? draft.subject ?? '',
         body: draft.edited_body ?? draft.body ?? '',
+        // Parallel HTML body (image-logo signature) — MUST track the same source
+        // as `body` above. If a rep edited the text (edited_body) but no matching
+        // edited_body_html exists, sending the original body_html would show
+        // HTML recipients the un-edited copy. In that case queue NULL so
+        // drain-send-queue falls back to textToHtml(edited_body) and the two
+        // parts stay consistent.
+        body_html: draft.edited_body
+          ? (draft.edited_body_html ?? null)
+          : (draft.body_html ?? null),
         scheduled_for: scheduledFor,
         status: 'queued',
       })

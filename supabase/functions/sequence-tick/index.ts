@@ -65,6 +65,13 @@ import {
   renderTemplate,
   firstNameFromFullName,
 } from './templates.ts'
+import {
+  assembleHtmlBody,
+  substituteMailbox,
+  substituteMailboxHtml,
+  unsubFooterHtml,
+  unsubFooterText,
+} from '../_shared/email-html.ts'
 
 // @ts-expect-error Deno globals
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
@@ -116,7 +123,7 @@ async function resolveSignatureForContact(
   userId: string,
   orgId: string,
   contactId: string,
-): Promise<string | null> {
+): Promise<{ text: string; html: string | null } | null> {
   // Pick the most recent open deal for this contact, if any.
   const { data: deal } = await supabase
     .from('deals')
@@ -140,7 +147,7 @@ async function resolveSignatureForContact(
 
   const { data: tpl } = await supabase
     .from('email_signature_templates')
-    .select('body_text')
+    .select('body_text, body_html')
     .eq('user_id', userId)
     .eq('brand_key', brandKey)
     .maybeSingle()
@@ -156,13 +163,14 @@ async function resolveSignatureForContact(
     .maybeSingle()
   const mailboxEmail = acct?.email_address ?? ''
 
-  return (tpl.body_text as string).replace(
-    /\{\{sending_mailbox_email\}\}/g,
-    mailboxEmail,
-  )
+  const text = substituteMailbox(tpl.body_text as string, mailboxEmail)
+  const html = tpl.body_html
+    ? substituteMailboxHtml(tpl.body_html as string, mailboxEmail)
+    : null
+  return { text, html }
 }
 
-async function buildUnsubFooter(email: string): Promise<string | null> {
+async function buildUnsubFooter(email: string): Promise<{ text: string; html: string } | null> {
   if (!UNSUBSCRIBE_SIGNING_KEY) {
     console.warn('UNSUBSCRIBE_SIGNING_KEY not set — skipping unsub footer')
     return null
@@ -170,7 +178,7 @@ async function buildUnsubFooter(email: string): Promise<string | null> {
   const normalised = email.trim().toLowerCase()
   const token = await signEmailHmac(normalised, UNSUBSCRIBE_SIGNING_KEY)
   const link = `${PUBLIC_APP_URL}/unsubscribe?email=${encodeURIComponent(normalised)}&token=${token}`
-  return `\n\n---\nThis email was sent by Jordan Marziale (Premium Water AU). To unsubscribe, click here: ${link}`
+  return { text: unsubFooterText(link), html: unsubFooterHtml(link) }
 }
 const BATCH_SIZE = 10
 const MAX_FAILURES = 3
@@ -562,6 +570,7 @@ async function processEnrolment(supabase: any, enr: EnrolmentRow): Promise<Proce
   // documented in the file header (search "Variant A/B selection logic").
   let subject = ''
   let body = ''
+  let bodyHtml: string | null = null
   let chosenVariantId: string | null = null
 
   if (step.template_variants) {
@@ -585,6 +594,7 @@ async function processEnrolment(supabase: any, enr: EnrolmentRow): Promise<Proce
     }
     subject = renderTemplate(variant.subject_template, renderCtx)
     body = renderTemplate(variant.body_template, renderCtx)
+    const claudeBody = body
     // Append per-brand signature (resolved via the contact's open deal's
     // product brand → 'purezza' default) BEFORE the unsub footer so the
     // legal copy stays at the very bottom of the email.
@@ -594,11 +604,18 @@ async function processEnrolment(supabase: any, enr: EnrolmentRow): Promise<Proce
       enr.org_id,
       contact.id,
     )
-    if (signature) body = `${body}\n\n${signature}`
+    if (signature) body = `${body}\n\n${signature.text}`
+    let footerHtml: string | null = null
     if (contact.email) {
       const footer = await buildUnsubFooter(String(contact.email))
-      if (footer) body = body + footer
+      if (footer) {
+        body = body + footer.text
+        footerHtml = footer.html
+      }
     }
+    bodyHtml = signature?.html
+      ? assembleHtmlBody(claudeBody, signature.html, footerHtml)
+      : null
   } else {
     // ── Production path B — LLM-generated draft (legacy / future) ──────
     // Pull recent activities for context (same shape generate-draft uses).
@@ -617,6 +634,7 @@ async function processEnrolment(supabase: any, enr: EnrolmentRow): Promise<Proce
       )
       subject = result.subject
       body = result.body
+      const claudeBody = body
       // Same brand-signature resolution as the template path above —
       // appended between Claude's body and the Spam Act unsub footer.
       const signature = await resolveSignatureForContact(
@@ -625,11 +643,18 @@ async function processEnrolment(supabase: any, enr: EnrolmentRow): Promise<Proce
         enr.org_id,
         contact.id,
       )
-      if (signature) body = `${body}\n\n${signature}`
+      if (signature) body = `${body}\n\n${signature.text}`
+      let footerHtml: string | null = null
       if (contact.email) {
         const footer = await buildUnsubFooter(String(contact.email))
-        if (footer) body = body + footer
+        if (footer) {
+          body = body + footer.text
+          footerHtml = footer.html
+        }
       }
+      bodyHtml = signature?.html
+        ? assembleHtmlBody(claudeBody, signature.html, footerHtml)
+        : null
     } catch (err) {
       const message = (err as Error).message ?? 'Unknown error'
       const newFailureCount = (enr.failure_count ?? 0) + 1
@@ -674,6 +699,7 @@ async function processEnrolment(supabase: any, enr: EnrolmentRow): Promise<Proce
       draft_kind: 'standard',
       subject,
       body,
+      body_html: bodyHtml,
       original_subject: subject,
       original_body: body,
       context_json: {
