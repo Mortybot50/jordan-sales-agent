@@ -42,10 +42,11 @@ export function unsubFooterText(link: string): string {
   return `\n\n---\nThis email was sent by Jordan Marziale (Premium Water AU). To unsubscribe, click here: ${link}`
 }
 
-// HTML unsubscribe footer — same copy, anchored link. The href is &-escaped
-// because the unsub link carries query params (?c=…&s=…&t=…).
+// HTML unsubscribe footer — same copy, anchored link. The href is fully
+// HTML-escaped (not just &) so a malformed app-url config can't break out of
+// the attribute. The link carries query params (?c=…&s=…&t=…).
 export function unsubFooterHtml(link: string): string {
-  const href = link.replace(/&/g, '&amp;')
+  const href = escapeHtml(link)
   return `<p style="margin:12px 0 0;font-family:Arial,sans-serif;font-size:12px;color:#94a3b8;line-height:1.3;">This email was sent by Jordan Marziale (Premium Water AU). To unsubscribe, <a href="${href}" style="color:#94a3b8;">click here</a>.</p>`
 }
 
