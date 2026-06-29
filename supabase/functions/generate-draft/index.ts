@@ -1,5 +1,11 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { checkUnsubKey } from './_unsub-key.ts'
+import {
+  assembleHtmlBody,
+  substituteMailbox,
+  unsubFooterHtml,
+  unsubFooterText,
+} from '../_shared/email-html.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -68,6 +74,8 @@ async function resolveBrandKey(
 // {{sending_mailbox_email}} placeholder with the actual sending inbox address.
 // Returns null if no template row is configured for this user/brand — the
 // caller should treat that as "no signature" and skip appending.
+// Returns both the plaintext signature (canonical, always sent) and the HTML
+// signature (image logos) so the draft can carry a parallel text/html body.
 async function resolveSignature(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
@@ -75,10 +83,10 @@ async function resolveSignature(
   orgId: string,
   brandKey: 'purezza' | 'culligan_zip',
   senderInboxId: string | null,
-): Promise<string | null> {
+): Promise<{ text: string; html: string | null } | null> {
   const { data: tpl } = await supabase
     .from('email_signature_templates')
-    .select('body_text')
+    .select('body_text, body_html')
     .eq('user_id', userId)
     .eq('brand_key', brandKey)
     .maybeSingle()
@@ -107,14 +115,14 @@ async function resolveSignature(
       .maybeSingle()
     mailboxEmail = acct?.email_address ?? null
   }
-  const substituted = (tpl.body_text as string).replace(
-    /\{\{sending_mailbox_email\}\}/g,
-    mailboxEmail ?? '',
-  )
-  return substituted
+  const text = substituteMailbox(tpl.body_text as string, mailboxEmail)
+  const html = tpl.body_html
+    ? substituteMailbox(tpl.body_html as string, mailboxEmail)
+    : null
+  return { text, html }
 }
 
-async function buildUnsubFooter(email: string): Promise<string> {
+async function buildUnsubFooter(email: string): Promise<{ text: string; html: string }> {
   // Caller is guarded by UNSUB_KEY_CHECK in the request handler — if we ever
   // reach here the key is present and ≥32 chars. Belt-and-braces throw so a
   // future refactor that moves the gate doesn't silently send footerless mail.
@@ -124,7 +132,7 @@ async function buildUnsubFooter(email: string): Promise<string> {
   const normalised = email.trim().toLowerCase()
   const token = await signEmailHmac(normalised, UNSUBSCRIBE_SIGNING_KEY)
   const link = `${PUBLIC_APP_URL}/unsubscribe?email=${encodeURIComponent(normalised)}&token=${token}`
-  return `\n\n---\nThis email was sent by Jordan Marziale (Premium Water AU). To unsubscribe, click here: ${link}`
+  return { text: unsubFooterText(link), html: unsubFooterHtml(link) }
 }
 
 Deno.serve(async (req) => {
@@ -440,6 +448,9 @@ Respond with ONLY valid JSON in this exact format (no markdown, no explanation):
   // The {{sending_mailbox_email}} placeholder is substituted with the chosen
   // sender_inbox or the org's first active inbox so signature email line
   // matches the From address (Jordan's Option B).
+  // Capture Claude's body before we append signature + footer so the parallel
+  // HTML body renders the same three sections (body / signature / footer).
+  const claudeBody = body
   const brandKey = await resolveBrandKey(supabase, deal?.product_id ?? null)
   const signature = await resolveSignature(
     supabase,
@@ -449,16 +460,26 @@ Respond with ONLY valid JSON in this exact format (no markdown, no explanation):
     null,
   )
   if (signature) {
-    body = `${body}\n\n${signature}`
+    body = `${body}\n\n${signature.text}`
   }
 
   // Append the Spam Act 2003 unsubscribe footer AFTER Claude has generated
   // the body — never via the prompt, so the legal copy can't be paraphrased.
   // We bake it into both `body` and `original_body` so the Learning Loop's
   // diff doesn't fire a false positive when Jordan leaves the footer alone.
+  let footerHtml: string | null = null
   if (contact.email) {
-    body = body + (await buildUnsubFooter(String(contact.email)))
+    const footer = await buildUnsubFooter(String(contact.email))
+    body = body + footer.text
+    footerHtml = footer.html
   }
+
+  // Parallel text/html body. Only emit HTML when the signature template has a
+  // body_html (image logos) — otherwise drain-send-queue's textToHtml fallback
+  // is the right rendering and we leave body_html NULL.
+  const bodyHtml = signature?.html
+    ? assembleHtmlBody(claudeBody, signature.html, footerHtml)
+    : null
 
   const contextJson = {
     contact: {
@@ -487,6 +508,7 @@ Respond with ONLY valid JSON in this exact format (no markdown, no explanation):
       draft_kind: draftKind,
       subject,
       body,
+      body_html: bodyHtml,
       original_subject: subject,
       original_body: body,
       context_json: contextJson,
