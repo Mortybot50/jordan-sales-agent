@@ -5,6 +5,7 @@ import {
   escapeHtml,
   textToHtml,
   substituteMailbox,
+  substituteMailboxHtml,
   unsubFooterText,
   unsubFooterHtml,
   assembleHtmlBody,
@@ -37,6 +38,18 @@ test('substituteMailbox replaces every token occurrence', () => {
 test('substituteMailbox treats null/undefined as empty string', () => {
   assert.equal(substituteMailbox('x {{sending_mailbox_email}} y', null), 'x  y')
   assert.equal(substituteMailbox('x {{sending_mailbox_email}} y', undefined), 'x  y')
+})
+
+test('substituteMailboxHtml escapes the mailbox value before insertion', () => {
+  assert.equal(
+    substituteMailboxHtml('<p>{{sending_mailbox_email}}</p>', 'a<b>&"\'@x.com'),
+    '<p>a&lt;b&gt;&amp;&quot;&#39;@x.com</p>',
+  )
+})
+
+test('substituteMailboxHtml leaves a normal address untouched and treats null as empty', () => {
+  assert.equal(substituteMailboxHtml('{{sending_mailbox_email}}', 'jordan@premiumwaterau.com.au'), 'jordan@premiumwaterau.com.au')
+  assert.equal(substituteMailboxHtml('x {{sending_mailbox_email}} y', null), 'x  y')
 })
 
 test('unsubFooterText matches the canonical plain-text footer', () => {

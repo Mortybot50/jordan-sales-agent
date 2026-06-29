@@ -24,8 +24,16 @@ export function textToHtml(text: string): string {
 
 // Replace the {{sending_mailbox_email}} token in a signature template. Mirrors
 // the substitution generate-draft/sequence-tick already do on body_text.
+// Use this for the text/plain body only.
 export function substituteMailbox(template: string, mailboxEmail: string | null | undefined): string {
   return template.replace(/\{\{sending_mailbox_email\}\}/g, mailboxEmail ?? '')
+}
+
+// HTML-safe variant: the mailbox value is escaped before it lands inside the
+// body_html template, so an address containing <, &, or quotes cannot break or
+// inject markup into the rendered signature.
+export function substituteMailboxHtml(template: string, mailboxEmail: string | null | undefined): string {
+  return template.replace(/\{\{sending_mailbox_email\}\}/g, escapeHtml(mailboxEmail ?? ''))
 }
 
 // Plain-text unsubscribe footer. Kept here so the text and HTML footers are

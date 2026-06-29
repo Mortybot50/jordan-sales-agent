@@ -33,7 +33,11 @@
 -- Purezza brand line = "Purezza Australia"; culligan_zip = "Culligan Group".
 --
 -- Idempotent: WHERE skips rows whose body_html already references the Culligan
--- logo asset, so a re-run is a no-op.
+-- logo asset, so a re-run is a no-op. The guard is written
+-- (body_html IS NULL OR body_html NOT LIKE '%logo-culligan.jpg%') because a bare
+-- NOT LIKE evaluates to NULL (not TRUE) on a NULL body_html, which would skip
+-- fresh-replay rows seeded without an HTML signature and leave the body_text
+-- placeholder unfixed.
 
 DO $$
 DECLARE
@@ -112,7 +116,7 @@ BEGIN
   WHERE  user_id    = '027c0c4a-ea67-46ef-82ef-47fbd5d1df65'::uuid
     AND  org_id     = '5557189e-5c2d-4990-afad-6aa1861826cd'::uuid
     AND  brand_key  = 'purezza'
-    AND  body_html NOT LIKE '%signature-assets/logo-culligan.jpg%';
+    AND  (body_html IS NULL OR body_html NOT LIKE '%signature-assets/logo-culligan.jpg%');
 
   UPDATE public.email_signature_templates
   SET    body_html  = v_html_culligan,
@@ -121,5 +125,5 @@ BEGIN
   WHERE  user_id    = '027c0c4a-ea67-46ef-82ef-47fbd5d1df65'::uuid
     AND  org_id     = '5557189e-5c2d-4990-afad-6aa1861826cd'::uuid
     AND  brand_key  = 'culligan_zip'
-    AND  body_html NOT LIKE '%signature-assets/logo-culligan.jpg%';
+    AND  (body_html IS NULL OR body_html NOT LIKE '%signature-assets/logo-culligan.jpg%');
 END $$;

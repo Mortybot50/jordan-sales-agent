@@ -408,11 +408,15 @@ Deno.serve(async (req: Request) => {
         to_email: recipient,
         subject: draft.edited_subject ?? draft.subject ?? '',
         body: draft.edited_body ?? draft.body ?? '',
-        // Parallel HTML body (image-logo signature). NULL when the draft has no
-        // HTML body — drain-send-queue then falls back to textToHtml(body).
-        // Known limitation: if a rep edited edited_body but not edited_body_html,
-        // the HTML can lag the text. Filed as a P2 follow-up.
-        body_html: draft.edited_body_html ?? draft.body_html ?? null,
+        // Parallel HTML body (image-logo signature) — MUST track the same source
+        // as `body` above. If a rep edited the text (edited_body) but no matching
+        // edited_body_html exists, sending the original body_html would show
+        // HTML recipients the un-edited copy. In that case queue NULL so
+        // drain-send-queue falls back to textToHtml(edited_body) and the two
+        // parts stay consistent.
+        body_html: draft.edited_body
+          ? (draft.edited_body_html ?? null)
+          : (draft.body_html ?? null),
         scheduled_for: scheduledFor,
         status: 'queued',
       })

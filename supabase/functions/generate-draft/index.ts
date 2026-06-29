@@ -3,6 +3,7 @@ import { checkUnsubKey } from './_unsub-key.ts'
 import {
   assembleHtmlBody,
   substituteMailbox,
+  substituteMailboxHtml,
   unsubFooterHtml,
   unsubFooterText,
 } from '../_shared/email-html.ts'
@@ -117,7 +118,7 @@ async function resolveSignature(
   }
   const text = substituteMailbox(tpl.body_text as string, mailboxEmail)
   const html = tpl.body_html
-    ? substituteMailbox(tpl.body_html as string, mailboxEmail)
+    ? substituteMailboxHtml(tpl.body_html as string, mailboxEmail)
     : null
   return { text, html }
 }
