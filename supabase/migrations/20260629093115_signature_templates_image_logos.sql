@@ -51,7 +51,7 @@ BEGIN
   -- Three-logo row (Culligan → Purezza → Zip). Replaces the old text line.
   v_logo_row := concat(
     '<p style="margin:12px 0;">',
-    '<img src="', v_base, '/logo-culligan.jpg" width="71" height="40" alt="Culligan" style="vertical-align:middle;margin-right:10px;border:0;" />',
+    '<img src="', v_base, '/logo-culligan.jpg" width="109" height="40" alt="Culligan" style="vertical-align:middle;margin-right:10px;border:0;" />',
     '<img src="', v_base, '/logo-purezza.jpg" width="40" height="40" alt="Purezza Premium Water" style="vertical-align:middle;margin-right:10px;border:0;" />',
     '<img src="', v_base, '/logo-zip.jpg" width="95" height="40" alt="Zip Water" style="vertical-align:middle;border:0;" />',
     '</p>'
