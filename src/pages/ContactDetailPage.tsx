@@ -382,9 +382,11 @@ export function ContactDetailPage() {
   // canonical selector, so the header tier/score matches the contacts list.
   const primaryDeal = pickPrimaryDeal(deals ?? [])
   // Tier+score come from the SAME canonical derivation the contacts list uses,
-  // so the score only renders when a tier is present and the two can never
-  // disagree. pickPrimaryDeal is still the source for stage/next-step context.
-  const score = deriveContactLeadScore(deals ?? [])?.score ?? null
+  // so the header can never disagree with the list. pickPrimaryDeal is still
+  // the source for stage/next-step context.
+  const lead = deriveContactLeadScore(deals ?? [])
+  const tier = lead?.tier ?? null
+  const score = lead?.score ?? null
   const nextStepDueAt = primaryDeal?.next_step_due_at ?? primaryDeal?.follow_up_due ?? null
   const nextStepNote = primaryDeal?.next_step_note ?? null
   const nextStepOverdue =
@@ -440,7 +442,7 @@ export function ContactDetailPage() {
             {contact.role && (
               <StatusPill tone="neutral">{roleLabel(contact.role)}</StatusPill>
             )}
-            {score != null && <ScoreBadge score={score} withLabel />}
+            {tier && <ScoreBadge score={score} tier={tier} withLabel />}
             {contact.email && <span className="text-ink-muted">{contact.email}</span>}
           </span>
         }

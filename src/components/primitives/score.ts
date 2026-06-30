@@ -9,6 +9,7 @@
  *   null   → neutral
  */
 import type { PillTone } from './StatusPill'
+import type { Tier } from '@/lib/leadTier'
 
 export function scoreToTone(score: number | null | undefined): PillTone {
   if (score == null) return 'neutral'
@@ -22,4 +23,18 @@ export function scoreToLabel(score: number | null | undefined): string {
   if (score >= 80) return 'HOT'
   if (score >= 50) return 'WARM'
   return 'COLD'
+}
+
+/**
+ * Canonical tier → tone/label. When a surface knows the deal's tier (its
+ * temperature), prefer these over the score-derived helpers so the badge can
+ * never visually contradict the tier — even if the stored score number lags a
+ * tier change made by another write path (drag, drawer, or an edge function).
+ */
+export function tierToTone(tier: Tier): PillTone {
+  return tier
+}
+
+export function tierToLabel(tier: Tier): string {
+  return tier.toUpperCase()
 }

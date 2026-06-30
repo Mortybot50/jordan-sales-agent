@@ -106,7 +106,7 @@ export interface WarmLead {
   id: string
   full_name: string
   venue_name: string | null
-  score: number
+  score: number | null
   last_touch_at: string | null
 }
 
@@ -171,12 +171,13 @@ export function useWarmLeads() {
           id: contactId,
           full_name: primary.full_name,
           venue_name: primary.venue_name,
-          score: primary.score ?? 0,
+          score: primary.score ?? null,
           last_touch_at: primary.last_touch_at,
         })
       }
 
-      return out.sort((a, b) => b.score - a.score).slice(0, 5)
+      // Highest score first; unscored warm leads (score null) sort last.
+      return out.sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).slice(0, 5)
     },
   })
 }

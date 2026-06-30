@@ -49,7 +49,7 @@ export function WarmLeads() {
       header: 'Score',
       align: 'right',
       width: '72px',
-      cell: (row) => <ScoreBadge score={row.score} />,
+      cell: (row) => <ScoreBadge score={row.score} tier="warm" />,
     },
     {
       id: 'last',
