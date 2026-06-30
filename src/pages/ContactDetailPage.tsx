@@ -60,7 +60,7 @@ import { useVenueGroupBadges } from '@/lib/queries/venue-groups'
 import { AssignToGroupCombobox } from '@/components/venue-groups/AssignToGroupCombobox'
 import { GroupChip } from '@/components/venue-groups/GroupChip'
 import { useContactDeals, useCreateDeal } from '@/lib/queries/deals'
-import { pickPrimaryDeal } from '@/lib/leadTier'
+import { pickPrimaryDeal, deriveContactLeadScore } from '@/lib/leadTier'
 import { cleanDealTitle } from '@/lib/dealTitle'
 import { PackageDealForm } from '@/components/pipeline/PackageDealForm'
 import type { PackageDealValues } from '@/lib/schemas/deal'
@@ -381,7 +381,10 @@ export function ContactDetailPage() {
   // contact's primary deal (newest open; else newest of any) via the shared
   // canonical selector, so the header tier/score matches the contacts list.
   const primaryDeal = pickPrimaryDeal(deals ?? [])
-  const score = primaryDeal?.score ?? null
+  // Tier+score come from the SAME canonical derivation the contacts list uses,
+  // so the score only renders when a tier is present and the two can never
+  // disagree. pickPrimaryDeal is still the source for stage/next-step context.
+  const score = deriveContactLeadScore(deals ?? [])?.score ?? null
   const nextStepDueAt = primaryDeal?.next_step_due_at ?? primaryDeal?.follow_up_due ?? null
   const nextStepNote = primaryDeal?.next_step_note ?? null
   const nextStepOverdue =

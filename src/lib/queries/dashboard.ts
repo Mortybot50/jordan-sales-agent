@@ -15,6 +15,7 @@ import {
   qualifiedMeetingsTone,
   type JordanScoreResult,
 } from '@/lib/metrics/jordanScore'
+import { pickPrimaryDeal, type PrimaryDealCandidate } from '@/lib/leadTier'
 
 export interface DashboardKPIs {
   replyRate: number | null
@@ -115,33 +116,67 @@ export function useWarmLeads() {
     queryFn: async (): Promise<WarmLead[]> => {
       const sevenDaysAgo = subDays(new Date(), 7).toISOString()
 
-      // Canonical warm leads: deals tiered warm (temperature) that haven't been
-      // touched in 7+ days. Score (banded 50–79 for warm) comes straight off
-      // deals.score, so this reconciles with the contacts list + Kanban.
+      // Canonical warm leads, per CONTACT (not per deal). We group every deal by
+      // contact, pick the primary deal with the SAME rule the contacts list uses
+      // (pickPrimaryDeal), and keep contacts whose primary deal is warm and
+      // hasn't been touched in 7+ days. Deriving from the primary deal — rather
+      // than any warm deal — guarantees the widget never lists a contact the
+      // list/detail page call Hot or Cold. Score (banded 50–79 for warm) comes
+      // straight off deals.score.
       const { data: deals, error } = await supabase
         .from('deals')
         .select(`
-          id, contact_id, last_touch_at, score,
+          contact_id, temperature, score, last_touch_at, closed_at, created_at,
+          stage:pipeline_stages(is_closed),
           contact:contacts(id, full_name),
           venue:venues(name)
         `)
-        .eq('temperature', 'warm')
-        .or(`last_touch_at.lt.${sevenDaysAgo},last_touch_at.is.null`)
-        .is('closed_at', null)
-        .limit(50)
+        .not('contact_id', 'is', null)
 
       if (error) throw error
 
-      return (deals ?? [])
-        .map((d) => ({
-          id: d.contact_id ?? d.id,
+      interface WarmRow extends PrimaryDealCandidate {
+        contact_id: string
+        last_touch_at: string | null
+        full_name: string
+        venue_name: string | null
+      }
+
+      const byContact = new Map<string, WarmRow[]>()
+      for (const d of deals ?? []) {
+        if (!d.contact_id) continue
+        const row: WarmRow = {
+          contact_id: d.contact_id,
+          temperature: (d.temperature as PrimaryDealCandidate['temperature']) ?? null,
+          score: (d.score as number | null) ?? null,
+          closed_at: d.closed_at,
+          created_at: d.created_at,
+          stage: (d.stage as unknown as { is_closed: boolean | null } | null) ?? null,
+          last_touch_at: d.last_touch_at,
           full_name: (d.contact as { full_name: string } | null)?.full_name ?? 'Unknown',
           venue_name: (d.venue as { name: string } | null)?.name ?? null,
-          score: (d.score as number | null) ?? 0,
-          last_touch_at: d.last_touch_at,
-        }))
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 5)
+        }
+        const arr = byContact.get(d.contact_id) ?? []
+        arr.push(row)
+        byContact.set(d.contact_id, arr)
+      }
+
+      const out: WarmLead[] = []
+      for (const [contactId, rows] of byContact) {
+        const primary = pickPrimaryDeal(rows)
+        if (!primary || primary.temperature !== 'warm') continue
+        // Untouched 7+ days (older than the cutoff) or never touched.
+        if (primary.last_touch_at && primary.last_touch_at >= sevenDaysAgo) continue
+        out.push({
+          id: contactId,
+          full_name: primary.full_name,
+          venue_name: primary.venue_name,
+          score: primary.score ?? 0,
+          last_touch_at: primary.last_touch_at,
+        })
+      }
+
+      return out.sort((a, b) => b.score - a.score).slice(0, 5)
     },
   })
 }
