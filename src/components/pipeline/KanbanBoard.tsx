@@ -301,6 +301,11 @@ export function KanbanBoard({
           dbUpdates.outcome = null
           dbUpdates.closed_at = null
           dbUpdates.close_won_at = null
+          // Reopening also unwinds the install lifecycle — an installed deal
+          // dragged back to a temperature column is no longer installed.
+          dbUpdates.install_completed_at = null
+          dbUpdates.install_confirmed_at = null
+          dbUpdates.install_scheduled_for = null
         }
       }
 
@@ -343,6 +348,9 @@ export function KanbanBoard({
       dbUpdates.outcome = null
       dbUpdates.closed_at = null
       dbUpdates.close_won_at = null
+      dbUpdates.install_completed_at = null
+      dbUpdates.install_confirmed_at = null
+      dbUpdates.install_scheduled_for = null
     }
 
     const snapshot = localDeals ?? deals ?? []

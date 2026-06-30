@@ -456,6 +456,10 @@ export function useUpdateDeal() {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['deals'] })
       qc.invalidateQueries({ queryKey: ['activities'] })
+      // A stage/close-field change can move achieved ACV in or out of the
+      // monthly gate, so refresh the gate + dashboard caches too.
+      qc.invalidateQueries({ queryKey: ['monthly-gate'] })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
       if (vars.contact_id) {
         qc.invalidateQueries({ queryKey: ['deals', 'contact', vars.contact_id] })
       }
