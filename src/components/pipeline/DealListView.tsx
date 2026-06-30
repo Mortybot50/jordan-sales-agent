@@ -13,7 +13,6 @@ import { Briefcase } from 'lucide-react'
 import { useDeals, type Deal } from '@/lib/queries/deals'
 import { useStages } from '@/lib/queries/stages'
 import { formatDate } from '@/lib/utils'
-import { scoreToTier } from '@/lib/queries/contacts'
 import { DealDrawer } from './DealDrawer'
 
 type SortField = 'title' | 'venue' | 'value' | 'days' | 'followup' | 'score' | 'stalest'
@@ -103,7 +102,7 @@ export function DealListView({ includeSnoozed = false, sortBy = 'default' }: Dea
 
     const tier = selection.tier?.[0]
     if (tier) {
-      rows = rows.filter((d) => scoreToTier(d.lead_score?.score) === tier)
+      rows = rows.filter((d) => d.temperature === tier)
     }
 
     const stageIds = selection.stage ?? []

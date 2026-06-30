@@ -16,7 +16,6 @@ import {
   useContacts,
   useContactsPaginated,
   useDistinctContactTags,
-  scoreToTier,
   type Contact,
 } from '@/lib/queries/contacts'
 import { useVenueGroupBadges } from '@/lib/queries/venue-groups'
@@ -147,7 +146,7 @@ export function ContactsPage() {
 
     const tier = selection.tier?.[0]
     if (tier) {
-      rows = rows.filter((c) => scoreToTier(c.lead_score?.score) === tier)
+      rows = rows.filter((c) => c.lead_score?.tier === tier)
     }
 
     const venueTypes = selection.venue_type ?? []

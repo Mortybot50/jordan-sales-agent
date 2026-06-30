@@ -44,6 +44,9 @@ export interface Deal {
   // Temperature (added 2026-06-12 — Jordan's at-a-glance board)
   temperature: 'hot' | 'warm' | 'cold' | null
   temperature_source: 'auto' | 'manual'
+  // Canonical lead score 0–100, banded within temperature (added 2026-06-30 —
+  // tier/score sync). Null until the deal has been scored.
+  score: number | null
   // Proposal + held tracking (added 2026-06-30 — temperature-axis restructure)
   proposal_sent_at: string | null
   is_held: boolean
@@ -76,7 +79,7 @@ export interface Deal {
     weekly_price_aud: number
   } | null
   lead_score?: {
-    score: number
+    score: number | null
     tier: 'hot' | 'warm' | 'cold'
   } | null
   days_in_stage?: number
@@ -158,23 +161,6 @@ export function useDeals(options: UseDealsOptions = {}) {
 
       const deals = data ?? []
       const dealIds = deals.map((d) => d.id)
-
-      let scoreMap: Record<string, { score: number; tier: 'hot' | 'warm' | 'cold' }> = {}
-      if (dealIds.length > 0) {
-        const { data: scores } = await supabase
-          .from('lead_scores')
-          .select('deal_id, score, tier, scored_at')
-          .in('deal_id', dealIds)
-          .order('scored_at', { ascending: false })
-
-        if (scores) {
-          for (const s of scores) {
-            if (s.deal_id && !scoreMap[s.deal_id]) {
-              scoreMap[s.deal_id] = { score: s.score, tier: s.tier as 'hot' | 'warm' | 'cold' }
-            }
-          }
-        }
-      }
 
       // Pull activity rows per deal and fold client-side (Supabase has no
       // GROUP BY): latest occurred_at (aging), latest of any type ("last
@@ -290,10 +276,16 @@ export function useDeals(options: UseDealsOptions = {}) {
           d.notes.includes('[purezza-pst-promote]') &&
           /warm lead/i.test(d.notes)
 
+        // Canonical lead score: tier = temperature, score = deals.score. Null
+        // temperature (closed deals) → no score chip, never a Cold default.
+        const leadScore = d.temperature
+          ? { score: (d.score as number | null) ?? null, tier: d.temperature as 'hot' | 'warm' | 'cold' }
+          : null
+
         return {
           ...d,
           outcome: (d.outcome as Deal['outcome']) ?? null,
-          lead_score: scoreMap[d.id] ?? null,
+          lead_score: leadScore,
           days_in_stage: d.updated_at ? differenceInDays(new Date(), parseISO(d.updated_at)) : 0,
           is_snoozed: isSnoozed,
           recently_returned: recentlyReturned,

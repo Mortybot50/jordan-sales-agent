@@ -115,44 +115,29 @@ export function useWarmLeads() {
     queryFn: async (): Promise<WarmLead[]> => {
       const sevenDaysAgo = subDays(new Date(), 7).toISOString()
 
+      // Canonical warm leads: deals tiered warm (temperature) that haven't been
+      // touched in 7+ days. Score (banded 50–79 for warm) comes straight off
+      // deals.score, so this reconciles with the contacts list + Kanban.
       const { data: deals, error } = await supabase
         .from('deals')
         .select(`
-          id, contact_id, last_touch_at,
+          id, contact_id, last_touch_at, score,
           contact:contacts(id, full_name),
           venue:venues(name)
         `)
+        .eq('temperature', 'warm')
         .or(`last_touch_at.lt.${sevenDaysAgo},last_touch_at.is.null`)
         .is('closed_at', null)
-        .limit(20)
+        .limit(50)
 
       if (error) throw error
 
-      const dealIds = (deals ?? []).map((d) => d.id)
-      if (dealIds.length === 0) return []
-
-      const { data: scores } = await supabase
-        .from('lead_scores')
-        .select('deal_id, score, tier, scored_at')
-        .in('deal_id', dealIds)
-        .gte('score', 50)
-        .lte('score', 79)
-        .order('scored_at', { ascending: false })
-
-      const scoreMap: Record<string, number> = {}
-      for (const s of scores ?? []) {
-        if (s.deal_id && !scoreMap[s.deal_id]) {
-          scoreMap[s.deal_id] = s.score
-        }
-      }
-
       return (deals ?? [])
-        .filter((d) => d.id in scoreMap)
         .map((d) => ({
           id: d.contact_id ?? d.id,
           full_name: (d.contact as { full_name: string } | null)?.full_name ?? 'Unknown',
           venue_name: (d.venue as { name: string } | null)?.name ?? null,
-          score: scoreMap[d.id],
+          score: (d.score as number | null) ?? 0,
           last_touch_at: d.last_touch_at,
         }))
         .sort((a, b) => b.score - a.score)
