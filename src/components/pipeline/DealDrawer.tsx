@@ -222,7 +222,11 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
 
   async function handleMarkInstalled() {
     const installedStageId = stages?.find((s) => s.name === 'Installed')?.id
-    await markInstalled.mutateAsync({ dealId: deal.id, stageId: installedStageId })
+    await markInstalled.mutateAsync({
+      dealId: deal.id,
+      stageId: installedStageId,
+      existingCloseWonAt: deal.close_won_at,
+    })
   }
 
   function nextStepDateFromKeyword(keyword: 'today' | 'tomorrow' | 'friday' | 'monday' | 'plus_week'): string {

@@ -675,12 +675,27 @@ export function useMarkInstallConfirmed() {
 export function useMarkInstalled() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ dealId, stageId }: { dealId: string; stageId?: string }) => {
+    mutationFn: async ({
+      dealId,
+      stageId,
+      existingCloseWonAt,
+    }: {
+      dealId: string
+      stageId?: string
+      existingCloseWonAt?: string | null
+    }) => {
+      const nowIso = new Date().toISOString()
       const { error } = await supabase
         .from('deals')
         .update({
-          install_completed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          install_completed_at: nowIso,
+          // Installed is a won fulfilment state. Stamp the won outcome + a
+          // close_won_at so the deal is counted in won/earned + commission
+          // totals even if it reached the Installed stage without an explicit
+          // outcome tag. Preserve an existing close_won_at if there is one.
+          outcome: 'won',
+          close_won_at: existingCloseWonAt ?? nowIso,
+          updated_at: nowIso,
           // Move into the Installed stage column so it leaves Closed (the
           // kanban renders the Installed column from stage_id).
           ...(stageId ? { stage_id: stageId } : {}),
@@ -691,6 +706,7 @@ export function useMarkInstalled() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['deals'] })
       qc.invalidateQueries({ queryKey: ['dashboard'] })
+      qc.invalidateQueries({ queryKey: ['monthly-gate'] })
       toast.success('Marked as installed — commission earned')
     },
     onError: (err: Error) => toast.error(err.message),
