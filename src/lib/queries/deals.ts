@@ -431,6 +431,22 @@ export function useUpdateDeal() {
         enrollment: _enr,
         ...dbUpdates
       } = updates
+
+      // Centralised: any move into Proposal Sent stamps proposal_sent_at the
+      // first time (so the kanban card's "proposal sent / follow-up" line
+      // appears) regardless of whether the move came from a drag or the
+      // drawer's Stage select. Don't overwrite an existing timestamp.
+      if (to_stage === 'Proposal Sent' && dbUpdates.proposal_sent_at === undefined) {
+        const { data: cur } = await supabase
+          .from('deals')
+          .select('proposal_sent_at')
+          .eq('id', id)
+          .single()
+        if (cur && !cur.proposal_sent_at) {
+          ;(dbUpdates as Partial<Deal>).proposal_sent_at = new Date().toISOString()
+        }
+      }
+
       const { data, error } = await supabase
         .from('deals')
         .update({ ...dbUpdates, updated_at: new Date().toISOString() })
@@ -695,6 +711,10 @@ export function useMarkInstalled() {
           // outcome tag. Preserve an existing close_won_at if there is one.
           outcome: 'won',
           close_won_at: existingCloseWonAt ?? nowIso,
+          // An installed deal is no longer held — clear the hold so it leaves
+          // its temperature column and counts toward gate/commission views.
+          is_held: false,
+          held_until: null,
           updated_at: nowIso,
           // Move into the Installed stage column so it leaves Closed (the
           // kanban renders the Installed column from stage_id).
