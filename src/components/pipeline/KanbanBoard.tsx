@@ -396,12 +396,22 @@ export function KanbanBoard({
       contract_value: values.contract_value,
       product_id: quickAddProductId,
     })
-    if (col.kind === 'temperature' && created?.id) {
+    // Follow-up write for fields createDeal doesn't take directly: temperature
+    // columns carry their (manual) heat; the Proposal Sent column stamps the
+    // proposal date so quick-added proposals match dragged-in ones.
+    const followUp: Partial<Deal> = {}
+    if (col.kind === 'temperature') {
+      followUp.temperature = col.temp
+      followUp.temperature_source = 'manual'
+    }
+    if (col.kind === 'stage' && col.name === 'Proposal Sent') {
+      followUp.proposal_sent_at = new Date().toISOString()
+    }
+    if (created?.id && Object.keys(followUp).length > 0) {
       await updateDeal.mutateAsync({
         id: created.id,
         org_id: user.org_id,
-        temperature: col.temp,
-        temperature_source: 'manual',
+        ...followUp,
       })
     }
     setQuickAddColumn(null)

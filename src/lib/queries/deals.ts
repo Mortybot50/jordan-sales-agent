@@ -671,12 +671,15 @@ export function useMarkInstallConfirmed() {
 export function useMarkInstalled() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (dealId: string) => {
+    mutationFn: async ({ dealId, stageId }: { dealId: string; stageId?: string }) => {
       const { error } = await supabase
         .from('deals')
         .update({
           install_completed_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
+          // Move into the Installed stage column so it leaves Closed (the
+          // kanban renders the Installed column from stage_id).
+          ...(stageId ? { stage_id: stageId } : {}),
         })
         .eq('id', dealId)
       if (error) throw error
