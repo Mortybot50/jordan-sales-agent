@@ -356,7 +356,9 @@ export function DealCard({ deal, onClick }: DealCardProps) {
               )}
             </div>
             <div className="flex items-center gap-1.5">
-              {deal.lead_score?.score != null && <ScoreBadge score={deal.lead_score.score} />}
+              {deal.lead_score?.score != null && (
+                <ScoreBadge score={deal.lead_score.score} tier={deal.lead_score.tier} />
+              )}
               {/* Age: muted grey ~12px */}
               <span
                 className={cn(

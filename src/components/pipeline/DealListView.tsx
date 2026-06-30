@@ -241,7 +241,9 @@ export function DealListView({ includeSnoozed = false, sortBy = 'default' }: Dea
       sortable: true,
       align: 'right',
       width: '92px',
-      cell: (row) => <ScoreBadge score={row.lead_score?.score} />,
+      cell: (row) => (
+        <ScoreBadge score={row.lead_score?.score} tier={row.lead_score?.tier} />
+      ),
     },
   ]
 
