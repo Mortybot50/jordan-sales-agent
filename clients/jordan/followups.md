@@ -291,3 +291,32 @@ Until then, document that local OAuth testing is unsupported. No prod impact.
 **Why P3:** Metadata-only inflation of the `had_list_unsubscribe` flag in `email_send_events.metadata`. Zero behavioural impact on sending, suppression, or RFC 8058 compliance. Affects only analytics queries that count "how many sends had a List-Unsubscribe header".
 
 **Action:** introduce a `hadListUnsub: boolean` flag set when the unsub headers are actually pushed, and persist that instead of `customHeaders.length > 0`. Trivial cleanup, batch with the next email-stack patch.
+
+## tier-score-sync — 30/06/2026
+
+**Source:** Codex Pattern B gate on the `fix/tier-score-sync` branch (PR off `feat/kanban-temperature-axis`). 4 rounds run; round 4 returned CLEAN. P0/P1 all resolved in-PR (R1: warm-leads + detail derive via shared primary-deal helpers; R2: ScoreBadge tone/label from canonical tier + nullable warm score; R3: tier prop passed at DealCard + DealListView). The three below were triaged P2 at gate close and deliberately left for follow-up.
+
+### Finding A — P2: Score-number magnitude can lag a server-side tier change
+**Verbatim (round 2):** Manual temperature changes update `temperature` only, leaving existing `deals.score` in the old band. A cold score can now sit under a hot tier.
+
+**Resolution so far:** The *tier contradiction* (badge tone/label disagreeing with the tier) is fully closed — `ScoreBadge` now derives tone+label from the canonical `tier` prop, not the score number, at every call site. So a deal whose tier flips will always show the correct tone/label.
+
+**Residual (P2):** The displayed *number* can still lag until the score is re-banded. Client write paths (Kanban drag, drawer, create-in-column) all route through `useUpdateDeal`, and edge functions (`classify-reply-intent`, `poll-replies`, `gmail-inbound`, `approve-lead`) also write `temperature`. Until a re-band runs, a hot deal could read e.g. "HOT 58". 0 such rows today (backfill scored all 334 tiered deals in-band).
+
+**Why P2:** Not a tier disagreement (the spec's regression guard is tier-level and is protected). Magnitude-only oddity, only after a future tier change.
+
+**Action:** add a `bandedScore(tier, {win_probability, last_touch_at})` TS twin of the backfill formula in `src/lib/leadTier.ts`; call it in `useUpdateDeal` when `temperature` is set and `score` not explicitly provided, and mirror it in the temperature-writing edge functions. Batch with the next pipeline patch (edge-function changes need a deploy).
+
+### Finding B — P2: `useWarmLeads` groups all deals client-side
+**Verbatim (round 2):** `useWarmLeads` now fetches every deal with a contact and groups client-side; can blow up dashboard load at CRM scale.
+
+**Why P2:** 334 deals today — trivial. Matches existing dashboard query patterns (`usePipelineHeroMetrics` etc. also fetch all deals client-side). Would only matter at much larger scale.
+
+**Action:** when deal volume grows, move primary-deal selection server-side via an RPC using `row_number() over (partition by contact_id order by <open-first, created_at desc>)`, then filter warm/stale and limit. Revisit if the org crosses ~5k deals.
+
+### Finding C — P2: null-temperature deals show "—" in list/detail but bucket as cold in Kanban
+**Verbatim (round 2):** List tier filtering treats `temperature = null` as no tier, but Kanban buckets null into cold — the surfaces can disagree.
+
+**Why P2:** 0 null-temperature deals today. The "no tier → show —, never default to Cold" behaviour in the list/detail is the *deliberate* fix for the original bug (everything defaulting to Cold). Kanban buckets null → cold only because a card needs a column to live in; it's a placement necessity, not a tier claim.
+
+**Action:** if null-temperature deals start appearing, decide one null policy and apply it in both places (likely: give Kanban a dedicated "Untiered" lane rather than folding null into Cold). Revisit when the auto-classifier or import path starts producing null-temperature deals.
