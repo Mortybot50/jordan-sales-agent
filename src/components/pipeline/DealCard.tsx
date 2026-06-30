@@ -5,7 +5,7 @@ import type { Deal } from '@/lib/queries/deals'
 import { useVenueGroupBadges } from '@/lib/queries/venue-groups'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { format, addMonths } from 'date-fns'
+import { format, addMonths, addDays } from 'date-fns'
 import { dealDisplayTitle, relDays } from '@/lib/dealTitle'
 
 interface DealCardProps {
@@ -63,8 +63,15 @@ export function DealCard({ deal, onClick }: DealCardProps) {
   const finalValue = deal.final_value != null ? Number(deal.final_value) : null
   const headline = finalValue ?? acv ?? deal.contract_value
   const stageName = deal.stage?.name ?? ''
-  const isHeld = stageName === 'Hold for Next Month'
+  const isHeld = !!deal.is_held
   const contributesToGate = !isHeld && isCurrentMonth(deal.close_won_at)
+  // Outreach status badge — the deal's pipeline stage name. Replaces the old
+  // temperature chip now that temperature drives the column axis.
+  const statusLabel = stageName || 'New'
+  const statusColor = deal.stage?.color ?? '#94a3b8'
+  // Proposal Sent tracking — show sent date + a derived +7d follow-up date.
+  const proposalSentDate = deal.proposal_sent_at ? new Date(deal.proposal_sent_at) : null
+  const proposalFollowUpDate = proposalSentDate ? addDays(proposalSentDate, 7) : null
   const isClosedStage = !!deal.stage?.is_closed
   const isWon = deal.outcome === 'won'
   const isLost = deal.outcome === 'lost'
@@ -180,7 +187,8 @@ export function DealCard({ deal, onClick }: DealCardProps) {
   }
   // 4. Lifecycle context (snooze / held / reopened / back-from-snooze)
   if (isHeld) {
-    priorityPills.push({ key: 'held', label: `Held for ${format(addMonths(new Date(), 1), 'MMM')}`, className: mintPill, title: "Held for next month — does not count toward this month's gate" })
+    const heldMonth = deal.held_until ? new Date(deal.held_until) : addMonths(new Date(), 1)
+    priorityPills.push({ key: 'held', label: `Held for ${format(heldMonth, 'MMM')}`, className: mintPill, title: "On hold — stays in its temperature column, does not count toward this month's gate" })
   }
   if (recentlyReturned) {
     priorityPills.push({ key: 'back-from-snooze', label: 'Back from snooze', className: warmPill, title: snoozedUntilDate ? `Auto-woke ${snoozedUntilDate.toLocaleDateString('en-AU')}` : 'Returned from snooze' })
@@ -274,24 +282,16 @@ export function DealCard({ deal, onClick }: DealCardProps) {
             )}
           </p>
 
-          {/* 3 + 4. Heat pill + state pills — heat is always first, muted */}
+          {/* 3 + 4. Outreach status badge + state pills — status is always first */}
           <div className="flex items-center gap-1.5 flex-wrap">
-            {/* Heat pill — small, rounded, muted low-saturation tint */}
-            {deal.temperature && (
-              <span
-                className={cn(
-                  'inline-flex items-center rounded-full px-2 py-[2px] text-[11px] font-semibold uppercase tracking-wide',
-                  deal.temperature === 'hot'
-                    ? 'bg-rose-50 text-rose-500 dark:bg-rose-950/40 dark:text-rose-400'
-                    : deal.temperature === 'warm'
-                      ? 'bg-amber-50 text-amber-500 dark:bg-amber-950/40 dark:text-amber-400'
-                      : 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-400',
-                )}
-                title={deal.temperature_source === 'manual' ? `${deal.temperature} (manual)` : deal.temperature}
-              >
-                {deal.temperature}
-              </span>
-            )}
+            {/* Status badge — the deal's outreach stage. Coloured dot + label. */}
+            <span
+              className="inline-flex items-center gap-1 rounded-[4px] border border-hairline bg-surface-2 px-1.5 py-[2px] text-[10px] font-semibold uppercase tracking-[var(--jordan-tracking-label)] text-ink-muted"
+              title={`Status: ${statusLabel}`}
+            >
+              <span className="size-1.5 rounded-full shrink-0" style={{ backgroundColor: statusColor }} />
+              {statusLabel}
+            </span>
             {/* State pills — top 2 by priority */}
             {priorityPills.slice(0, 2).map((pill) => (
               <span key={pill.key} className={cn(pillBase, pill.className)} title={pill.title}>
@@ -309,6 +309,17 @@ export function DealCard({ deal, onClick }: DealCardProps) {
                 : deal.has_replied
                   ? 'Replied'
                   : 'Not contacted'}
+            </p>
+          )}
+          {proposalSentDate && proposalFollowUpDate && (
+            <p
+              className="truncate text-[12px] text-[#8a8a8a] dark:text-ink-muted jordan-tnum"
+              title={`Proposal sent ${proposalSentDate.toLocaleDateString('en-AU')} · follow up ${proposalFollowUpDate.toLocaleDateString('en-AU')}`}
+            >
+              <span className="text-[#b0b0b0] dark:text-ink-faint">Proposal sent</span>{' '}
+              {format(proposalSentDate, 'd MMM')}
+              <span className="text-[#b0b0b0] dark:text-ink-faint"> · follow up </span>
+              {format(proposalFollowUpDate, 'd MMM')}
             </p>
           )}
           {noteLine && (

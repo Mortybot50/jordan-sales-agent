@@ -139,7 +139,7 @@ export function usePipelineFinancials() {
         .from('deals')
         .select(`
           id, title, acv, tcv, contract_value, commission_amount, commission_pct,
-          close_won_at, closed_at, outcome, final_value,
+          close_won_at, closed_at, outcome, final_value, is_held,
           install_scheduled_for, install_confirmed_at, install_completed_at,
           stage:pipeline_stages(id, name, is_closed),
           contact:contacts(id, full_name),
@@ -171,6 +171,7 @@ export function usePipelineFinancials() {
         closed_at: string | null
         outcome: 'won' | 'lost' | null
         final_value: number | string | null
+        is_held: boolean | null
         install_scheduled_for: string | null
         install_confirmed_at: string | null
         install_completed_at: string | null
@@ -194,7 +195,7 @@ export function usePipelineFinancials() {
         const finalValue = r.final_value != null ? Number(r.final_value) : null
         const commissionPct = r.commission_pct != null ? Number(r.commission_pct) : null
         const stageName = r.stage?.name ?? ''
-        const isHeld = stageName === 'Hold for Next Month'
+        const isHeld = !!r.is_held
         const isLost = r.outcome === 'lost' || /lost/i.test(stageName)
 
         if (isHeld) {

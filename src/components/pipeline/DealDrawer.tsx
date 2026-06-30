@@ -35,6 +35,7 @@ import {
   useMarkInstalled,
   useSnoozeDeal,
   useUpdateDealNextStep,
+  useSetDealHeld,
 } from '@/lib/queries/deals'
 import { useContactActivities } from '@/lib/queries/activities'
 import { useStages } from '@/lib/queries/stages'
@@ -88,6 +89,12 @@ function nextMonthLabel(): string {
   return format(addMonths(new Date(), 1), 'MMMM')
 }
 
+/** First day of next month, as a yyyy-MM-dd date string (when a hold lapses). */
+function firstOfNextMonthISO(): string {
+  const now = new Date()
+  return format(new Date(now.getFullYear(), now.getMonth() + 1, 1), 'yyyy-MM-dd')
+}
+
 export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [outcomeIntent, setOutcomeIntent] = useState<'won' | 'lost' | null>(null)
@@ -108,6 +115,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
   const markConfirmed = useMarkInstallConfirmed()
   const markInstalled = useMarkInstalled()
   const snoozeDeal = useSnoozeDeal()
+  const setHeld = useSetDealHeld()
   const updateNextStep = useUpdateDealNextStep(deal.id)
 
   const form = useForm<DealFormValues>({
@@ -285,7 +293,7 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
   const tcv = deal.tcv != null ? Number(deal.tcv) : null
   const commission = deal.commission_amount != null ? Number(deal.commission_amount) : null
   const stageName = deal.stage?.name ?? ''
-  const isHeld = stageName === 'Hold for Next Month'
+  const isHeld = !!deal.is_held
   // Won = closed stage that isn't Lost ("Closed" post-consolidation).
   const isClosedWon = !!deal.stage?.is_closed && !/lost/i.test(stageName)
   const contributesToGate = !!deal.close_won_at && isCurrentMonth(deal.close_won_at) && !isHeld
@@ -620,23 +628,26 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
                 Held for {nextMonthLabel()}
               </CapsLabel>
               <p className="text-[12px] text-ink-muted">
-                This deal won't count toward this month's gate. Move when ready.
+                This deal won't count toward this month's gate. Release when ready.
               </p>
               <div className="flex gap-2">
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => moveToStageByName('Proposal Sent')}
-                  disabled={updateStage.isPending}
+                  onClick={() => setHeld.mutate({ dealId: deal.id, isHeld: false })}
+                  disabled={setHeld.isPending}
                   className="flex-1"
                 >
                   <Play className="w-3.5 h-3.5 mr-1" />
-                  Back to Proposal Sent
+                  Release hold
                 </Button>
                 <Button
                   size="sm"
-                  onClick={() => moveToStageByName('Closed')}
-                  disabled={updateStage.isPending}
+                  onClick={() => {
+                    setHeld.mutate({ dealId: deal.id, isHeld: false })
+                    moveToStageByName('Closed')
+                  }}
+                  disabled={updateStage.isPending || setHeld.isPending}
                   className="flex-1"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
@@ -653,8 +664,8 @@ export function DealDrawer({ deal, open, onClose }: DealDrawerProps) {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => moveToStageByName('Hold for Next Month')}
-                disabled={updateStage.isPending}
+                onClick={() => setHeld.mutate({ dealId: deal.id, isHeld: true, heldUntil: firstOfNextMonthISO() })}
+                disabled={setHeld.isPending}
                 className="h-8 px-2.5 text-[12px] rounded-full border-hairline bg-transparent hover:bg-surface-2 font-medium"
               >
                 <Pause className="w-3 h-3 mr-1" />

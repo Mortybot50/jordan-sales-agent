@@ -492,10 +492,12 @@ export type Database = {
           created_at: string | null
           final_value: number | null
           follow_up_due: string | null
+          held_until: string | null
           id: string
           install_completed_at: string | null
           install_confirmed_at: string | null
           install_scheduled_for: string | null
+          is_held: boolean
           last_touch_at: string | null
           lost_reason: string | null
           next_step_due_at: string | null
@@ -505,6 +507,7 @@ export type Database = {
           outcome: string | null
           owner_user_id: string | null
           product_id: string | null
+          proposal_sent_at: string | null
           snoozed_until: string | null
           stage_id: string | null
           tcv: number | null
@@ -531,10 +534,12 @@ export type Database = {
           created_at?: string | null
           final_value?: number | null
           follow_up_due?: string | null
+          held_until?: string | null
           id?: string
           install_completed_at?: string | null
           install_confirmed_at?: string | null
           install_scheduled_for?: string | null
+          is_held?: boolean
           last_touch_at?: string | null
           lost_reason?: string | null
           next_step_due_at?: string | null
@@ -544,6 +549,7 @@ export type Database = {
           outcome?: string | null
           owner_user_id?: string | null
           product_id?: string | null
+          proposal_sent_at?: string | null
           snoozed_until?: string | null
           stage_id?: string | null
           tcv?: number | null
@@ -570,10 +576,12 @@ export type Database = {
           created_at?: string | null
           final_value?: number | null
           follow_up_due?: string | null
+          held_until?: string | null
           id?: string
           install_completed_at?: string | null
           install_confirmed_at?: string | null
           install_scheduled_for?: string | null
+          is_held?: boolean
           last_touch_at?: string | null
           lost_reason?: string | null
           next_step_due_at?: string | null
@@ -583,6 +591,7 @@ export type Database = {
           outcome?: string | null
           owner_user_id?: string | null
           product_id?: string | null
+          proposal_sent_at?: string | null
           snoozed_until?: string | null
           stage_id?: string | null
           tcv?: number | null
