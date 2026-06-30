@@ -522,6 +522,8 @@ export function useMarkDealOutcome() {
       closeDate,
       lostReason,
       stageId,
+      existingClosedAt = null,
+      existingCloseWonAt = null,
     }: {
       dealId: string
       orgId: string
@@ -530,17 +532,33 @@ export function useMarkDealOutcome() {
       closeDate: string                      // ISO date (yyyy-MM-dd)
       lostReason?: string | null
       stageId?: string                       // optional stage_id to set in same write
+      existingClosedAt?: string | null       // preserved when marking Installed
+      existingCloseWonAt?: string | null     // preserved when marking Installed
     }) => {
       const closeIso = new Date(`${closeDate}T12:00:00`).toISOString()
       const isInstalled = outcome === 'installed'
       // Installed deals are recorded as 'won' in the outcome column.
       const dbOutcome = isInstalled ? 'won' : outcome
+      // Installed is a post-Closed fulfilment state — the dialog's date is the
+      // INSTALL date, not the close date. Preserve the original close month so
+      // gate history isn't rewritten; only seed close fields if the deal was
+      // never closed (e.g. dragged straight to Installed).
+      const closedAt = isInstalled ? (existingClosedAt ?? closeIso) : closeIso
+      const closeWonAt = isInstalled
+        ? (existingCloseWonAt ?? closeIso)
+        : dbOutcome === 'won'
+          ? closeIso
+          : null
       const updates = {
         outcome: dbOutcome,
         final_value: finalValue,
-        closed_at: closeIso,
+        closed_at: closedAt,
         updated_at: new Date().toISOString(),
-        close_won_at: dbOutcome === 'won' ? closeIso : null,
+        close_won_at: closeWonAt,
+        // Any confirmed outcome releases a "held for next month" flag — a
+        // closed/lost/installed deal can't also be parked for next month.
+        is_held: false,
+        held_until: null,
         ...(outcome === 'lost' ? { lost_reason: lostReason ?? null } : {}),
         ...(isInstalled ? { install_completed_at: closeIso } : {}),
         ...(stageId ? { stage_id: stageId } : {}),

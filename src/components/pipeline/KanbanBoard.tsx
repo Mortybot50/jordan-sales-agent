@@ -179,12 +179,16 @@ export function KanbanBoard({
     }
   }, [outcomeStageIds])
 
-  // Deep-link stage filter narrows to a single column (only meaningful for
-  // outcome-stage columns; falls back to all columns otherwise).
+  // Deep-link stage filter (a real stage id from Pipeline Health). An
+  // outcome-stage id narrows to that single column. A non-outcome stage id
+  // (New/Contacted/Replied/Meeting Booked) has no column of its own — those
+  // deals live in their temperature columns — so show the temperature columns
+  // and let filteredDeals narrow the cards to that stage_id.
   const visibleColumns = useMemo(() => {
     if (!stageFilter) return columns
-    const match = columns.filter((c) => c.id === stageFilter)
-    return match.length > 0 ? match : columns
+    const outcomeMatch = columns.filter((c) => c.id === stageFilter)
+    if (outcomeMatch.length > 0) return outcomeMatch
+    return columns.filter((c) => c.kind === 'temperature')
   }, [columns, stageFilter])
 
   // Map a stage_id → the natural outreach stage a reopened deal should land in,
@@ -216,6 +220,9 @@ export function KanbanBoard({
 
   const filteredDeals = useMemo(() => {
     return displayDeals.filter((d) => {
+      // Deep-link stage filter narrows cards to that stage_id (honours
+      // non-outcome stage links that have no column of their own).
+      if (stageFilter && d.stage_id !== stageFilter) return false
       if (outreachFilter === 'enrolled' && !(d.enrollment && (d.enrollment.status === 'active' || d.enrollment.status === 'paused'))) return false
       if (outreachFilter === 'replied' && !d.has_replied) return false
       if (outreachFilter === 'not_contacted' && (d.last_contact_at || d.has_replied || d.enrollment)) return false
@@ -224,7 +231,7 @@ export function KanbanBoard({
       if (sourceFilter === 'other' && isPst) return false
       return true
     })
-  }, [displayDeals, outreachFilter, sourceFilter])
+  }, [displayDeals, outreachFilter, sourceFilter, stageFilter])
 
   const dealsByColumn = useMemo(() => {
     const map: Record<string, Deal[]> = {}

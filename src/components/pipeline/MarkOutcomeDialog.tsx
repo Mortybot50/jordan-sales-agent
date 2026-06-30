@@ -87,6 +87,8 @@ function Body({
       closeDate,
       lostReason: outcome === 'lost' ? (lostReason.trim() || null) : null,
       stageId: pendingStageId ?? undefined,
+      existingClosedAt: deal.closed_at,
+      existingCloseWonAt: deal.close_won_at,
     })
     onSaved?.()
     onClose()
