@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
+import { deriveContactLeadScore, type PrimaryDealCandidate } from '@/lib/leadTier'
 
 export interface Contact {
   id: string
@@ -27,17 +28,10 @@ export interface Contact {
     cover_count: number | null
   } | null
   lead_score?: {
-    score: number
+    score: number | null
     tier: 'hot' | 'warm' | 'cold'
   } | null
   tags?: string[]
-}
-
-export function scoreToTier(score: number | null | undefined): 'hot' | 'warm' | 'cold' {
-  if (score == null) return 'cold'
-  if (score >= 80) return 'hot'
-  if (score >= 50) return 'warm'
-  return 'cold'
 }
 
 /**
@@ -64,45 +58,10 @@ export function useContacts() {
 
       if (error) throw error
 
-      // Fetch latest lead scores for all deals linked to these contacts
+      // Canonical tier/score: derive from each contact's primary deal
+      // (deals.temperature + deals.score), the same field the Kanban reads.
       const contactIds = (data ?? []).map((c) => c.id)
-      let scoreMap: Record<string, { score: number; tier: 'hot' | 'warm' | 'cold' }> = {}
-
-      if (contactIds.length > 0) {
-        const { data: deals } = await supabase
-          .from('deals')
-          .select('contact_id, id')
-          .in('contact_id', contactIds)
-
-        if (deals && deals.length > 0) {
-          const dealIds = deals.map((d) => d.id)
-          const { data: scores } = await supabase
-            .from('lead_scores')
-            .select('deal_id, score, tier, scored_at')
-            .in('deal_id', dealIds)
-            .order('scored_at', { ascending: false })
-
-          if (scores) {
-            // Latest score per deal
-            const latestByDeal: Record<string, typeof scores[0]> = {}
-            for (const s of scores) {
-              if (s.deal_id && !latestByDeal[s.deal_id]) {
-                latestByDeal[s.deal_id] = s
-              }
-            }
-            // Map back to contact
-            for (const deal of deals) {
-              if (deal.contact_id && deal.id && latestByDeal[deal.id]) {
-                const s = latestByDeal[deal.id]
-                const existing = scoreMap[deal.contact_id]
-                if (!existing || s.score > existing.score) {
-                  scoreMap[deal.contact_id] = { score: s.score, tier: s.tier as 'hot' | 'warm' | 'cold' }
-                }
-              }
-            }
-          }
-        }
-      }
+      const dealsByContact = await fetchDealsByContact(contactIds)
 
       // Tags — fetch all and group by contact_id
       const tagMap: Record<string, string[]> = {}
@@ -121,11 +80,41 @@ export function useContacts() {
 
       return (data ?? []).map((c) => ({
         ...c,
-        lead_score: scoreMap[c.id] ?? null,
+        lead_score: deriveContactLeadScore(dealsByContact[c.id]),
         tags: tagMap[c.id] ?? [],
       })) as Contact[]
     },
   })
+}
+
+/**
+ * Fetch the deals for a set of contacts and group them by contact_id, selecting
+ * only the fields the canonical tier/score derivation needs. Shared by
+ * `useContacts` and `useContactsPaginated`.
+ */
+async function fetchDealsByContact(
+  contactIds: string[],
+): Promise<Record<string, PrimaryDealCandidate[]>> {
+  const byContact: Record<string, PrimaryDealCandidate[]> = {}
+  if (contactIds.length === 0) return byContact
+
+  const { data: deals } = await supabase
+    .from('deals')
+    .select('contact_id, temperature, score, closed_at, created_at, stage:pipeline_stages(is_closed)')
+    .in('contact_id', contactIds)
+
+  for (const d of deals ?? []) {
+    if (!d.contact_id) continue
+    const arr = byContact[d.contact_id] ?? (byContact[d.contact_id] = [])
+    arr.push({
+      temperature: (d.temperature as PrimaryDealCandidate['temperature']) ?? null,
+      score: (d.score as number | null) ?? null,
+      closed_at: d.closed_at,
+      created_at: d.created_at,
+      stage: (d.stage as unknown as { is_closed: boolean | null } | null) ?? null,
+    })
+  }
+  return byContact
 }
 
 /**
@@ -188,45 +177,11 @@ export function useContactsPaginated(opts: {
       if (error) throw error
 
       const contactIds = (data ?? []).map((c) => c.id)
-      let scoreMap: Record<string, { score: number; tier: 'hot' | 'warm' | 'cold' }> = {}
       const tagMap: Record<string, string[]> = {}
 
+      const dealsByContact = await fetchDealsByContact(contactIds)
+
       if (contactIds.length > 0) {
-        const { data: deals } = await supabase
-          .from('deals')
-          .select('contact_id, id')
-          .in('contact_id', contactIds)
-
-        if (deals && deals.length > 0) {
-          const dealIds = deals.map((d) => d.id)
-          const { data: scores } = await supabase
-            .from('lead_scores')
-            .select('deal_id, score, tier, scored_at')
-            .in('deal_id', dealIds)
-            .order('scored_at', { ascending: false })
-
-          if (scores) {
-            const latestByDeal: Record<string, typeof scores[0]> = {}
-            for (const s of scores) {
-              if (s.deal_id && !latestByDeal[s.deal_id]) {
-                latestByDeal[s.deal_id] = s
-              }
-            }
-            for (const deal of deals) {
-              if (deal.contact_id && deal.id && latestByDeal[deal.id]) {
-                const s = latestByDeal[deal.id]
-                const existing = scoreMap[deal.contact_id]
-                if (!existing || s.score > existing.score) {
-                  scoreMap[deal.contact_id] = {
-                    score: s.score,
-                    tier: s.tier as 'hot' | 'warm' | 'cold',
-                  }
-                }
-              }
-            }
-          }
-        }
-
         const { data: tagRows } = await supabase
           .from('contact_tags')
           .select('contact_id, tag')
@@ -241,7 +196,7 @@ export function useContactsPaginated(opts: {
 
       const rows = (data ?? []).map((c) => ({
         ...c,
-        lead_score: scoreMap[c.id] ?? null,
+        lead_score: deriveContactLeadScore(dealsByContact[c.id]),
         tags: tagMap[c.id] ?? [],
       })) as Contact[]
 

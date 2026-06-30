@@ -1,7 +1,8 @@
 import * as React from 'react'
 import { StatusPill } from './StatusPill'
 import { MetricNumber } from './MetricNumber'
-import { scoreToLabel, scoreToTone } from './score'
+import { scoreToLabel, scoreToTone, tierToLabel, tierToTone } from './score'
+import type { Tier } from '@/lib/leadTier'
 
 /**
  * ScoreBadge — lead score → hot/warm/cold pill.
@@ -12,6 +13,12 @@ import { scoreToLabel, scoreToTone } from './score'
  */
 export interface ScoreBadgeProps {
   score: number | null | undefined
+  /**
+   * Canonical tier (deal temperature). When provided, the pill tone + label
+   * come from the tier rather than the score number, so the badge can never
+   * contradict the tier shown elsewhere. The number is still the score.
+   */
+  tier?: Tier | null
   /** Show "HOT 82" instead of just "82". */
   withLabel?: boolean
   className?: string
@@ -24,8 +31,9 @@ const DEFAULT_SCORE_TOOLTIP =
   'Use ≥60 as daily focus threshold.'
 
 export const ScoreBadge = React.forwardRef<HTMLSpanElement, ScoreBadgeProps>(
-  ({ score, withLabel = false, className, title }, ref) => {
-    const tone = scoreToTone(score)
+  ({ score, tier, withLabel = false, className, title }, ref) => {
+    const tone = tier ? tierToTone(tier) : scoreToTone(score)
+    const label = tier ? tierToLabel(tier) : scoreToLabel(score)
 
     return (
       <StatusPill
@@ -35,7 +43,7 @@ export const ScoreBadge = React.forwardRef<HTMLSpanElement, ScoreBadgeProps>(
         className={className}
         title={title ?? DEFAULT_SCORE_TOOLTIP}
       >
-        {withLabel && <span>{scoreToLabel(score)}</span>}
+        {withLabel && <span>{label}</span>}
         {score != null ? (
           <MetricNumber value={score} className="text-[11px]" />
         ) : (

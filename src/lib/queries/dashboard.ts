@@ -15,6 +15,7 @@ import {
   qualifiedMeetingsTone,
   type JordanScoreResult,
 } from '@/lib/metrics/jordanScore'
+import { pickPrimaryDeal, type PrimaryDealCandidate } from '@/lib/leadTier'
 
 export interface DashboardKPIs {
   replyRate: number | null
@@ -105,7 +106,7 @@ export interface WarmLead {
   id: string
   full_name: string
   venue_name: string | null
-  score: number
+  score: number | null
   last_touch_at: string | null
 }
 
@@ -115,48 +116,68 @@ export function useWarmLeads() {
     queryFn: async (): Promise<WarmLead[]> => {
       const sevenDaysAgo = subDays(new Date(), 7).toISOString()
 
+      // Canonical warm leads, per CONTACT (not per deal). We group every deal by
+      // contact, pick the primary deal with the SAME rule the contacts list uses
+      // (pickPrimaryDeal), and keep contacts whose primary deal is warm and
+      // hasn't been touched in 7+ days. Deriving from the primary deal — rather
+      // than any warm deal — guarantees the widget never lists a contact the
+      // list/detail page call Hot or Cold. Score (banded 50–79 for warm) comes
+      // straight off deals.score.
       const { data: deals, error } = await supabase
         .from('deals')
         .select(`
-          id, contact_id, last_touch_at,
+          contact_id, temperature, score, last_touch_at, closed_at, created_at,
+          stage:pipeline_stages(is_closed),
           contact:contacts(id, full_name),
           venue:venues(name)
         `)
-        .or(`last_touch_at.lt.${sevenDaysAgo},last_touch_at.is.null`)
-        .is('closed_at', null)
-        .limit(20)
+        .not('contact_id', 'is', null)
 
       if (error) throw error
 
-      const dealIds = (deals ?? []).map((d) => d.id)
-      if (dealIds.length === 0) return []
-
-      const { data: scores } = await supabase
-        .from('lead_scores')
-        .select('deal_id, score, tier, scored_at')
-        .in('deal_id', dealIds)
-        .gte('score', 50)
-        .lte('score', 79)
-        .order('scored_at', { ascending: false })
-
-      const scoreMap: Record<string, number> = {}
-      for (const s of scores ?? []) {
-        if (s.deal_id && !scoreMap[s.deal_id]) {
-          scoreMap[s.deal_id] = s.score
-        }
+      interface WarmRow extends PrimaryDealCandidate {
+        contact_id: string
+        last_touch_at: string | null
+        full_name: string
+        venue_name: string | null
       }
 
-      return (deals ?? [])
-        .filter((d) => d.id in scoreMap)
-        .map((d) => ({
-          id: d.contact_id ?? d.id,
+      const byContact = new Map<string, WarmRow[]>()
+      for (const d of deals ?? []) {
+        if (!d.contact_id) continue
+        const row: WarmRow = {
+          contact_id: d.contact_id,
+          temperature: (d.temperature as PrimaryDealCandidate['temperature']) ?? null,
+          score: (d.score as number | null) ?? null,
+          closed_at: d.closed_at,
+          created_at: d.created_at,
+          stage: (d.stage as unknown as { is_closed: boolean | null } | null) ?? null,
+          last_touch_at: d.last_touch_at,
           full_name: (d.contact as { full_name: string } | null)?.full_name ?? 'Unknown',
           venue_name: (d.venue as { name: string } | null)?.name ?? null,
-          score: scoreMap[d.id],
-          last_touch_at: d.last_touch_at,
-        }))
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 5)
+        }
+        const arr = byContact.get(d.contact_id) ?? []
+        arr.push(row)
+        byContact.set(d.contact_id, arr)
+      }
+
+      const out: WarmLead[] = []
+      for (const [contactId, rows] of byContact) {
+        const primary = pickPrimaryDeal(rows)
+        if (!primary || primary.temperature !== 'warm') continue
+        // Untouched 7+ days (older than the cutoff) or never touched.
+        if (primary.last_touch_at && primary.last_touch_at >= sevenDaysAgo) continue
+        out.push({
+          id: contactId,
+          full_name: primary.full_name,
+          venue_name: primary.venue_name,
+          score: primary.score ?? null,
+          last_touch_at: primary.last_touch_at,
+        })
+      }
+
+      // Highest score first; unscored warm leads (score null) sort last.
+      return out.sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).slice(0, 5)
     },
   })
 }

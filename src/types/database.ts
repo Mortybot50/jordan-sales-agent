@@ -508,6 +508,7 @@ export type Database = {
           owner_user_id: string | null
           product_id: string | null
           proposal_sent_at: string | null
+          score: number | null
           snoozed_until: string | null
           stage_id: string | null
           tcv: number | null
@@ -550,6 +551,7 @@ export type Database = {
           owner_user_id?: string | null
           product_id?: string | null
           proposal_sent_at?: string | null
+          score?: number | null
           snoozed_until?: string | null
           stage_id?: string | null
           tcv?: number | null
@@ -592,6 +594,7 @@ export type Database = {
           owner_user_id?: string | null
           product_id?: string | null
           proposal_sent_at?: string | null
+          score?: number | null
           snoozed_until?: string | null
           stage_id?: string | null
           tcv?: number | null
