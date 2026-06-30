@@ -580,7 +580,16 @@ export function useMarkDealOutcome() {
         is_held: false,
         held_until: null,
         ...(outcome === 'lost' ? { lost_reason: lostReason ?? null } : {}),
-        ...(isInstalled ? { install_completed_at: closeIso } : {}),
+        ...(isInstalled
+          ? { install_completed_at: closeIso }
+          : // Moving to Closed or Lost unwinds any install state, so a
+            // previously-installed deal doesn't keep stale install timestamps
+            // (and isn't double-counted as earned commission).
+            {
+              install_completed_at: null,
+              install_confirmed_at: null,
+              install_scheduled_for: null,
+            }),
         ...(stageId ? { stage_id: stageId } : {}),
       }
 
