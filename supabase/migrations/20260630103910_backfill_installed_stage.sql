@@ -14,6 +14,7 @@ SET stage_id = s.id,
     updated_at = now()
 FROM pipeline_stages s
 WHERE s.name = 'Installed'
+  AND s.org_id = d.org_id            -- per-org: never cross an org boundary
   AND d.install_completed_at IS NOT NULL
   AND d.outcome = 'won'
   AND d.stage_id IS DISTINCT FROM s.id;

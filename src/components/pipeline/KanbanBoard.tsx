@@ -170,10 +170,13 @@ export function KanbanBoard({
   )
 
   // A deal sits in its outcome stage column if it has one; otherwise its
-  // temperature bucket (NULL temperature → cold).
+  // temperature bucket (NULL temperature → cold). Held deals are the
+  // exception: "held for next month" is a card flag, not a column, so a held
+  // deal always drops back to its temperature column (with a "Held" badge),
+  // even if it's sitting in an open outcome stage like Proposal Sent.
   const columnIdForDeal = useMemo(() => {
     return (d: Deal): string => {
-      if (d.stage_id && outcomeStageIds.has(d.stage_id)) return d.stage_id
+      if (!d.is_held && d.stage_id && outcomeStageIds.has(d.stage_id)) return d.stage_id
       const t = (d.temperature ?? 'cold') as TempKey
       return tempColumnId(TEMP_ORDER.includes(t) ? t : 'cold')
     }
