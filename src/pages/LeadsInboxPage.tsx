@@ -41,6 +41,11 @@ const SOURCE_LABEL: Record<string, string> = {
 }
 
 function ContactStatusPill({ lead }: { lead: InboxLead }) {
+  // Truth source is contact_status (derived from an actual emailed contact),
+  // NOT the raw contact_enrichment_status field — that field can drift stale
+  // (e.g. CSV-imported venues arrive with emails but a never-updated crawler
+  // status). is_lead === (contact_status === 'found'), so if we have an email
+  // this ALWAYS wins first and reads as a lead.
   if (lead.contact_status === 'found') {
     return (
       <StatusPill tone="success">
@@ -48,8 +53,11 @@ function ContactStatusPill({ lead }: { lead: InboxLead }) {
       </StatusPill>
     )
   }
+  // No emailed contact = prospect. Word it by the fact that matters to Jordan
+  // (no email yet), not by whether a crawl happened — that was the confusing
+  // "Crawled — none found" label that contradicted venues which had emails.
   if (lead.contact_status === 'crawled_empty') {
-    return <StatusPill tone="warning">Crawled — none found</StatusPill>
+    return <StatusPill tone="warning">No email yet</StatusPill>
   }
   return <StatusPill tone="neutral">Not crawled yet</StatusPill>
 }
