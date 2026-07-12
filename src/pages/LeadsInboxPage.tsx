@@ -11,6 +11,7 @@ import {
 } from '@/components/primitives'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 import {
   useLeadsInbox,
@@ -53,26 +54,52 @@ function ContactStatusPill({ lead }: { lead: InboxLead }) {
   return <StatusPill tone="neutral">Not crawled yet</StatusPill>
 }
 
+// verification_status enum: pending | valid | invalid | catch_all | disposable | unknown
+function verificationTone(status: string | null): 'success' | 'danger' | 'warning' | 'neutral' {
+  switch (status) {
+    case 'valid':
+      return 'success'
+    case 'invalid':
+      return 'danger'
+    case 'catch_all':
+    case 'disposable':
+      return 'warning'
+    default:
+      return 'neutral'
+  }
+}
+
+/** Verification pill + email tier — secondary metadata beside an email. */
 function VerificationPill({ lead }: { lead: InboxLead }) {
   const c = lead.best_contact
   if (!c?.email) return <span className="text-ink-disabled">—</span>
-  const tone =
-    c.verification_status === 'valid'
-      ? 'success'
-      : c.verification_status === 'invalid'
-        ? 'danger'
-        : c.verification_status === 'risky'
-          ? 'warning'
-          : 'neutral'
   return (
     <span className="inline-flex items-center gap-1">
-      <StatusPill tone={tone}>{c.verification_status ?? 'pending'}</StatusPill>
+      <StatusPill tone={verificationTone(c.verification_status)}>
+        {c.verification_status ?? 'pending'}
+      </StatusPill>
       {c.email_tier != null && (
         <span className="text-[10px] text-ink-faint jordan-tnum" title="Email tier (1 = decision-maker pattern)">
           T{c.email_tier}
         </span>
       )}
     </span>
+  )
+}
+
+/** Best-email cell — the address is the primary content; pill + tier inline. */
+function BestEmailCell({ lead }: { lead: InboxLead }) {
+  const c = lead.best_contact
+  if (!c?.email) return <span className="text-ink-disabled">—</span>
+  return (
+    <div className="flex min-w-0 items-center gap-1.5">
+      <span className="truncate text-[12px] text-ink" title={c.email}>
+        {c.email}
+      </span>
+      <span className="shrink-0">
+        <VerificationPill lead={lead} />
+      </span>
+    </div>
   )
 }
 
@@ -88,9 +115,18 @@ export function LeadsInboxPage() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [bulkRunning, setBulkRunning] = useState(false)
   const [approveSteps, setApproveSteps] = useState<ApproveStep[] | null>(null)
+  const [segment, setSegment] = useState<'all' | 'leads' | 'prospects'>('all')
 
-  const rows = leads ?? []
-  const allSelected = rows.length > 0 && selected.size === rows.length
+  const allRows = leads ?? []
+  const leadCount = allRows.filter((l) => l.is_lead).length
+  const prospectCount = allRows.length - leadCount
+  const rows =
+    segment === 'leads'
+      ? allRows.filter((l) => l.is_lead)
+      : segment === 'prospects'
+        ? allRows.filter((l) => !l.is_lead)
+        : allRows
+  const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id))
 
   function toggle(id: string) {
     setSelected((s) => {
@@ -140,7 +176,12 @@ export function LeadsInboxPage() {
           aria-label="Select all"
           checked={allSelected}
           onChange={() =>
-            setSelected(allSelected ? new Set() : new Set(rows.map((r) => r.id)))
+            setSelected((s) => {
+              const n = new Set(s)
+              if (allSelected) rows.forEach((r) => n.delete(r.id))
+              else rows.forEach((r) => n.add(r.id))
+              return n
+            })
           }
           className="h-3.5 w-3.5 cursor-pointer accent-[var(--jordan-accent)]"
         />
@@ -164,7 +205,17 @@ export function LeadsInboxPage() {
       header: 'Venue',
       cell: (row) => (
         <div className="min-w-0">
-          <p className="truncate font-medium text-ink">{row.name}</p>
+          <p className="flex items-center gap-1.5 truncate font-medium text-ink">
+            <span
+              aria-hidden
+              title={row.is_lead ? 'Lead — email discovered' : 'Prospect — no email yet'}
+              className={cn(
+                'inline-block h-1.5 w-1.5 shrink-0 rounded-full',
+                row.is_lead ? 'bg-[color:var(--jordan-accent)]' : 'bg-ink-disabled',
+              )}
+            />
+            <span className="truncate">{row.name}</span>
+          </p>
           {row.review_notes?.includes('needs contact') && (
             <StatusPill tone="warning" className="mt-0.5">needs contact</StatusPill>
           )}
@@ -213,8 +264,8 @@ export function LeadsInboxPage() {
     {
       id: 'verification',
       header: 'Best email',
-      width: '130px',
-      cell: (row) => <VerificationPill lead={row} />,
+      width: '260px',
+      cell: (row) => <BestEmailCell lead={row} />,
     },
     {
       id: 'actions',
@@ -262,13 +313,42 @@ export function LeadsInboxPage() {
       <PageHeader
         eyebrow="Intelligence"
         title="Leads inbox"
-        description={`${rows.length} venue${rows.length === 1 ? '' : 's'} waiting for your call — sourced by Places, VCGLR, publications and the crawler. Approve = contacts crawled & verified, deal created, first email drafted for your review.`}
+        description={`${allRows.length} venue${allRows.length === 1 ? '' : 's'} waiting for your call — sourced by Places, VCGLR, publications and the crawler. Approve = contacts crawled & verified, deal created, first email drafted for your review.`}
         actions={
           <Button asChild size="sm" variant="outline" className="h-8">
             <Link to="/sourcing">Sourcing searches</Link>
           </Button>
         }
       />
+
+      {/* Lead vs prospect segment — a venue is a "lead" only once an email is found. */}
+      <div
+        role="group"
+        aria-label="Filter by lead status"
+        className="inline-flex rounded-[var(--jordan-radius-md)] border border-hairline bg-surface-2 p-0.5 text-[12px]"
+      >
+        {([
+          ['all', 'All', allRows.length],
+          ['leads', 'Leads', leadCount],
+          ['prospects', 'Prospects', prospectCount],
+        ] as const).map(([key, label, count]) => (
+          <button
+            key={key}
+            type="button"
+            aria-pressed={segment === key}
+            onClick={() => setSegment(key)}
+            className={cn(
+              'rounded-[calc(var(--jordan-radius-md)-2px)] px-3 py-1 transition-colors',
+              segment === key
+                ? 'bg-surface-1 text-ink shadow-sm'
+                : 'text-ink-muted hover:text-ink',
+            )}
+          >
+            {label}{' '}
+            <span className="jordan-tnum text-ink-faint">{count}</span>
+          </button>
+        ))}
+      </div>
 
       {selected.size > 0 && (
         <div className="flex items-center gap-2 rounded-[var(--jordan-radius-md)] border border-hairline bg-surface-2 px-3 py-2">
@@ -316,16 +396,27 @@ export function LeadsInboxPage() {
         onRetry={() => refetch()}
         onRowClick={(row) => setPeek(row)}
         aria-label="Leads inbox"
-        empty={{
-          icon: InboxIcon,
-          title: 'Inbox zero — no leads waiting',
-          body: 'New venues from sourcing runs land here for review. Kick off a search from the Sourcing page.',
-          action: (
-            <Button asChild size="sm">
-              <Link to="/sourcing">Open Sourcing</Link>
-            </Button>
-          ),
-        }}
+        empty={
+          segment !== 'all' && allRows.length > 0
+            ? {
+                icon: InboxIcon,
+                title: segment === 'leads' ? 'No leads in this view' : 'No prospects in this view',
+                body:
+                  segment === 'leads'
+                    ? 'None of the waiting venues have a discovered email yet. Switch to All or Prospects.'
+                    : 'Every waiting venue already has a discovered email. Switch to All or Leads.',
+              }
+            : {
+                icon: InboxIcon,
+                title: 'Inbox zero — no leads waiting',
+                body: 'New venues from sourcing runs land here for review. Kick off a search from the Sourcing page.',
+                action: (
+                  <Button asChild size="sm">
+                    <Link to="/sourcing">Open Sourcing</Link>
+                  </Button>
+                ),
+              }
+        }
       />
 
       {/* Detail peek */}

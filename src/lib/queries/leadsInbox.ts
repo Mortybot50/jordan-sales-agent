@@ -27,6 +27,12 @@ export interface InboxLead {
   source_details: Record<string, unknown> | null
   /** Aggregated from contacts: none | crawled_empty | found */
   contact_status: 'none' | 'crawled_empty' | 'found'
+  /**
+   * Jordan's rule: a venue is a "lead" only once we've discovered an email.
+   * Derived, not stored — equals contact_status === 'found'. Everything else
+   * (no crawl, or crawled with no email) is a prospect/candidate.
+   */
+  is_lead: boolean
   contact_count: number
   best_contact: {
     full_name: string | null
@@ -86,6 +92,7 @@ export function useLeadsInbox() {
           ...v,
           source_details: (v.source_details ?? null) as InboxLead['source_details'],
           contact_status,
+          is_lead: contact_status === 'found',
           contact_count: list.length,
           best_contact: best,
         }
