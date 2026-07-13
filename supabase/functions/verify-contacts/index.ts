@@ -72,7 +72,16 @@ function mapZeroBounce(status: string | undefined, subStatus: string | undefined
       return 'catch_all'
     case 'spamtrap':
     case 'abuse':
+      return 'invalid'
     case 'do_not_mail':
+      // ZeroBounce tags role-based inboxes (hello@ / info@ / bookings@) as
+      // do_not_mail sub_status=role_based — but venue inboxes ARE the target
+      // audience for hospitality outreach. Hard-killing them as 'invalid'
+      // (which approve-lead permanently excludes) emptied the funnel on the
+      // first drain: 10/10 real venues flagged. Route role-based to 'unknown'
+      // so the human approve gate makes the call; the genuinely toxic
+      // sub-statuses (toxic / possible_trap / global_suppression) stay fatal.
+      if (sub.includes('role_based')) return 'unknown'
       return 'invalid'
     case 'unknown':
     default:
@@ -110,10 +119,17 @@ async function zeroBounceBatch(emails: string[]): Promise<Map<string, ZbResult>>
   }
 
   const out = new Map<string, ZbResult>()
+  const rawCounts: Record<string, number> = {}
   for (const r of json.email_batch ?? []) {
     const key = (r.address ?? r.email_address ?? '').toLowerCase().trim()
     if (key) out.set(key, r)
+    const combo = `${r.status ?? '?'}:${r.sub_status || '-'}`
+    rawCounts[combo] = (rawCounts[combo] ?? 0) + 1
   }
+  // Raw verdict distribution (status:sub_status) — sub_status isn't persisted
+  // on contacts, so this log line is the only audit trail of WHY each batch
+  // landed in its buckets (e.g. do_not_mail:role_based vs do_not_mail:toxic).
+  console.log(`verify-contacts: zerobounce verdicts ${JSON.stringify(rawCounts)}`)
   return out
 }
 
