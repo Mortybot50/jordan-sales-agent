@@ -90,6 +90,41 @@ export function useLeadSearchRuns(searchId: string | null) {
   })
 }
 
+export interface FunnelCounts {
+  total_venues: number
+  venues_with_email: number
+  venues_verified: number
+  venues_in_outreach: number
+}
+
+/**
+ * Funnel strip on the Sourcing page: total venues → has email → verified →
+ * in outreach. Backed by the leadflow_funnel_counts() RPC (org-scoped).
+ */
+export function useFunnelCounts() {
+  return useQuery({
+    queryKey: ['funnel-counts'],
+    queryFn: async (): Promise<FunnelCounts> => {
+      // Cast: this RPC is applied by migration 20260713071052 and isn't in the
+      // committed generated types yet. Regen types after deploy to drop the cast.
+      const { data, error } = await supabase.rpc(
+        'leadflow_funnel_counts' as never,
+      )
+      if (error) throw error
+      const row = (Array.isArray(data) ? data[0] : data) as
+        | Record<string, number>
+        | null
+      return {
+        total_venues: Number(row?.total_venues ?? 0),
+        venues_with_email: Number(row?.venues_with_email ?? 0),
+        venues_verified: Number(row?.venues_verified ?? 0),
+        venues_in_outreach: Number(row?.venues_in_outreach ?? 0),
+      }
+    },
+    staleTime: 60_000,
+  })
+}
+
 // ── Mutations ───────────────────────────────────────────────────────
 
 export function useCreateLeadSearch() {
