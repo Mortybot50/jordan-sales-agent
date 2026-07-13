@@ -68,7 +68,22 @@ function suburbLabel(s: string | null): string {
 }
 
 function FunnelStrip() {
-  const { data, isLoading } = useFunnelCounts()
+  const { data, isLoading, isError, refetch } = useFunnelCounts()
+
+  if (isError) {
+    return (
+      <div className="rounded-lg border border-border bg-surface px-4 py-3 text-sm text-ink-muted flex items-center gap-3">
+        <span>Funnel counts unavailable right now.</span>
+        <button
+          onClick={() => refetch()}
+          className="text-[color:var(--jordan-accent)] hover:underline"
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
+
   const steps: Array<{ label: string; value: number | null }> = [
     { label: 'Total venues', value: data?.total_venues ?? null },
     { label: 'Has email', value: data?.venues_with_email ?? null },
@@ -84,7 +99,9 @@ function FunnelStrip() {
               {s.label}
             </div>
             <div className="mt-0.5 text-2xl font-semibold jordan-tnum text-ink">
-              {isLoading ? '—' : (s.value ?? 0).toLocaleString()}
+              {isLoading || s.value === null
+                ? '—'
+                : s.value.toLocaleString()}
             </div>
           </div>
           {i < steps.length - 1 && (

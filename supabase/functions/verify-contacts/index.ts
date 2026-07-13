@@ -170,7 +170,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (!verdict) continue // ZeroBounce didn't return this one — leave pending
 
     const status = mapZeroBounce(verdict.status, verdict.sub_status)
-    const { error: upErr } = await supabase
+    // Compare-and-swap on verification_status='pending': if a concurrent tick
+    // (or the human approve-lead verify) already moved this contact off
+    // pending, this update matches zero rows and we skip it — so overlapping
+    // drainer runs can't clobber a newer verdict with a staler one.
+    const { data: swapped, error: upErr } = await supabase
       .from('contacts')
       .update({
         verification_status: status,
@@ -178,11 +182,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
         catch_all_flag: status === 'catch_all',
       })
       .eq('id', row.id)
+      .eq('verification_status', 'pending')
+      .select('id')
 
     if (upErr) {
       console.error(`verify-contacts: update failed for ${row.id}: ${upErr.message}`)
       continue
     }
+    if (!swapped || swapped.length === 0) continue // already claimed by another run
     counts[status] = (counts[status] ?? 0) + 1
     updated++
   }

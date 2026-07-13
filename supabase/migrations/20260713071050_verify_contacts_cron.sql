@@ -81,9 +81,9 @@ comment on function public.leadflow_drain_verify_queue() is
 -- 2. Unschedule any prior copy, then re-schedule fresh (every 10 min).
 -- ---------------------------------------------------------------------------
 do $$ begin
-  perform cron.unschedule(jobid) from cron.job
-   where jobname = 'leadflow-verify-contacts';
-exception when others then null;
+  if exists (select 1 from cron.job where jobname = 'leadflow-verify-contacts') then
+    perform cron.unschedule('leadflow-verify-contacts');
+  end if;
 end $$;
 
 select cron.schedule(
