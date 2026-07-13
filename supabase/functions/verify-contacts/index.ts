@@ -81,7 +81,10 @@ function mapZeroBounce(status: string | undefined, subStatus: string | undefined
 }
 
 async function zeroBounceBatch(emails: string[]): Promise<Map<string, ZbResult>> {
-  const resp = await fetch('https://bulkapi.zerobounce.net/v2/validatebatch', {
+  // bulkapi.zerobounce.net is DEPRECATED — it now serves a Cloudflare-WAF 403
+  // ("Access Restricted") for every request. The batch endpoint lives on the
+  // main API host. Confirmed 13/07/2026 when the verify cron 403'd on launch.
+  const resp = await fetch('https://api.zerobounce.net/v2/validatebatch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -94,7 +97,18 @@ async function zeroBounceBatch(emails: string[]): Promise<Map<string, ZbResult>>
     throw new Error(`ZeroBounce HTTP ${resp.status}: ${(await resp.text()).slice(0, 200)}`)
   }
 
-  const json = await resp.json() as { email_batch?: ZbResult[]; errors?: unknown[] }
+  const json = await resp.json() as {
+    email_batch?: ZbResult[]
+    errors?: { error?: string; email_address?: string }[]
+  }
+
+  // The migrated endpoint reports key/credit problems as HTTP 200 with an
+  // `errors` array and an empty batch — fail loud instead of silently marking
+  // nothing, so a dead key surfaces in the cron log rather than a stalled queue.
+  if ((json.email_batch ?? []).length === 0 && (json.errors ?? []).length > 0) {
+    throw new Error(`ZeroBounce rejected batch: ${JSON.stringify(json.errors).slice(0, 200)}`)
+  }
+
   const out = new Map<string, ZbResult>()
   for (const r of json.email_batch ?? []) {
     const key = (r.address ?? r.email_address ?? '').toLowerCase().trim()
