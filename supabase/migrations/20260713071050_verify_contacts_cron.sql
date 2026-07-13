@@ -36,9 +36,55 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- 0b. Atomic claim: the drainer reserves pending contacts before spending a
+--     ZeroBounce credit on them, so two overlapping ticks never double-verify
+--     (and never burn duplicate paid API calls) on the same row.
+--
+--     verification_claimed_at is a soft lease, NOT a verification state — the
+--     CHECK-constrained verification_status vocabulary is untouched. A claim
+--     older than 15 min is considered stale and re-claimable, so a run that
+--     dies mid-batch (e.g. ZeroBounce 502) doesn't strand its contacts.
+-- ---------------------------------------------------------------------------
+alter table public.contacts
+  add column if not exists verification_claimed_at timestamptz;
+
+create or replace function public.leadflow_claim_pending_contacts(p_limit int)
+returns table (id uuid, email text)
+language sql
+security definer
+set search_path = ''
+as $$
+  update public.contacts c
+     set verification_claimed_at = now()
+   where c.id in (
+     select c2.id
+       from public.contacts c2
+       join public.venues v on v.id = c2.venue_id
+      where c2.verification_status = 'pending'
+        and c2.email is not null
+        and v.review_status is distinct from 'rejected'
+        and (c2.verification_claimed_at is null
+             or c2.verification_claimed_at < now() - interval '15 minutes')
+      order by c2.email_tier asc nulls last
+      limit greatest(1, least(coalesce(p_limit, 100), 200))
+      for update of c2 skip locked
+   )
+  returning c.id, c.email;
+$$;
+
+revoke all on function public.leadflow_claim_pending_contacts(int) from public;
+grant execute on function public.leadflow_claim_pending_contacts(int) to service_role;
+
+comment on function public.leadflow_claim_pending_contacts(int) is
+  'Atomically leases up to p_limit pending contacts for ZeroBounce verification '
+  '(best email_tier first, excludes rejected venues) via FOR UPDATE SKIP LOCKED, '
+  'stamping verification_claimed_at. Overlapping drainer ticks never claim the '
+  'same row. Claims older than 15 min are re-leasable. service_role only.';
+
+-- ---------------------------------------------------------------------------
 -- 1. Drainer function: fire one async http_post to verify-contacts. The Edge
---    Function does the batching (pulls the pending backlog, best tier first,
---    excludes contacts on rejected venues) so this stays a thin trigger.
+--    Function claims a batch via leadflow_claim_pending_contacts() so this
+--    stays a thin trigger.
 -- ---------------------------------------------------------------------------
 create or replace function public.leadflow_drain_verify_queue()
 returns void

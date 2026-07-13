@@ -132,18 +132,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-  // Pull the pending backlog, best emails first. Exclude contacts on rejected
-  // venues — no point spending a verification credit on a lead we've binned.
+  // Atomically CLAIM a batch of the pending backlog (best emails first, rejected
+  // venues excluded) via leadflow_claim_pending_contacts, which uses FOR UPDATE
+  // SKIP LOCKED + a 15-min lease. This guarantees two overlapping drainer ticks
+  // never claim — and never spend a ZeroBounce credit on — the same contact.
   const { data: pending, error: readErr } = await supabase
-    .from('contacts')
-    .select('id, email, venue_id, venues!inner(review_status)')
-    .eq('verification_status', 'pending')
-    .not('email', 'is', null)
-    .neq('venues.review_status', 'rejected')
-    .order('email_tier', { ascending: true, nullsFirst: false })
-    .limit(limit)
+    .rpc('leadflow_claim_pending_contacts', { p_limit: limit })
 
-  if (readErr) return json(500, { error: `pending read failed: ${readErr.message}` })
+  if (readErr) return json(500, { error: `claim failed: ${readErr.message}` })
 
   const rows = (pending ?? []).filter((r) => r.email)
   if (rows.length === 0) {

@@ -75,10 +75,15 @@ revoke all on function public.leadflow_drain_crawl_queue() from public;
 
 -- ---------------------------------------------------------------------------
 -- 2. One-time retry of transient failures that still have a website to crawl.
---    WHERE-guarded, so re-running this migration flips nothing extra.
+--    Gated on last_crawled_at before this migration's authoring instant so it
+--    is replay-idempotent: a venue that fails a crawl AFTER this migration ran
+--    will NOT be re-flipped by a later replay of this file (Supabase only runs
+--    each migration once, but a manual re-run stays safe). On a fresh DB there
+--    are no failed venues yet, so it no-ops.
 -- ---------------------------------------------------------------------------
 update public.venues
    set contact_enrichment_status = 'pending'
  where contact_enrichment_status = 'failed'
    and website is not null
-   and length(trim(website)) > 0;
+   and length(trim(website)) > 0
+   and (last_crawled_at is null or last_crawled_at < timestamptz '2026-07-13 07:10:51+00');
