@@ -64,13 +64,19 @@ export function useLeadsInbox() {
         verification_status: string | null
         email_tier: number | null
       }>> = {}
-      if (ids.length > 0) {
-        // Page the contact lookup — .in() with 1000 ids is fine, PostgREST
-        // caps rows not ids; contacts per pending venue are few.
-        const { data: contacts } = await supabase
+      // Chunk the venue_id list: an .in() over ~650 UUIDs builds a >20 KB
+      // request URL that trips PostgREST/proxy size limits, and because the
+      // error was previously swallowed the whole contacts fetch failed
+      // silently — every venue rendered "no email yet". Page in batches and
+      // surface any error so a real failure throws instead of hiding.
+      const CHUNK = 200
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        const batch = ids.slice(i, i + CHUNK)
+        const { data: contacts, error: cErr } = await supabase
           .from('contacts')
           .select('venue_id, full_name, email, verification_status, email_tier')
-          .in('venue_id', ids)
+          .in('venue_id', batch)
+        if (cErr) throw cErr
         for (const c of contacts ?? []) {
           if (!c.venue_id) continue
           ;(contactsByVenue[c.venue_id] ??= []).push(c)

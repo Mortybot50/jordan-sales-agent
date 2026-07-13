@@ -24,6 +24,7 @@ import { useAuth } from '@/hooks/useAuth'
 import {
   useLeadSearches,
   useDeleteLeadSearch,
+  useFunnelCounts,
   type LeadSearch,
 } from '@/lib/queries/sourcing'
 import { SourcingForm } from '@/components/sourcing/SourcingForm'
@@ -64,6 +65,37 @@ function suburbLabel(s: string | null): string {
   if (parts.length === 0) return 'Any'
   if (parts.length === 1) return parts[0]
   return `${parts[0]} +${parts.length - 1}`
+}
+
+function FunnelStrip() {
+  const { data, isLoading } = useFunnelCounts()
+  const steps: Array<{ label: string; value: number | null }> = [
+    { label: 'Total venues', value: data?.total_venues ?? null },
+    { label: 'Has email', value: data?.venues_with_email ?? null },
+    { label: 'Verified', value: data?.venues_verified ?? null },
+    { label: 'In outreach', value: data?.venues_in_outreach ?? null },
+  ]
+  return (
+    <div className="flex flex-wrap items-stretch gap-2">
+      {steps.map((s, i) => (
+        <div key={s.label} className="flex items-stretch gap-2">
+          <div className="rounded-lg border border-border bg-surface px-4 py-3 min-w-[120px]">
+            <div className="text-[11px] uppercase tracking-wide text-ink-faint">
+              {s.label}
+            </div>
+            <div className="mt-0.5 text-2xl font-semibold jordan-tnum text-ink">
+              {isLoading ? '—' : (s.value ?? 0).toLocaleString()}
+            </div>
+          </div>
+          {i < steps.length - 1 && (
+            <div className="flex items-center text-ink-faint" aria-hidden>
+              →
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export function SourcingPage() {
@@ -288,6 +320,8 @@ export function SourcingPage() {
           </>
         }
       />
+
+      <FunnelStrip />
 
       {error ? (
         <ErrorAlert
