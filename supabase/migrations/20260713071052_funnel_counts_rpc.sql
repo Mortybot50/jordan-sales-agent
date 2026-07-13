@@ -48,6 +48,7 @@ as $$
         and se.status in ('active','paused'));
 $$;
 
+revoke all on function public.leadflow_funnel_counts() from public;
 grant execute on function public.leadflow_funnel_counts() to authenticated;
 
 comment on function public.leadflow_funnel_counts() is
