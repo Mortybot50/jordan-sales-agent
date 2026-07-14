@@ -203,6 +203,15 @@ function extractEmails(html: string): Set<string> {
 // HTTP fetch
 // ---------------------------------------------------------------------------
 
+// Hard cap on bytes read per page. Some venue homepages ship multi-MB of
+// inlined HTML / base64 images; reading the whole body with resp.text() and
+// then running several global regexes over it was the cause of the edge
+// function hitting HTTP 546 WORKER_RESOURCE_LIMIT (OOM). Contact info (mailto:,
+// header/nav/footer addresses, contact-page links) lives near the top of the
+// document, so 512KB is comfortably enough. We stream and abort the read once
+// the cap is reached instead of buffering the entire response.
+const MAX_PAGE_BYTES = 512 * 1024
+
 async function fetchPage(url: string, timeoutMs: number): Promise<string> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), timeoutMs)
@@ -215,7 +224,26 @@ async function fetchPage(url: string, timeoutMs: number): Promise<string> {
     if (!resp.ok) return ''
     const ct = resp.headers.get('content-type') ?? ''
     if (ct && !ct.includes('text/html') && !ct.includes('application/xhtml')) return ''
-    return await resp.text()
+    if (!resp.body) return ''
+
+    // Bounded streaming read: stop as soon as we've collected MAX_PAGE_BYTES.
+    const reader = resp.body.getReader()
+    const decoder = new TextDecoder()
+    let html = ''
+    let bytes = 0
+    try {
+      while (bytes < MAX_PAGE_BYTES) {
+        const { done, value } = await reader.read()
+        if (done) break
+        bytes += value.byteLength
+        html += decoder.decode(value, { stream: true })
+      }
+    } finally {
+      // Release the connection; we may have stopped mid-stream on purpose.
+      try { await reader.cancel() } catch { /* already closed */ }
+    }
+    html += decoder.decode()
+    return html
   } catch {
     return ''
   } finally {
