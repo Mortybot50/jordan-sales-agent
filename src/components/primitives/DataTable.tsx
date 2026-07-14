@@ -86,7 +86,36 @@ export function DataTable<T>({
   className,
   ...rest
 }: DataTableProps<T>) {
-  const gridCols = columns.map((c) => c.width ?? 'minmax(0, 1fr)').join(' ')
+  // The header row and each body row are SEPARATE grid containers that must
+  // resolve to identical column tracks. A content-sized track (`1fr` or
+  // `minmax(min, 1fr)`) resolves its `max-content` contribution from ITS OWN
+  // content, so under the table's `min-width: max-content` overflow the header
+  // (short label) and body (longer cell) size a flexible track differently —
+  // shifting every value one column right of its header on narrow viewports.
+  // Fix: flexible columns get an explicit fixed width so every track is
+  // deterministic and identical across both grids. Content truncates within.
+  // Header and body are SEPARATE grid containers, so their column tracks must
+  // resolve to the exact same widths. A content-flexible track (`1fr` or
+  // `minmax(min, Nfr)`) resolves partly from its OWN content, so under the
+  // table's `min-width: max-content` overflow the header (short label) and body
+  // (longer cell) size that track differently — shifting every value one column
+  // right of its header on narrow viewports (the reported bug). Only
+  // deterministic (fr-free) tracks are guaranteed identical in both grids.
+  //
+  // normalizeTrack strips flexibility so alignment is bulletproof for every
+  // consumer, without each page having to remember to avoid `fr`:
+  //   - no width           -> fixed 220px
+  //   - 'minmax(min, Nfr)'  -> fixed `min` (the floor becomes the width)
+  //   - any 'Nfr'           -> fixed 200px fallback
+  //   - explicit fixed len  -> unchanged (e.g. '110px', '64px')
+  const normalizeTrack = (w: string | undefined): string => {
+    if (!w) return '220px'
+    const mm = w.match(/minmax\(\s*([^,]+?)\s*,\s*[^)]*fr\s*\)/i)
+    if (mm) return mm[1].trim()
+    if (/\bfr\b/i.test(w)) return '200px'
+    return w
+  }
+  const gridCols = columns.map((c) => normalizeTrack(c.width)).join(' ')
   const rowHeight = rowHeightVar[density]
 
   return (
