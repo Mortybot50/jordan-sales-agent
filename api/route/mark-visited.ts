@@ -161,7 +161,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             verified_at: null,
             verification_claimed_at: null,
             catch_all_flag: false,
-            role_based: null,
+            // NOTE: role_based is a GENERATED ALWAYS STORED column derived from
+            // the email — Postgres rejects any write to it. We're not changing
+            // the email, so it already holds the correct value; omit it.
           })
           .eq('id', existing.id)
         if (requeueErr) {
@@ -210,42 +212,54 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .select('review_status')
       .eq('id', stop.venue_id)
       .maybeSingle()
-    // If we can't read the venue's current state, DON'T guess. A transient read
-    // failure surfacing as null would make the venue look non-pending, and we'd
-    // fall through to the open-deal check + reset. Skip the whole re-surface on
-    // error — the contact is already saved, worst case Jordan re-approves.
+    // If we can't read the venue's current state, DON'T guess and DON'T swallow.
+    // A transient read failure returning null would make the venue look
+    // non-pending → we'd fall through and could reset an active venue. But we
+    // also can't just skip: skipping records the visit below, and the retry hits
+    // the 409 branch with the venue never surfaced — stranding the contact. So
+    // return a recoverable 502 (nothing linked yet); the retry re-runs cleanly.
     if (venueErr) {
       console.error('[route/mark-visited] collected_email venue read', venueErr)
-    } else {
-      const reviewStatus = (venueRow?.review_status as string | null) ?? null
-      if (reviewStatus !== 'pending') {
-        const { data: openDeal, error: dealErr } = await ctx.admin
-          .from('deals')
-          .select('id')
-          .eq('venue_id', stop.venue_id)
-          .is('closed_at', null)
-          .limit(1)
-          .maybeSingle()
-        // Same reasoning: a failed open-deal read makes an ACTIVE venue look
-        // dealless, so we'd wrongly reset it to pending. Only reset when we've
-        // positively confirmed there's no open deal.
-        if (dealErr) {
-          console.error('[route/mark-visited] collected_email open-deal read', dealErr)
-        } else if (!openDeal) {
-          const { error: reviewErr } = await ctx.admin
-            .from('venues')
-            .update({
-              review_status: 'pending',
-              review_decided_at: null,
-              review_decided_by: null,
-            })
-            .eq('id', stop.venue_id)
-            .eq('org_id', stop.org_id)
-          if (reviewErr) {
-            // Non-fatal: the contact is saved either way. Worst case the venue
-            // isn't re-surfaced and Jordan re-approves it manually.
-            console.error('[route/mark-visited] collected_email venue re-surface', reviewErr)
-          }
+      return res.status(502).json({ error: 'Failed to check venue for re-surfacing — nothing recorded, please retry', detail: venueErr.message })
+    }
+    const reviewStatus = (venueRow?.review_status as string | null) ?? null
+    if (reviewStatus !== 'pending') {
+      const { data: openDeal, error: dealErr } = await ctx.admin
+        .from('deals')
+        .select('id')
+        .eq('venue_id', stop.venue_id)
+        .is('closed_at', null)
+        .limit(1)
+        .maybeSingle()
+      // Same reasoning as the venue read: a failed open-deal read makes an
+      // ACTIVE venue look dealless (→ wrong reset), and swallowing it strands
+      // the contact. Recoverable 502, retry re-runs.
+      if (dealErr) {
+        console.error('[route/mark-visited] collected_email open-deal read', dealErr)
+        return res.status(502).json({ error: 'Failed to check venue deal state — nothing recorded, please retry', detail: dealErr.message })
+      }
+      if (!openDeal) {
+        const { error: reviewErr } = await ctx.admin
+          .from('venues')
+          .update({
+            review_status: 'pending',
+            review_decided_at: null,
+            review_decided_by: null,
+          })
+          .eq('id', stop.venue_id)
+          .eq('org_id', stop.org_id)
+        if (reviewErr) {
+          // Recoverable, and it MUST be. Re-surfacing to review_status=pending
+          // is what puts the venue back in the leads inbox — the only path that
+          // gets the collected email a human Approve → draft. If this failed and
+          // we swallowed it, the visit would still record + link below, the retry
+          // would hit the 409-already-visited branch, and the contact would be
+          // stranded (pending but never surfaced). This block runs BEFORE the
+          // visit insert precisely so a 502 here leaves nothing linked; the retry
+          // re-runs idempotently (existing contact reused, already-pending venue
+          // skips this whole branch).
+          console.error('[route/mark-visited] collected_email venue re-surface', reviewErr)
+          return res.status(502).json({ error: 'Failed to re-surface venue for approval — nothing recorded, please retry', detail: reviewErr.message })
         }
       }
     }
