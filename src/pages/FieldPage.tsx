@@ -422,7 +422,7 @@ export function FieldPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {FIELD_OUTCOME_OPTIONS.map((o) => (
+                    {FIELD_OUTCOME_OPTIONS.filter((o) => o.value !== 'collected_email').map((o) => (
                       <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                     ))}
                   </SelectContent>

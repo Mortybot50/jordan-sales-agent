@@ -56,7 +56,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .select(`
         id, route_day_id, stop_order, stop_kind, est_arrival_min, est_drive_km,
         venue_id, venue_name_cached, suburb_cached, lead_score_cached,
-        field_visit_id,
+        field_visit_id, outreach_channel, phone_cached,
         venue:venues!route_stops_venue_id_fkey(lat, lng),
         field_visit:field_visits!route_stops_field_visit_id_fkey(visited_at, outcome)
       `)

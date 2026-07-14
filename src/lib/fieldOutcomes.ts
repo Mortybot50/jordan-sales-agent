@@ -12,6 +12,7 @@ export type FieldOutcome =
   | 'closed'
   | 'not_in'
   | 'dm_absent'
+  | 'collected_email'
   | 'other'
 
 export const FIELD_OUTCOME_OPTIONS: Array<{ value: FieldOutcome; label: string }> = [
@@ -20,6 +21,7 @@ export const FIELD_OUTCOME_OPTIONS: Array<{ value: FieldOutcome; label: string }
   { value: 'closed', label: 'Closed/quiet' },
   { value: 'not_in', label: 'Not in' },
   { value: 'dm_absent', label: 'DM absent' },
+  { value: 'collected_email', label: 'Got email' },
   { value: 'other', label: 'Other' },
 ]
 

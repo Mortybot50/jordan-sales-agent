@@ -25,8 +25,12 @@ import { authenticate, makeRateLimiter, rateLimitOk } from './_helpers.js'
 const limiter = makeRateLimiter(60_000, 30)
 
 const VALID_OUTCOMES = new Set([
-  'interested', 'not_now', 'closed', 'not_in', 'dm_absent', 'other',
+  'interested', 'not_now', 'closed', 'not_in', 'dm_absent', 'collected_email', 'other',
 ])
+
+// Deliberately loose — the real verdict comes from ZeroBounce via the
+// verify-contacts cron once the contact is created. We only reject obvious junk.
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
@@ -45,6 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     voice_audio_path?: unknown
     lat?: unknown
     lng?: unknown
+    collected_email?: unknown
   }
 
   const stopId = typeof body.route_stop_id === 'string' ? body.route_stop_id : ''
@@ -61,11 +66,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(422).json({ error: 'lat/lng must be numeric' })
   }
 
+  // Validate the collected email BEFORE any DB mutation. Otherwise a malformed
+  // (or empty) email records the visit + links the stop, then 422s — and the
+  // retry hits the already-visited 409, so the contact is never created and
+  // there's no recovery path.
+  const rawEmail = body.collected_email == null ? '' : String(body.collected_email).trim().toLowerCase()
+  if (outcome === 'collected_email') {
+    if (!rawEmail) {
+      return res.status(422).json({ error: 'collected_email is required when outcome is collected_email' })
+    }
+    if (!EMAIL_RE.test(rawEmail) || rawEmail.length > 320) {
+      return res.status(422).json({ error: 'collected_email is not a valid email address' })
+    }
+  }
+
   // Confirm the stop belongs to the caller (RLS handles this implicitly via
   // the join to route_days.user_id, but we want a 404 vs a silent zero-row).
   const { data: stop, error: stopErr } = await ctx.userClient
     .from('route_stops')
-    .select('id, venue_id, org_id, field_visit_id')
+    .select('id, venue_id, org_id, field_visit_id, venue_name_cached')
     .eq('id', stopId)
     .maybeSingle()
   if (stopErr) {
@@ -82,6 +101,170 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const voiceTranscript = body.voice_transcript == null ? null : String(body.voice_transcript).slice(0, 8000)
   const voiceAudioPath = body.voice_audio_path == null ? null : String(body.voice_audio_path).slice(0, 500)
 
+  // Loop-back: an email collected on a visit re-enters the normal pipeline via
+  // a contact at verification_status='pending' (the column default) so the
+  // verify-contacts cron picks it up → ZeroBounce → verify→draft. NEVER
+  // auto-sends — the human approve/send gate is untouched.
+  //
+  // This runs BEFORE the field_visit insert + stop link on purpose. If it ran
+  // after, a contact-insert failure would leave the visit recorded and the stop
+  // linked (field_visit_id set), so the retry would hit the 409-already-visited
+  // branch and the email would be silently lost with no recovery path. Doing it
+  // first means a failure returns a recoverable 502 with nothing linked, and the
+  // retry re-runs cleanly. The venue-scoped email lookup makes it idempotent:
+  // if a prior attempt created the contact but then died before linking, the
+  // retry finds the existing contact instead of duplicating it.
+  // rawEmail is already validated above (before any mutation).
+  let collectedContactId: string | null = null
+  if (outcome === 'collected_email' && rawEmail && stop.venue_id) {
+    // Escape LIKE metacharacters (% _ \) so an email like `a_b@x.com` matches
+    // literally under ilike instead of treating `_`/`%` as wildcards (which
+    // could match a DIFFERENT contact at the venue). ilike keeps it
+    // case-insensitive so a case-variant of the same address still dedupes.
+    const emailPattern = rawEmail.replace(/([\\%_])/g, '\\$1')
+    // .limit(1) makes .maybeSingle() safe: a venue can hold multiple contacts
+    // sharing an email (no venue/email unique constraint), and an unbounded
+    // .maybeSingle() would ERROR on >1 row. Order deterministically so the same
+    // existing contact is picked every retry instead of inserting a duplicate.
+    const { data: existing, error: lookupErr } = await ctx.admin
+      .from('contacts')
+      .select('id, verification_status')
+      .eq('org_id', stop.org_id)
+      .eq('venue_id', stop.venue_id)
+      .ilike('email', emailPattern)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    if (lookupErr) {
+      // Recoverable: nothing linked yet. Surface so the client retries rather
+      // than falling through to insert a duplicate contact.
+      console.error('[route/mark-visited] collected_email contact lookup', lookupErr)
+      return res.status(502).json({ error: 'Failed to save collected email — nothing recorded, please retry', detail: lookupErr.message })
+    }
+
+    if (existing?.id) {
+      collectedContactId = existing.id
+      // If a prior verdict left this email in a terminal non-deliverable state
+      // (invalid / unknown / catch_all / disposable), the verify worker will
+      // never re-claim it — leadflow_claim_pending_contacts only claims
+      // verification_status='pending'. Jordan just physically re-collected the
+      // address, which overrides the stale verdict, so reset it to the same
+      // fresh state a brand-new contact starts in and let ZeroBounce re-judge.
+      // 'valid' is already deliverable — leave it (don't burn a credit or risk a
+      // downgrade); 'pending' is already queued — no-op.
+      const vs = existing.verification_status
+      if (vs !== 'pending' && vs !== 'valid') {
+        const { error: requeueErr } = await ctx.admin
+          .from('contacts')
+          .update({
+            verification_status: 'pending',
+            verified_at: null,
+            verification_claimed_at: null,
+            catch_all_flag: false,
+            // NOTE: role_based is a GENERATED ALWAYS STORED column derived from
+            // the email — Postgres rejects any write to it. We're not changing
+            // the email, so it already holds the correct value; omit it.
+          })
+          .eq('id', existing.id)
+        if (requeueErr) {
+          // Recoverable: nothing linked yet, so a retry re-runs and re-attempts
+          // the requeue (idempotent — a now-pending contact skips this branch).
+          console.error('[route/mark-visited] collected_email requeue', requeueErr)
+          return res.status(502).json({ error: 'Failed to requeue collected email for verification — please retry', detail: requeueErr.message })
+        }
+      }
+    } else {
+      const fullName = (stop.venue_name_cached as string | null)?.trim() || 'Collected on visit'
+      const { data: contact, error: contactErr } = await ctx.admin
+        .from('contacts')
+        .insert({
+          org_id: stop.org_id,
+          venue_id: stop.venue_id,
+          full_name: fullName,
+          email: rawEmail,
+          source: 'manual',
+        })
+        .select('id')
+        .single()
+      if (contactErr) {
+        // Recoverable: nothing is linked yet, so a retry with the same body
+        // re-runs from scratch. Return 5xx so the client knows to retry.
+        console.error('[route/mark-visited] collected_email contact insert', contactErr)
+        return res.status(502).json({ error: 'Failed to save collected email — nothing recorded, please retry', detail: contactErr.message })
+      }
+      collectedContactId = contact.id
+    }
+
+    // Surface the venue back into the leads inbox so the collected email flows
+    // through the SAME human chain every other lead uses: appear in the inbox →
+    // Jordan clicks Approve → approve-lead runs verify → deal → enroll → tick →
+    // step-1 draft lands in the review queue. We do NOT auto-approve or enrol
+    // here — that would bypass the human send gate.
+    //
+    // The gate for "already in active outreach, leave it alone" is an OPEN deal
+    // (closed_at IS NULL — the same idempotency signal approve-lead uses), NOT
+    // review_status='approved'. approve-lead deliberately leaves a venue
+    // 'approved' with no deal in its "needs contact" terminal case, so gating on
+    // status alone would strand a later collected email on such a venue. A venue
+    // already 'pending' is in the inbox — no-op.
+    const { data: venueRow, error: venueErr } = await ctx.admin
+      .from('venues')
+      .select('review_status')
+      .eq('id', stop.venue_id)
+      .maybeSingle()
+    // If we can't read the venue's current state, DON'T guess and DON'T swallow.
+    // A transient read failure returning null would make the venue look
+    // non-pending → we'd fall through and could reset an active venue. But we
+    // also can't just skip: skipping records the visit below, and the retry hits
+    // the 409 branch with the venue never surfaced — stranding the contact. So
+    // return a recoverable 502 (nothing linked yet); the retry re-runs cleanly.
+    if (venueErr) {
+      console.error('[route/mark-visited] collected_email venue read', venueErr)
+      return res.status(502).json({ error: 'Failed to check venue for re-surfacing — nothing recorded, please retry', detail: venueErr.message })
+    }
+    const reviewStatus = (venueRow?.review_status as string | null) ?? null
+    if (reviewStatus !== 'pending') {
+      const { data: openDeal, error: dealErr } = await ctx.admin
+        .from('deals')
+        .select('id')
+        .eq('venue_id', stop.venue_id)
+        .is('closed_at', null)
+        .limit(1)
+        .maybeSingle()
+      // Same reasoning as the venue read: a failed open-deal read makes an
+      // ACTIVE venue look dealless (→ wrong reset), and swallowing it strands
+      // the contact. Recoverable 502, retry re-runs.
+      if (dealErr) {
+        console.error('[route/mark-visited] collected_email open-deal read', dealErr)
+        return res.status(502).json({ error: 'Failed to check venue deal state — nothing recorded, please retry', detail: dealErr.message })
+      }
+      if (!openDeal) {
+        const { error: reviewErr } = await ctx.admin
+          .from('venues')
+          .update({
+            review_status: 'pending',
+            review_decided_at: null,
+            review_decided_by: null,
+          })
+          .eq('id', stop.venue_id)
+          .eq('org_id', stop.org_id)
+        if (reviewErr) {
+          // Recoverable, and it MUST be. Re-surfacing to review_status=pending
+          // is what puts the venue back in the leads inbox — the only path that
+          // gets the collected email a human Approve → draft. If this failed and
+          // we swallowed it, the visit would still record + link below, the retry
+          // would hit the 409-already-visited branch, and the contact would be
+          // stranded (pending but never surfaced). This block runs BEFORE the
+          // visit insert precisely so a 502 here leaves nothing linked; the retry
+          // re-runs idempotently (existing contact reused, already-pending venue
+          // skips this whole branch).
+          console.error('[route/mark-visited] collected_email venue re-surface', reviewErr)
+          return res.status(502).json({ error: 'Failed to re-surface venue for approval — nothing recorded, please retry', detail: reviewErr.message })
+        }
+      }
+    }
+  }
+
   // Insert the field_visit. The trigger threads the activity through the
   // venue's primary contact + bumps last_visited_at on venue/contact/deal.
   const { data: visit, error: visitErr } = await ctx.userClient
@@ -89,7 +272,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .insert({
       org_id: stop.org_id,
       user_id: ctx.user.id,
-      contact_id: null,
+      // Link to the collected contact so the trigger threads the activity onto
+      // the right contact + bumps its last_visited_at. null for every other
+      // outcome (collectedContactId is only ever set on the collected_email
+      // path); the trigger then falls back to the venue's primary contact.
+      contact_id: collectedContactId,
       venue_id: stop.venue_id,
       outcome,
       notes,
@@ -114,5 +301,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error('[route/mark-visited] route_stops link', linkErr)
   }
 
-  return res.status(200).json({ field_visit_id: visit.id })
+  return res.status(200).json({ field_visit_id: visit.id, collected_contact_id: collectedContactId })
 }

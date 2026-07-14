@@ -9,7 +9,7 @@
  */
 
 import { useMemo, useState } from 'react'
-import { Loader2, MapPin, Navigation, RotateCw, Sparkles, X } from 'lucide-react'
+import { Loader2, MapPin, Navigation, Phone, RotateCw, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -25,15 +25,22 @@ import {
   useUpsertRouteDay,
   useGenerateRouteDay,
   useMarkRouteStopVisited,
+  useAreaCoverage,
   fetchRouteMapsUrl,
   todayIsoWeekdayInRange,
   WEEKDAY_LABELS,
   type RouteDay,
   type RouteStop,
+  type OutreachChannel,
 } from '@/lib/queries/route'
 import { FIELD_OUTCOME_OPTIONS, type FieldOutcome, outcomeLabel } from '@/lib/fieldOutcomes'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+
+const CHANNEL_BADGE: Record<Exclude<OutreachChannel, 'email' | 'none'>, { label: string; tone: PillTone }> = {
+  phone_only: { label: 'Call first', tone: 'accent' },
+  visit_only: { label: 'Walk-in', tone: 'warning' },
+}
 
 const RADIUS_OPTIONS = [2, 3, 5, 8, 12, 20]
 const TARGET_OPTIONS = [3, 4, 5, 6, 8, 10]
@@ -95,6 +102,7 @@ export function RoutePage() {
   const upsert = useUpsertRouteDay()
   const generate = useGenerateRouteDay()
   const markVisited = useMarkRouteStopVisited()
+  const coverage = useAreaCoverage()
 
   const todayIso = todayIsoWeekdayInRange()
   const isSunday = todayIso === null
@@ -122,6 +130,7 @@ export function RoutePage() {
   const [selectedStop, setSelectedStop] = useState<RouteStop | null>(null)
   const [outcome, setOutcome] = useState<FieldOutcome>('interested')
   const [visitNotes, setVisitNotes] = useState('')
+  const [collectedEmail, setCollectedEmail] = useState('')
   const [openingMaps, setOpeningMaps] = useState(false)
 
   const geocodedVenues = useMemo(() => {
@@ -197,13 +206,20 @@ export function RoutePage() {
 
   async function handleSaveVisit() {
     if (!selectedStop) return
+    const email = collectedEmail.trim()
+    if (outcome === 'collected_email' && !email) {
+      toast.error('Enter the email you collected, or pick a different outcome')
+      return
+    }
     await markVisited.mutateAsync({
       route_stop_id: selectedStop.id,
       outcome,
       notes: visitNotes || null,
+      collected_email: outcome === 'collected_email' ? email : null,
     })
     setSelectedStop(null)
     setVisitNotes('')
+    setCollectedEmail('')
   }
 
   const stops = currentRouteDay?.stops ?? []
@@ -446,9 +462,60 @@ export function RoutePage() {
                         setSelectedStop(stop)
                         setOutcome('interested')
                         setVisitNotes('')
+                        setCollectedEmail('')
                       }}
                     />
                   ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Area coverage — how much of each suburb's no-email pool is still un-worked */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-[14px]">Area coverage</CardTitle>
+              <p className="text-[12px] text-ink-muted mt-0.5">
+                Venues with no emailable contact — worth a call or a walk-in. Set a suburb focus above to pull them into the day.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {coverage.isLoading ? (
+                <div className="space-y-1.5">
+                  {[0, 1, 2].map((i) => <SkeletonRow key={i} />)}
+                </div>
+              ) : (coverage.data ?? []).length === 0 ? (
+                <EmptyState
+                  icon={MapPin}
+                  title="Nothing to work through"
+                  body="Every venue with an address either has a deliverable email or is already logged as visited."
+                />
+              ) : (
+                <ul className="divide-y divide-hairline">
+                  {(coverage.data ?? []).slice(0, 8).map((area) => {
+                    const worked = area.total_candidates - area.remaining
+                    const pct = area.total_candidates > 0
+                      ? Math.round((worked / area.total_candidates) * 100)
+                      : 0
+                    return (
+                      <li key={area.suburb_key} className="flex items-center gap-3 py-2.5">
+                        <button
+                          type="button"
+                          onClick={() => setForm((s) => ({ ...s, suburb_focus: area.suburb_label }))}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <p className="text-[13px] font-medium text-ink truncate">{area.suburb_label}</p>
+                          <p className="text-[12px] text-ink-muted jordan-tnum">
+                            {area.remaining} to go · {area.phone_only} to call · {area.visit_only} walk-in
+                          </p>
+                        </button>
+                        <div className="shrink-0 text-right">
+                          <p className="text-[12px] text-ink jordan-tnum">{worked}/{area.total_candidates}</p>
+                          <p className="text-[11px] text-ink-faint jordan-tnum">{pct}% done</p>
+                        </div>
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
             </CardContent>
@@ -481,6 +548,26 @@ export function RoutePage() {
               </SelectContent>
             </Select>
           </div>
+
+          {outcome === 'collected_email' && (
+            <div className="space-y-1.5">
+              <Label htmlFor="collected-email">Email collected</Label>
+              <input
+                id="collected-email"
+                type="email"
+                inputMode="email"
+                autoCapitalize="none"
+                autoCorrect="off"
+                value={collectedEmail}
+                onChange={(e) => setCollectedEmail(e.target.value)}
+                placeholder="name@venue.com.au"
+                className="w-full rounded-md border border-hairline bg-surface-1 px-2.5 py-1.5 text-[13px]"
+              />
+              <p className="text-[11px] text-ink-faint">
+                Goes into the normal verify → draft queue. Nothing sends until you approve it.
+              </p>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="visit-notes">Notes</Label>
@@ -538,12 +625,17 @@ function RouteStopRow({
 }) {
   const visited = stop.field_visit_id != null
   const tone = STOP_KIND_TONE[stop.stop_kind]
+  const channelBadge =
+    stop.outreach_channel === 'phone_only' || stop.outreach_channel === 'visit_only'
+      ? CHANNEL_BADGE[stop.outreach_channel]
+      : null
   return (
     <li className="flex items-start gap-3 py-2.5">
       <div className="w-6 text-center text-[11px] text-ink-faint jordan-tnum">{index + 1}</div>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <StatusPill tone={tone}>{STOP_KIND_LABEL[stop.stop_kind]}</StatusPill>
+          {channelBadge && <StatusPill tone={channelBadge.tone}>{channelBadge.label}</StatusPill>}
           <p className="text-[13px] font-medium text-ink truncate">{stop.venue_name_cached}</p>
           {stop.lead_score_cached != null && (
             <ScoreBadge score={stop.lead_score_cached} />
@@ -554,6 +646,15 @@ function RouteStopRow({
           {stop.est_drive_km != null ? ` · ${Number(stop.est_drive_km).toFixed(1)} km` : ''}
           {stop.est_arrival_min != null ? ` · ~${stop.est_arrival_min} min` : ''}
         </p>
+        {stop.phone_cached && !visited && (
+          <a
+            href={`tel:${stop.phone_cached.replace(/[^\d+]/g, '')}`}
+            className="mt-1 inline-flex items-center gap-1.5 text-[12px] text-[color:var(--jordan-accent-mint)] hover:underline"
+          >
+            <Phone className="size-3.5" />
+            {stop.phone_cached}
+          </a>
+        )}
         {visited && stop.field_visit && (
           <p className="text-[11.5px] text-[color:var(--jordan-success-text)] mt-0.5">
             Visited · {outcomeLabel(stop.field_visit.outcome)}

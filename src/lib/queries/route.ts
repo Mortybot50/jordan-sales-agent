@@ -19,6 +19,9 @@ import type { FieldOutcome } from '@/lib/fieldOutcomes'
 
 export type StopKind = 'prospect' | 'follow_up' | 'anchor'
 
+/** How Jordan can reach a venue, derived from what enrichment found. */
+export type OutreachChannel = 'email' | 'phone_only' | 'visit_only' | 'none'
+
 export interface RouteStop {
   id: string
   route_day_id: string
@@ -31,6 +34,8 @@ export interface RouteStop {
   suburb_cached: string | null
   lead_score_cached: number | null
   field_visit_id: string | null
+  outreach_channel: OutreachChannel | null
+  phone_cached: string | null
   venue: { lat: number | null; lng: number | null } | null
   field_visit: { visited_at: string; outcome: FieldOutcome } | null
 }
@@ -154,6 +159,8 @@ export interface MarkVisitedInput {
   voice_audio_path?: string | null
   lat?: number | null
   lng?: number | null
+  /** Email collected on the visit — feeds the normal verify→draft pipeline. */
+  collected_email?: string | null
 }
 
 export function useMarkRouteStopVisited() {
@@ -198,4 +205,35 @@ export function todayIsoWeekdayInRange(): number | null {
 
 export const WEEKDAY_LABELS: Record<number, string> = {
   1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat',
+}
+
+export interface AreaCoverage {
+  suburb_key: string
+  suburb_label: string
+  total_candidates: number
+  phone_only: number
+  visit_only: number
+  contacted: number
+  remaining: number
+}
+
+/**
+ * Per-suburb coverage of the physical-prospecting funnel (phone_only +
+ * visit_only venues), so Jordan can see how much of an area he's worked
+ * through and keep chipping at "not yet contacted" over successive weeks.
+ * Reads the RLS-scoped `venue_area_coverage` view directly.
+ */
+export function useAreaCoverage() {
+  return useQuery({
+    queryKey: ['route', 'coverage'],
+    queryFn: async (): Promise<AreaCoverage[]> => {
+      const { data, error } = await supabase
+        .from('venue_area_coverage')
+        .select('suburb_key, suburb_label, total_candidates, phone_only, visit_only, contacted, remaining')
+        .order('remaining', { ascending: false })
+      if (error) throw error
+      return (data ?? []) as AreaCoverage[]
+    },
+    staleTime: 5 * 60 * 1000,
+  })
 }

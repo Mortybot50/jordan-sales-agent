@@ -111,6 +111,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const unvisited = allStops.filter(
     (s) => s.field_visit_id == null && s.venue?.lat != null && s.venue?.lng != null,
   )
+  // Suburb-focus (Pool C) prospects have no lat/lng — they can't be TSP-ordered,
+  // but they're real stops and MUST be renumbered too, or their stale stop_order
+  // collides with the reassigned geocoded ones on the unique index.
+  const ungeocoded = allStops.filter(
+    (s) => s.field_visit_id == null && (s.venue?.lat == null || s.venue?.lng == null),
+  )
 
   let optimized: OptimizeResult = {
     ordered_ids: unvisited.map((s) => s.id),
@@ -177,6 +183,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
     cursor += 1
   }
+  // Ungeocoded suburb-focus prospects tail the route (no distance/ETA).
+  for (const s of ungeocoded) {
+    updates.push({ id: s.id, stop_order: cursor, est_arrival_min: null })
+    cursor += 1
+  }
 
   // Atomic re-numbering — push updates one row at a time. The unique index
   // (route_day_id, stop_order) means we have to write to a temporary order
@@ -201,7 +212,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   return res.status(200).json({
     route_day_id: routeDayId,
-    stop_count: visited.length + optimized.ordered_ids.length,
+    stop_count: visited.length + optimized.ordered_ids.length + ungeocoded.length,
     total_distance_km: optimized.total_distance_km,
     estimated_minutes: optimized.estimated_minutes,
   })

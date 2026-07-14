@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { subDays } from 'date-fns'
+import type { FieldOutcome } from '@/lib/fieldOutcomes'
 
 export type PinKind = 'warm' | 'deal' | 'reopening' | 'cold'
 
@@ -28,7 +29,7 @@ export interface FieldVisit {
   user_id: string
   contact_id: string | null
   venue_observation_id: string | null
-  outcome: 'interested' | 'not_now' | 'closed' | 'not_in' | 'dm_absent' | 'other'
+  outcome: FieldOutcome
   notes: string | null
   voice_transcript: string | null
   voice_audio_path: string | null
