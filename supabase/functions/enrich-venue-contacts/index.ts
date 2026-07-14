@@ -620,11 +620,45 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const effective = step === 'auto' ? (hasWebsite ? 'guess' : 'resolve') : step
 
   if (effective === 'resolve') {
-    const r = await resolveVenue(supabase, venue, dryRun)
-    return json(200, { venue_id: venueId, step: 'resolve', dry_run: dryRun, ...r })
+    // Dry-run never bills or writes, so the plain read is enough — no claim.
+    if (dryRun) {
+      const r = await resolveVenue(supabase, venue, true)
+      return json(200, { venue_id: venueId, step: 'resolve', dry_run: true, ...r })
+    }
+    // Live: CLAIM this one venue through the same lease the batch path uses, so
+    // it inherits the terminal-marker skip (enrich_source already set) AND the
+    // FOR UPDATE SKIP LOCKED concurrency guard — two overlapping single-venue
+    // calls can't both spend a Places lookup on it. No row back means it is
+    // already resolved, ineligible (archived/excluded/has-website), or leased by
+    // a concurrent run right now.
+    const { data: claimed, error: claimErr } = await supabase
+      .rpc('leadflow_claim_resolve_venues', { p_limit: 1, p_org: null, p_venue: venueId })
+    if (claimErr) return json(500, { error: `resolve claim failed: ${claimErr.message}` })
+    const leased = ((claimed as VenueRow[]) ?? [])[0]
+    if (!leased) {
+      return json(200, { venue_id: venueId, step: 'resolve', dry_run: false, outcome: 'skipped', skipped: 'not_claimable' })
+    }
+    const r = await resolveVenue(supabase, leased, false)
+    return json(200, { venue_id: venueId, step: 'resolve', dry_run: false, ...r })
   }
 
-  const contacts = await loadContacts(supabase, venueId)
-  const g = await guessVenue(supabase, venue, contacts, dryRun)
-  return json(200, { venue_id: venueId, step: 'guess', dry_run: dryRun, ...g })
+  // Guess. Dry-run keeps the plain read/preview (no claim, no bill).
+  if (dryRun) {
+    const contacts = await loadContacts(supabase, venueId)
+    const g = await guessVenue(supabase, venue, contacts, true)
+    return json(200, { venue_id: venueId, step: 'guess', dry_run: true, ...g })
+  }
+  // Live: CLAIM through the guess lease so a concluded/terminal (guess_attempted_at
+  // set) or concurrently-leased venue is skipped before any ZeroBounce credit is
+  // spent — the in-memory guard alone is not concurrency-safe.
+  const { data: gClaimed, error: gClaimErr } = await supabase
+    .rpc('leadflow_claim_guess_venues', { p_limit: 1, p_org: null, p_venue: venueId })
+  if (gClaimErr) return json(500, { error: `guess claim failed: ${gClaimErr.message}` })
+  const gLeased = ((gClaimed as VenueRow[]) ?? [])[0]
+  if (!gLeased) {
+    return json(200, { venue_id: venueId, step: 'guess', dry_run: false, skipped: 'not_claimable' })
+  }
+  const contacts = await loadContacts(supabase, gLeased.id)
+  const g = await guessVenue(supabase, gLeased, contacts, false)
+  return json(200, { venue_id: venueId, step: 'guess', dry_run: false, ...g })
 })
