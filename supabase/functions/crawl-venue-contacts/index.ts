@@ -236,44 +236,70 @@ async function fetchPage(url: string, timeoutMs: number): Promise<string> {
     const reader = resp.body.getReader()
     const head: Uint8Array[] = []
     let headBytes = 0
-    // Ring buffer of trailing chunks so we retain roughly the last TAIL_BYTES
-    // without ever holding the whole body.
-    const tail: Uint8Array[] = []
-    let tailBytes = 0
+    // Fixed-size ring for the tail: a single preallocated buffer we write into
+    // circularly, so tail memory is exactly TAIL_BYTES no matter the chunk
+    // sizes the runtime hands us.
+    const tailBuf = new Uint8Array(TAIL_BYTES)
+    let tailWritten = 0 // total bytes ever routed to the tail (for wrap math)
     let truncated = false
+
+    const pushTail = (bytes: Uint8Array) => {
+      // Only the last TAIL_BYTES matter; if a single chunk is bigger than the
+      // ring, keep just its final TAIL_BYTES.
+      let src = bytes
+      if (src.byteLength > TAIL_BYTES) src = src.subarray(src.byteLength - TAIL_BYTES)
+      for (let i = 0; i < src.byteLength; i++) {
+        tailBuf[(tailWritten + i) % TAIL_BYTES] = src[i]
+      }
+      tailWritten += src.byteLength
+    }
+
     try {
       for (;;) {
         const { done, value } = await reader.read()
         if (done) break
         if (!value || value.byteLength === 0) continue
+        let chunk = value
+        // Fill the head up to exactly HEAD_BYTES, splitting the chunk if needed.
         if (headBytes < HEAD_BYTES) {
-          head.push(value)
-          headBytes += value.byteLength
-        } else {
-          truncated = true
-          tail.push(value)
-          tailBytes += value.byteLength
-          // Trim from the front of the tail ring once it exceeds TAIL_BYTES.
-          while (tailBytes - (tail[0]?.byteLength ?? 0) >= TAIL_BYTES && tail.length > 1) {
-            tailBytes -= tail.shift()!.byteLength
+          const room = HEAD_BYTES - headBytes
+          if (chunk.byteLength <= room) {
+            head.push(chunk)
+            headBytes += chunk.byteLength
+            continue
           }
+          head.push(chunk.subarray(0, room))
+          headBytes = HEAD_BYTES
+          chunk = chunk.subarray(room) // remainder overflows into the tail
         }
+        // Anything past the head goes to the bounded tail ring.
+        truncated = true
+        pushTail(chunk)
       }
     } finally {
       try { await reader.cancel() } catch { /* already closed */ }
     }
 
+    // Reassemble the tail ring in chronological order.
+    let tail: Uint8Array
+    if (!truncated || tailWritten === 0) {
+      tail = new Uint8Array(0)
+    } else if (tailWritten <= TAIL_BYTES) {
+      tail = tailBuf.subarray(0, tailWritten)
+    } else {
+      const start = tailWritten % TAIL_BYTES
+      tail = new Uint8Array(TAIL_BYTES)
+      tail.set(tailBuf.subarray(start))
+      tail.set(tailBuf.subarray(0, start), TAIL_BYTES - start)
+    }
+
     const decoder = new TextDecoder()
     let html = ''
     for (const c of head) html += decoder.decode(c, { stream: true })
-    if (truncated) {
-      html += decoder.decode() // flush head
+    html += decoder.decode() // flush head
+    if (truncated && tail.byteLength > 0) {
       html += '\n<!-- crawl-venue-contacts: middle truncated -->\n'
-      const tailDecoder = new TextDecoder()
-      for (const c of tail) html += tailDecoder.decode(c, { stream: true })
-      html += tailDecoder.decode()
-    } else {
-      html += decoder.decode()
+      html += new TextDecoder().decode(tail)
     }
     return html
   } catch {
