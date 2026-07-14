@@ -123,7 +123,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // existing contact is picked every retry instead of inserting a duplicate.
     const { data: existing, error: lookupErr } = await ctx.admin
       .from('contacts')
-      .select('id')
+      .select('id, verification_status')
       .eq('org_id', stop.org_id)
       .eq('venue_id', stop.venue_id)
       .ilike('email', rawEmail)
@@ -139,6 +139,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (existing?.id) {
       collectedContactId = existing.id
+      // If a prior verdict left this email in a terminal non-deliverable state
+      // (invalid / unknown / catch_all / disposable), the verify worker will
+      // never re-claim it — leadflow_claim_pending_contacts only claims
+      // verification_status='pending'. Jordan just physically re-collected the
+      // address, which overrides the stale verdict, so reset it to the same
+      // fresh state a brand-new contact starts in and let ZeroBounce re-judge.
+      // 'valid' is already deliverable — leave it (don't burn a credit or risk a
+      // downgrade); 'pending' is already queued — no-op.
+      const vs = existing.verification_status
+      if (vs !== 'pending' && vs !== 'valid') {
+        const { error: requeueErr } = await ctx.admin
+          .from('contacts')
+          .update({
+            verification_status: 'pending',
+            verified_at: null,
+            verification_claimed_at: null,
+            catch_all_flag: false,
+            role_based: null,
+          })
+          .eq('id', existing.id)
+        if (requeueErr) {
+          // Recoverable: nothing linked yet, so a retry re-runs and re-attempts
+          // the requeue (idempotent — a now-pending contact skips this branch).
+          console.error('[route/mark-visited] collected_email requeue', requeueErr)
+          return res.status(502).json({ error: 'Failed to requeue collected email for verification — please retry', detail: requeueErr.message })
+        }
+      }
     } else {
       const fullName = (stop.venue_name_cached as string | null)?.trim() || 'Collected on visit'
       const { data: contact, error: contactErr } = await ctx.admin
