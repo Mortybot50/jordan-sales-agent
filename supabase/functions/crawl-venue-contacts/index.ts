@@ -280,6 +280,50 @@ function isSocialOwnDomain(emailDomain: string): boolean {
   return SOCIAL_OWN_DOMAINS.some((own) => d === own || d.endsWith('.' + own))
 }
 
+// Minimal unescape for values pulled out of the embedded JSON model (\/ → /,
+// @ → @, \n → space). Enough to recover an email that JSON-escaped its
+// separators without pulling in a full JSON parser.
+function unescapeJsonish(s: string): string {
+  return s
+    .replace(/\\u0040/gi, '@')
+    .replace(/\\\//g, '/')
+    .replace(/\\n/g, ' ')
+    .replace(/\\"/g, '"')
+}
+
+/**
+ * Instagram/Facebook profile HTML is mostly NOT the profile owner: recommended
+ * accounts, adverts, embedded metadata and login/support chrome all carry their
+ * own email addresses. Scanning the whole document attributes those strangers'
+ * emails to the venue. So restrict extraction to regions that ARE owner-owned:
+ *   • the og:description meta (the human bio line both platforms render), and
+ *   • the profile's own JSON fields — biography, public_email, business_email,
+ *     and the generic email field pro accounts expose.
+ * Only emails appearing inside those windows are treated as venue-owned.
+ */
+function extractSocialBioEmails(html: string): Set<string> {
+  const windows: string[] = []
+
+  const og = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']*)["']/i)
+  if (og) windows.push(og[1])
+
+  const jsonFields = [
+    /"biography":"((?:[^"\\]|\\.)*)"/gi,
+    /"public_email":"((?:[^"\\]|\\.)*)"/gi,
+    /"business_email":"((?:[^"\\]|\\.)*)"/gi,
+    /"email":"((?:[^"\\]|\\.)*)"/gi,
+  ]
+  for (const re of jsonFields) {
+    for (const m of html.matchAll(re)) windows.push(unescapeJsonish(m[1]))
+  }
+
+  const out = new Set<string>()
+  for (const w of windows) {
+    for (const e of extractEmails(w)) out.add(e)
+  }
+  return out
+}
+
 // ---------------------------------------------------------------------------
 // HTTP fetch
 // ---------------------------------------------------------------------------
@@ -515,7 +559,9 @@ async function crawlVenue(rawWebsite: string): Promise<CrawlResult> {
       const html = await fetchPage(socialUrl, SUBPAGE_TIMEOUT_MS)
       if (!html) continue
       result.pagesChecked++
-      for (const email of extractEmails(html)) {
+      // Owner-bio-scoped only — never the whole profile document, which is full
+      // of unrelated (recommended-account / advert / chrome) email addresses.
+      for (const email of extractSocialBioEmails(html)) {
         if (result.emails.size >= MAX_ACCEPTED_EMAILS) break
         if (isJunk(email)) continue
         const atIdx = email.indexOf('@')

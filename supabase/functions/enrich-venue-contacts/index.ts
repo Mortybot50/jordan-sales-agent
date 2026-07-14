@@ -160,8 +160,21 @@ async function resolveVenue(
   // rather than claiming a resolution the DB never recorded.
   const { error: upErr } = await supabase.from('venues').update(patch).eq('id', v.id)
   if (upErr) {
-    console.error(`enrich: venue update failed for ${v.id}: ${upErr.message}`)
-    return { outcome: 'error' }
+    // Unique (org_id, place_id): another venue in this org already holds the
+    // Google place we just resolved to. Losing the whole write (and the
+    // website) over a duplicate place_id would re-queue and re-bill this venue
+    // forever, so retry WITHOUT place_id — the website + marker still land.
+    if (upErr.code === '23505' && 'place_id' in patch) {
+      const { place_id: _dropped, ...patchNoPlaceId } = patch
+      const { error: retryErr } = await supabase.from('venues').update(patchNoPlaceId).eq('id', v.id)
+      if (retryErr) {
+        console.error(`enrich: venue update retry (no place_id) failed for ${v.id}: ${retryErr.message}`)
+        return { outcome: 'error' }
+      }
+    } else {
+      console.error(`enrich: venue update failed for ${v.id}: ${upErr.message}`)
+      return { outcome: 'error' }
+    }
   }
 
   return { outcome: hasWebsite ? 'resolved_website' : 'match_no_website', website: resolved.website }
@@ -457,22 +470,35 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (step === 'resolve') {
       if (!placesConfigured()) return json(500, { error: 'GOOGLE_PLACES_API_KEY not set' })
 
-      // Name-only, not-yet-attempted venues, best-fit first. enrich_source IS
-      // NULL guards idempotency: previously-attempted venues (resolved or
-      // dead-ended) are skipped so we never re-bill Places.
-      let q = supabase.from('venues').select(VENUE_COLS)
-        .or('website.is.null,website.eq.')
-        .is('enrich_source', null)
-        .neq('archived', true)
-        .neq('is_excluded', true)
-        .order('icp_score', { ascending: false, nullsFirst: false })
-        .limit(limit)
-      if (body.org_id) q = q.eq('org_id', body.org_id)
+      let rows: VenueRow[]
+      if (dryRun) {
+        // Preview: plain unclaimed read (no lease burn). resolveVenue(dryRun)
+        // still calls Places to count resolvable vs dead-end, but writes
+        // nothing, so no claim/lease is needed to protect a mutation.
+        let q = supabase.from('venues').select(VENUE_COLS)
+          .or('website.is.null,website.eq.')
+          .is('enrich_source', null)
+          .neq('archived', true)
+          .neq('is_excluded', true)
+          .order('icp_score', { ascending: false, nullsFirst: false })
+          .limit(limit)
+        if (body.org_id) q = q.eq('org_id', body.org_id)
+        const { data: venues, error } = await q
+        if (error) return json(500, { error: `venue read failed: ${error.message}` })
+        rows = (venues as VenueRow[]) ?? []
+      } else {
+        // Live run — atomically CLAIM the slice via leadflow_claim_resolve_venues
+        // (FOR UPDATE SKIP LOCKED + 15-min lease) so two overlapping resolve
+        // batches never both select the same NULL-enrich_source rows and each
+        // pay for the same Places call. enrich_source (the terminal marker) is
+        // written by resolveVenue once the attempt concludes; a transient error
+        // leaves it NULL so the lease expiry re-queues the venue.
+        const { data: venues, error } = await supabase
+          .rpc('leadflow_claim_resolve_venues', { p_limit: limit, p_org: body.org_id ?? null })
+        if (error) return json(500, { error: `resolve claim failed: ${error.message}` })
+        rows = (venues as VenueRow[]) ?? []
+      }
 
-      const { data: venues, error } = await q
-      if (error) return json(500, { error: `venue read failed: ${error.message}` })
-
-      const rows = (venues as VenueRow[]) ?? []
       const counts = { scanned: 0, resolved_website: 0, match_no_website: 0, dead_end: 0, errors: 0 }
       for (const v of rows) {
         counts.scanned++
