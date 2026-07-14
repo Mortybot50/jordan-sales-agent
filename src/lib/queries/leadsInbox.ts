@@ -39,7 +39,15 @@ export interface InboxLead {
     email: string | null
     verification_status: string | null
     email_tier: number | null
+    catch_all_flag: boolean | null
+    role_based: boolean | null
   } | null
+  /**
+   * Honest send-readiness: at least one contact whose email is
+   * verification_status='valid' AND NOT catch-all AND NOT role-based. Mirrors
+   * the approve-lead + enqueue-sends gate exactly. Derived, not stored.
+   */
+  outreach_ready: boolean
 }
 
 export function useLeadsInbox() {
@@ -63,6 +71,8 @@ export function useLeadsInbox() {
         email: string | null
         verification_status: string | null
         email_tier: number | null
+        catch_all_flag: boolean | null
+        role_based: boolean | null
       }>> = {}
       // Chunk the venue_id list: an .in() over ~650 UUIDs builds a >20 KB
       // request URL that trips PostgREST/proxy size limits, and because the
@@ -74,7 +84,7 @@ export function useLeadsInbox() {
         const batch = ids.slice(i, i + CHUNK)
         const { data: contacts, error: cErr } = await supabase
           .from('contacts')
-          .select('venue_id, full_name, email, verification_status, email_tier')
+          .select('venue_id, full_name, email, verification_status, email_tier, catch_all_flag, role_based')
           .in('venue_id', batch)
         if (cErr) throw cErr
         for (const c of contacts ?? []) {
@@ -94,6 +104,12 @@ export function useLeadsInbox() {
             : v.contact_enrichment_status && v.contact_enrichment_status !== 'pending'
               ? 'crawled_empty'
               : 'none'
+        const outreach_ready = list.some(
+          (c) =>
+            c.verification_status === 'valid' &&
+            c.catch_all_flag !== true &&
+            c.role_based !== true,
+        )
         return {
           ...v,
           source_details: (v.source_details ?? null) as InboxLead['source_details'],
@@ -101,6 +117,7 @@ export function useLeadsInbox() {
           is_lead: contact_status === 'found',
           contact_count: list.length,
           best_contact: best,
+          outreach_ready,
         }
       })
     },
@@ -132,18 +149,22 @@ export interface ApproveStep {
 export function useApproveLead() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (venueId: string): Promise<{ ok: boolean; needs_contact?: boolean; steps: ApproveStep[] }> => {
+    mutationFn: async (venueId: string): Promise<{ ok: boolean; needs_contact?: boolean; awaiting_verification?: boolean; steps: ApproveStep[] }> => {
       const { data, error } = await supabase.functions.invoke('approve-lead', {
         body: { venue_id: venueId },
       })
       if (error) throw error
-      return data as { ok: boolean; needs_contact?: boolean; steps: ApproveStep[] }
+      return data as { ok: boolean; needs_contact?: boolean; awaiting_verification?: boolean; steps: ApproveStep[] }
     },
     onSuccess: (res) => {
       invalidateInbox(qc)
       qc.invalidateQueries({ queryKey: ['deals'] })
       qc.invalidateQueries({ queryKey: ['drafts'] })
-      if (res.needs_contact) {
+      if (res.awaiting_verification) {
+        toast.info('Kept in the inbox — email still being verified', {
+          description: 'ZeroBounce hasn\'t confirmed a deliverable email yet. It stays here; approve again once verification completes.',
+        })
+      } else if (res.needs_contact) {
         toast.warning('Approved — but no usable contact found', {
           description: 'The venue is flagged "needs contact". Add an email manually, then enrol.',
         })

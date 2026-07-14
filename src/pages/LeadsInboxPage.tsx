@@ -77,15 +77,27 @@ function verificationTone(status: string | null): 'success' | 'danger' | 'warnin
   }
 }
 
-/** Verification pill + email tier — secondary metadata beside an email. */
+/** Verification pill + email tier + deliverability flags beside an email. */
 function VerificationPill({ lead }: { lead: InboxLead }) {
   const c = lead.best_contact
-  if (!c?.email) return <span className="text-ink-disabled">—</span>
+  if (!c?.email) return null
   return (
     <span className="inline-flex items-center gap-1">
       <StatusPill tone={verificationTone(c.verification_status)}>
         {c.verification_status ?? 'pending'}
       </StatusPill>
+      {/* Honest deliverability flags — a valid-but-role/catch-all address is
+          NOT outreach-ready, so surface why it won't auto-send. */}
+      {c.role_based === true && (
+        <StatusPill tone="warning" title="Shared/role inbox (info@, bookings@ …) — not auto-sendable">
+          role
+        </StatusPill>
+      )}
+      {c.catch_all_flag === true && (
+        <StatusPill tone="warning" title="Catch-all domain — deliverability unconfirmed">
+          catch-all
+        </StatusPill>
+      )}
       {c.email_tier != null && (
         <span className="text-[10px] text-ink-faint jordan-tnum" title="Email tier (1 = decision-maker pattern)">
           T{c.email_tier}
@@ -98,7 +110,9 @@ function VerificationPill({ lead }: { lead: InboxLead }) {
 /** Best-email cell — the address is the primary content; pill + tier inline. */
 function BestEmailCell({ lead }: { lead: InboxLead }) {
   const c = lead.best_contact
-  if (!c?.email) return <span className="text-ink-disabled">—</span>
+  // Explicit empty state — a bare "—" read as ambiguous next to the neighbouring
+  // suburb/contacts cells. Say plainly there's no email on file.
+  if (!c?.email) return <span className="text-[12px] text-ink-disabled">No email</span>
   return (
     <div className="flex min-w-0 items-center gap-1.5">
       <span className="truncate text-[12px] text-ink" title={c.email}>
