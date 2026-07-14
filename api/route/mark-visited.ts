@@ -160,6 +160,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       collectedContactId = contact.id
     }
+
+    // Surface the venue back into the leads inbox so the collected email flows
+    // through the SAME human chain every other lead uses: appear in the inbox →
+    // Jordan clicks Approve → approve-lead runs verify → deal → enroll → tick →
+    // step-1 draft lands in the review queue. We do NOT auto-approve or enrol
+    // here — doing so would bypass the human send gate. We only nudge a venue
+    // that has dropped OUT of the queue; a venue already 'pending' (still in the
+    // inbox) or 'approved' (already in active outreach) is left untouched.
+    const { data: venueRow } = await ctx.admin
+      .from('venues')
+      .select('review_status')
+      .eq('id', stop.venue_id)
+      .maybeSingle()
+    const reviewStatus = (venueRow?.review_status as string | null) ?? null
+    if (reviewStatus !== 'pending' && reviewStatus !== 'approved') {
+      const { error: reviewErr } = await ctx.admin
+        .from('venues')
+        .update({ review_status: 'pending' })
+        .eq('id', stop.venue_id)
+        .eq('org_id', stop.org_id)
+      if (reviewErr) {
+        // Non-fatal: the contact is saved either way. The dominant case is a
+        // venue that's already 'pending', so this is usually a no-op anyway.
+        console.error('[route/mark-visited] collected_email venue re-surface', reviewErr)
+      }
+    }
   }
 
   // Insert the field_visit. The trigger threads the activity through the
