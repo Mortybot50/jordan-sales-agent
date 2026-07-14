@@ -203,14 +203,21 @@ function extractEmails(html: string): Set<string> {
 // HTTP fetch
 // ---------------------------------------------------------------------------
 
-// Hard cap on bytes read per page. Some venue homepages ship multi-MB of
-// inlined HTML / base64 images; reading the whole body with resp.text() and
-// then running several global regexes over it was the cause of the edge
-// function hitting HTTP 546 WORKER_RESOURCE_LIMIT (OOM). Contact info (mailto:,
-// header/nav/footer addresses, contact-page links) lives near the top of the
-// document, so 512KB is comfortably enough. We stream and abort the read once
-// the cap is reached instead of buffering the entire response.
-const MAX_PAGE_BYTES = 512 * 1024
+// Per-page memory bound. Some venue homepages ship multi-MB of inlined HTML /
+// base64 images; reading the whole body with resp.text() and then running
+// several global regexes over it was the cause of the edge function hitting
+// HTTP 546 WORKER_RESOURCE_LIMIT (OOM), so discovery found zero new emails.
+//
+// We can't just read the prefix: venues commonly put their email address and
+// contact links (/about, /team, /get-in-touch) in the FOOTER, at the end of the
+// document. So instead of buffering the whole page we keep a bounded HEAD +
+// TAIL window — the first HEAD_BYTES and the last TAIL_BYTES — and drop the
+// middle. Both header/nav and footer are scanned; total memory stays bounded
+// regardless of page size. For pages under the cap this returns the full page
+// unchanged. A visible marker is inserted where the middle was dropped so a
+// truncated <a href> can never accidentally splice into a valid-looking one.
+const HEAD_BYTES = 384 * 1024
+const TAIL_BYTES = 256 * 1024
 
 async function fetchPage(url: string, timeoutMs: number): Promise<string> {
   const ctrl = new AbortController()
@@ -226,23 +233,48 @@ async function fetchPage(url: string, timeoutMs: number): Promise<string> {
     if (ct && !ct.includes('text/html') && !ct.includes('application/xhtml')) return ''
     if (!resp.body) return ''
 
-    // Bounded streaming read: stop as soon as we've collected MAX_PAGE_BYTES.
     const reader = resp.body.getReader()
-    const decoder = new TextDecoder()
-    let html = ''
-    let bytes = 0
+    const head: Uint8Array[] = []
+    let headBytes = 0
+    // Ring buffer of trailing chunks so we retain roughly the last TAIL_BYTES
+    // without ever holding the whole body.
+    const tail: Uint8Array[] = []
+    let tailBytes = 0
+    let truncated = false
     try {
-      while (bytes < MAX_PAGE_BYTES) {
+      for (;;) {
         const { done, value } = await reader.read()
         if (done) break
-        bytes += value.byteLength
-        html += decoder.decode(value, { stream: true })
+        if (!value || value.byteLength === 0) continue
+        if (headBytes < HEAD_BYTES) {
+          head.push(value)
+          headBytes += value.byteLength
+        } else {
+          truncated = true
+          tail.push(value)
+          tailBytes += value.byteLength
+          // Trim from the front of the tail ring once it exceeds TAIL_BYTES.
+          while (tailBytes - (tail[0]?.byteLength ?? 0) >= TAIL_BYTES && tail.length > 1) {
+            tailBytes -= tail.shift()!.byteLength
+          }
+        }
       }
     } finally {
-      // Release the connection; we may have stopped mid-stream on purpose.
       try { await reader.cancel() } catch { /* already closed */ }
     }
-    html += decoder.decode()
+
+    const decoder = new TextDecoder()
+    let html = ''
+    for (const c of head) html += decoder.decode(c, { stream: true })
+    if (truncated) {
+      html += decoder.decode() // flush head
+      html += '\n<!-- crawl-venue-contacts: middle truncated -->\n'
+      const tailDecoder = new TextDecoder()
+      for (const c of tail) html += tailDecoder.decode(c, { stream: true })
+      html += tailDecoder.decode()
+    } else {
+      html += decoder.decode()
+    }
     return html
   } catch {
     return ''
