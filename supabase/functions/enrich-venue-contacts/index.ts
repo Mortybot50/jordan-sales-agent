@@ -119,9 +119,16 @@ async function resolveVenue(
 
   if (res.status === 'no_match') {
     if (!dryRun) {
-      await supabase.from('venues')
+      const { error: nmErr } = await supabase.from('venues')
         .update({ enrich_source: 'places_no_match', updated_at: new Date().toISOString() })
         .eq('id', v.id)
+      // If the marker write fails, don't claim a dead-end: enrich_source stays
+      // NULL, so return 'error' and let the venue be retried rather than
+      // silently re-incurring a Places call on every later batch.
+      if (nmErr) {
+        console.error(`enrich: no_match marker update failed for ${v.id}: ${nmErr.message}`)
+        return { outcome: 'error' }
+      }
     }
     return { outcome: 'dead_end' }
   }
@@ -186,9 +193,50 @@ interface GuessResult {
  * must leave the venue re-queued.
  */
 async function markGuessAttempted(supabase: Supa, id: string): Promise<void> {
-  await supabase.from('venues')
+  const { error } = await supabase.from('venues')
     .update({ guess_attempted_at: new Date().toISOString() })
     .eq('id', id)
+  // Surface a failed stamp loudly: the attempt genuinely concluded (credit
+  // spent, contacts written), but with the marker still NULL the lease expiry
+  // will re-claim this venue and re-bill ZeroBounce. Can't force the write if
+  // the DB rejected it — logging is the honest handling so it's diagnosable.
+  if (error) {
+    console.error(`enrich: failed to stamp guess_attempted_at for ${id}: ${error.message} — venue may re-queue and re-bill`)
+  }
+}
+
+/**
+ * Persist a ZeroBounce-confirmed guess without discarding the verdict we paid
+ * for. Update-first: if a contact for (org, venue, email) already exists — from
+ * the crawler, an import, or a prior guess — promote ONLY its verification
+ * fields (status / catch_all_flag / verified_at), leaving its original source
+ * and full_name provenance intact. If no row exists, insert the guessed contact
+ * fresh. A blanket upsert with ignoreDuplicates would silently drop the new
+ * valid/catch_all verdict onto an existing pending row, wasting the credit and
+ * leaving the contact permanently unusable. Returns an error string or null.
+ */
+async function writeVerifiedContact(
+  supabase: Supa,
+  row: Record<string, unknown>,
+): Promise<string | null> {
+  const { data: updated, error: upErr } = await supabase.from('contacts')
+    .update({
+      verification_status: row.verification_status,
+      catch_all_flag: row.catch_all_flag,
+      verified_at: row.verified_at,
+    })
+    .eq('org_id', row.org_id as string)
+    .eq('venue_id', row.venue_id as string)
+    .eq('email', row.email as string)
+    .select('id')
+  if (upErr) return upErr.message
+  if (updated && updated.length > 0) return null
+
+  const { error: insErr } = await supabase.from('contacts').insert(row)
+  // A concurrent run may have inserted the same (org,venue,email) between our
+  // update and insert — a unique violation there is a benign race, not a failure.
+  if (insErr && insErr.code !== '23505') return insErr.message
+  return null
 }
 
 /** Pull a plausible person name off the venue's existing contacts, if any. */
@@ -301,14 +349,11 @@ async function guessVenue(
     guessedCatchAll = 1
   }
 
-  if (rows.length > 0) {
-    const { error } = await supabase.from('contacts').upsert(rows, {
-      onConflict: 'org_id,venue_id,email',
-      ignoreDuplicates: true,
-    })
-    if (error) {
-      console.error(`enrich: contact upsert failed for ${v.id}: ${error.message}`)
-      return { ...empty, candidates: candidates.length, role_candidates: roleCount, personal_candidates: personalCount, skipped: 'zerobounce_error', error: error.message }
+  for (const row of rows) {
+    const err = await writeVerifiedContact(supabase, row)
+    if (err) {
+      console.error(`enrich: contact write failed for ${v.id}: ${err}`)
+      return { ...empty, candidates: candidates.length, role_candidates: roleCount, personal_candidates: personalCount, skipped: 'zerobounce_error', error: err }
     }
   }
 
