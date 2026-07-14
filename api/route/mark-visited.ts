@@ -117,13 +117,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // rawEmail is already validated above (before any mutation).
   let collectedContactId: string | null = null
   if (outcome === 'collected_email' && rawEmail && stop.venue_id) {
-    const { data: existing } = await ctx.admin
+    // .limit(1) makes .maybeSingle() safe: a venue can hold multiple contacts
+    // sharing an email (no venue/email unique constraint), and an unbounded
+    // .maybeSingle() would ERROR on >1 row. Order deterministically so the same
+    // existing contact is picked every retry instead of inserting a duplicate.
+    const { data: existing, error: lookupErr } = await ctx.admin
       .from('contacts')
       .select('id')
       .eq('org_id', stop.org_id)
       .eq('venue_id', stop.venue_id)
       .ilike('email', rawEmail)
+      .order('created_at', { ascending: true })
+      .limit(1)
       .maybeSingle()
+    if (lookupErr) {
+      // Recoverable: nothing linked yet. Surface so the client retries rather
+      // than falling through to insert a duplicate contact.
+      console.error('[route/mark-visited] collected_email contact lookup', lookupErr)
+      return res.status(502).json({ error: 'Failed to save collected email — nothing recorded, please retry', detail: lookupErr.message })
+    }
 
     if (existing?.id) {
       collectedContactId = existing.id
