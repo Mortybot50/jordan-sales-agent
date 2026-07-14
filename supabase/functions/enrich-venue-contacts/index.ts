@@ -269,6 +269,7 @@ async function guessVenue(
   supabase: Supa,
   v: VenueRow,
   contacts: ContactRow[],
+  dryRun = false,
 ): Promise<GuessResult> {
   const empty: GuessResult = {
     guessed_valid: 0, guessed_catch_all: 0, candidates: 0,
@@ -284,19 +285,25 @@ async function guessVenue(
     c.catch_all_flag !== true && c.role_based !== true,
   )
   if (alreadyDeliverable) {
-    await markGuessAttempted(supabase, v.id)
+    if (!dryRun) await markGuessAttempted(supabase, v.id)
     return { ...empty, skipped: 'already_deliverable' }
   }
 
   const personName = pickPersonName(contacts, v.name)
   const candidates = buildCandidates(v.website, personName, MAX_GUESS_CANDIDATES)
   if (candidates.length === 0) {
-    await markGuessAttempted(supabase, v.id)
+    if (!dryRun) await markGuessAttempted(supabase, v.id)
     return { ...empty, skipped: 'no_candidates' }
   }
 
   const roleCount = candidates.filter((c) => c.kind === 'role').length
   const personalCount = candidates.filter((c) => c.kind === 'personal').length
+
+  // Dry-run: report what WOULD be verified — no ZeroBounce call (no credit
+  // spend), no contact writes, no guess_attempted_at stamp.
+  if (dryRun) {
+    return { ...empty, candidates: candidates.length, role_candidates: roleCount, personal_candidates: personalCount }
+  }
 
   const outcome = await zeroBounceValidateBatch(
     ZEROBOUNCE_API_KEY,
@@ -605,6 +612,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   const contacts = await loadContacts(supabase, venueId)
-  const g = await guessVenue(supabase, venue, contacts)
-  return json(200, { venue_id: venueId, step: 'guess', ...g })
+  const g = await guessVenue(supabase, venue, contacts, dryRun)
+  return json(200, { venue_id: venueId, step: 'guess', dry_run: dryRun, ...g })
 })
