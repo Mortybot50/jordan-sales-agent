@@ -141,36 +141,36 @@ Deno.serve(async (req: Request) => {
     if (c.verification_status && c.verification_status !== 'pending') continue
     try {
       const v = await provider.verify(c.email)
-      // The internal provider returns 'valid'|'risky'|'invalid'. It's only a
-      // cheap first filter (syntax/MX/role/tier); ZeroBounce (the
-      // leadflow-verify-contacts cron) is the authoritative verdict and it only
-      // claims rows still at 'pending'. So we persist ONLY a confident internal
-      // verdict (valid/invalid). 'risky' (role address / inconclusive MX) is
-      // left at 'pending' — unwritten — so the contact stays in the ZeroBounce
-      // backlog rather than being stranded at a terminal 'unknown' that no
-      // drainer ever revisits (and 'risky' isn't in
-      // contacts_verification_status_check anyway). We still stamp the tier,
-      // which is useful regardless of the verdict.
-      if (v.result === 'risky') {
+      // The internal provider is only a cheap PRE-filter (syntax/MX/role/tier);
+      // ZeroBounce (the leadflow-verify-contacts cron) is the AUTHORITATIVE
+      // deliverability verdict and it only claims rows still at 'pending'. So:
+      //   - a confident 'invalid' (malformed / no MX) is written now — no point
+      //     spending a ZeroBounce credit on a domain that can't receive mail;
+      //   - 'valid' (MX exists) and 'risky' (role address / MX lookup failed)
+      //     are LEFT 'pending' so ZeroBounce still supplies the real verdict.
+      // Internal 'valid' is MX-existence only, NOT deliverability — promoting it
+      // to verification_status='valid' would both strand the contact out of the
+      // ZeroBounce backlog AND make the send gates treat an unverified mailbox
+      // as sendable. We always stamp the tier, which is useful regardless.
+      if (v.result === 'invalid') {
+        await supabase
+          .from('contacts')
+          .update({
+            verification_status: 'invalid',
+            email_tier: v.tier,
+            verified_at: new Date().toISOString(),
+          })
+          .eq('id', c.id)
+        c.verification_status = 'invalid'
+        c.email_tier = v.tier
+        verified++
+      } else {
         await supabase
           .from('contacts')
           .update({ email_tier: v.tier })
           .eq('id', c.id)
         c.email_tier = v.tier
-        continue
       }
-      const status = v.result
-      await supabase
-        .from('contacts')
-        .update({
-          verification_status: status,
-          email_tier: v.tier,
-          verified_at: new Date().toISOString(),
-        })
-        .eq('id', c.id)
-      c.verification_status = status
-      c.email_tier = v.tier
-      verified++
     } catch (e) {
       console.error('verify failed for contact', c.id, e)
     }
@@ -178,7 +178,7 @@ Deno.serve(async (req: Request) => {
   steps.push({
     step: 'verify',
     status: contacts.length === 0 ? 'skipped' : 'ok',
-    detail: contacts.length === 0 ? 'No contacts to verify' : `${verified} contact(s) verified (internal: syntax/MX/role/tier)`,
+    detail: contacts.length === 0 ? 'No contacts to verify' : `internal pre-filter ran on ${contacts.length} contact(s), ${verified} rejected as invalid — deliverability is confirmed by ZeroBounce`,
   })
 
   // Send gate (Jordan's rule): a contact is only enrollable — i.e. eligible to
@@ -197,6 +197,36 @@ Deno.serve(async (req: Request) => {
     )
     .sort((a, b) => (a.email_tier ?? 3) - (b.email_tier ?? 3))
   if (usable.length === 0) {
+    // Distinguish "still waiting on ZeroBounce" from "genuinely no usable
+    // email". A contact that is still 'pending' (email present, not role-based,
+    // ZeroBounce hasn't returned its verdict yet) may still become 'valid'.
+    // We must NOT leave such a venue stranded at review_status='approved': the
+    // leads inbox only lists pending venues and the verification cron creates
+    // no deal / enrolment, so an approved-but-unenrolled venue would vanish
+    // with no way to retry. Instead we revert it to 'pending' so it stays in
+    // the inbox and is re-approvable the moment a deliverable email is
+    // confirmed. Terminal cases (only role/catch-all/unknown/invalid emails,
+    // or no email at all) get the honest "needs contact" flag and stay
+    // approved — retrying them would never change the outcome.
+    const awaitingVerification = contacts.some((c) =>
+      !!c.email &&
+      (c.verification_status == null || c.verification_status === 'pending') &&
+      c.role_based !== true &&
+      c.catch_all_flag !== true,
+    )
+    if (awaitingVerification) {
+      await supabase
+        .from('venues')
+        .update({
+          review_status: 'pending',
+          review_decided_at: null,
+          review_decided_by: null,
+          review_notes: 'awaiting email verification (ZeroBounce) — approve again once a deliverable email is confirmed',
+        })
+        .eq('id', venue.id)
+      steps.push({ step: 'deal', status: 'skipped', detail: 'Email(s) still awaiting ZeroBounce verification — kept in the inbox to retry once confirmed deliverable' })
+      return json(200, { ok: true, awaiting_verification: true, steps })
+    }
     await supabase
       .from('venues')
       .update({ review_notes: 'needs contact — no verified-deliverable email (need valid, not catch-all, not role-based)' })

@@ -149,18 +149,22 @@ export interface ApproveStep {
 export function useApproveLead() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (venueId: string): Promise<{ ok: boolean; needs_contact?: boolean; steps: ApproveStep[] }> => {
+    mutationFn: async (venueId: string): Promise<{ ok: boolean; needs_contact?: boolean; awaiting_verification?: boolean; steps: ApproveStep[] }> => {
       const { data, error } = await supabase.functions.invoke('approve-lead', {
         body: { venue_id: venueId },
       })
       if (error) throw error
-      return data as { ok: boolean; needs_contact?: boolean; steps: ApproveStep[] }
+      return data as { ok: boolean; needs_contact?: boolean; awaiting_verification?: boolean; steps: ApproveStep[] }
     },
     onSuccess: (res) => {
       invalidateInbox(qc)
       qc.invalidateQueries({ queryKey: ['deals'] })
       qc.invalidateQueries({ queryKey: ['drafts'] })
-      if (res.needs_contact) {
+      if (res.awaiting_verification) {
+        toast.info('Kept in the inbox — email still being verified', {
+          description: 'ZeroBounce hasn\'t confirmed a deliverable email yet. It stays here; approve again once verification completes.',
+        })
+      } else if (res.needs_contact) {
         toast.warning('Approved — but no usable contact found', {
           description: 'The venue is flagged "needs contact". Add an email manually, then enrol.',
         })
