@@ -2040,6 +2040,8 @@ export type Database = {
           id: string
           lead_score_cached: number | null
           org_id: string
+          outreach_channel: string | null
+          phone_cached: string | null
           route_day_id: string
           stop_kind: string
           stop_order: number
@@ -2055,6 +2057,8 @@ export type Database = {
           id?: string
           lead_score_cached?: number | null
           org_id: string
+          outreach_channel?: string | null
+          phone_cached?: string | null
           route_day_id: string
           stop_kind: string
           stop_order: number
@@ -2070,6 +2074,8 @@ export type Database = {
           id?: string
           lead_score_cached?: number | null
           org_id?: string
+          outreach_channel?: string | null
+          phone_cached?: string | null
           route_day_id?: string
           stop_kind?: string
           stop_order?: number
@@ -3221,6 +3227,74 @@ export type Database = {
           public_slug?: string | null
         }
         Relationships: []
+      }
+      venue_area_coverage: {
+        Row: {
+          contacted: number | null
+          org_id: string | null
+          phone_only: number | null
+          remaining: number | null
+          suburb_key: string | null
+          suburb_label: string | null
+          total_candidates: number | null
+          visit_only: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venues_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      venue_outreach_channel: {
+        Row: {
+          has_deliverable_email: boolean | null
+          is_excluded: boolean | null
+          lat: number | null
+          lng: number | null
+          name: string | null
+          org_id: string | null
+          outreach_channel: string | null
+          phone: string | null
+          suburb: string | null
+          venue_id: string | null
+        }
+        Insert: {
+          has_deliverable_email?: never
+          is_excluded?: boolean | null
+          lat?: number | null
+          lng?: number | null
+          name?: string | null
+          org_id?: string | null
+          outreach_channel?: never
+          phone?: string | null
+          suburb?: string | null
+          venue_id?: string | null
+        }
+        Update: {
+          has_deliverable_email?: never
+          is_excluded?: boolean | null
+          lat?: number | null
+          lng?: number | null
+          name?: string | null
+          org_id?: string | null
+          outreach_channel?: never
+          phone?: string | null
+          suburb?: string | null
+          venue_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venues_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {

@@ -25,8 +25,12 @@ import { authenticate, makeRateLimiter, rateLimitOk } from './_helpers.js'
 const limiter = makeRateLimiter(60_000, 30)
 
 const VALID_OUTCOMES = new Set([
-  'interested', 'not_now', 'closed', 'not_in', 'dm_absent', 'other',
+  'interested', 'not_now', 'closed', 'not_in', 'dm_absent', 'collected_email', 'other',
 ])
+
+// Deliberately loose — the real verdict comes from ZeroBounce via the
+// verify-contacts cron once the contact is created. We only reject obvious junk.
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
@@ -45,6 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     voice_audio_path?: unknown
     lat?: unknown
     lng?: unknown
+    collected_email?: unknown
   }
 
   const stopId = typeof body.route_stop_id === 'string' ? body.route_stop_id : ''
@@ -65,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // the join to route_days.user_id, but we want a 404 vs a silent zero-row).
   const { data: stop, error: stopErr } = await ctx.userClient
     .from('route_stops')
-    .select('id, venue_id, org_id, field_visit_id')
+    .select('id, venue_id, org_id, field_visit_id, venue_name_cached')
     .eq('id', stopId)
     .maybeSingle()
   if (stopErr) {
@@ -114,5 +119,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error('[route/mark-visited] route_stops link', linkErr)
   }
 
-  return res.status(200).json({ field_visit_id: visit.id })
+  // Loop-back: an email collected on a visit re-enters the normal pipeline.
+  // Create a contact at verification_status='pending' (the column default) so
+  // the verify-contacts cron picks it up → ZeroBounce → verify→draft. This
+  // NEVER auto-sends — the human approve/send gate is untouched.
+  let collectedContactId: string | null = null
+  const rawEmail = body.collected_email == null ? '' : String(body.collected_email).trim().toLowerCase()
+  if (outcome === 'collected_email' && rawEmail && stop.venue_id) {
+    if (!EMAIL_RE.test(rawEmail) || rawEmail.length > 320) {
+      return res.status(422).json({ error: 'collected_email is not a valid email address', field_visit_id: visit.id })
+    }
+    // Skip if this venue already has the same email (don't create duplicates).
+    const { data: existing } = await ctx.admin
+      .from('contacts')
+      .select('id')
+      .eq('org_id', stop.org_id)
+      .eq('venue_id', stop.venue_id)
+      .ilike('email', rawEmail)
+      .maybeSingle()
+
+    if (existing?.id) {
+      collectedContactId = existing.id
+    } else {
+      const fullName = (stop.venue_name_cached as string | null)?.trim() || 'Collected on visit'
+      const { data: contact, error: contactErr } = await ctx.admin
+        .from('contacts')
+        .insert({
+          org_id: stop.org_id,
+          venue_id: stop.venue_id,
+          full_name: fullName,
+          email: rawEmail,
+          source: 'manual',
+        })
+        .select('id')
+        .single()
+      if (contactErr) {
+        // Non-fatal: the visit + outcome are already recorded. Surface for logs.
+        console.error('[route/mark-visited] collected_email contact insert', contactErr)
+      } else {
+        collectedContactId = contact.id
+      }
+    }
+  }
+
+  return res.status(200).json({ field_visit_id: visit.id, collected_contact_id: collectedContactId })
 }
