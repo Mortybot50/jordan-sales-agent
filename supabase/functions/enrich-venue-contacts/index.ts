@@ -84,6 +84,7 @@ interface VenueRow {
   phone: string | null
   place_id: string | null
   enrich_source: string | null
+  guess_attempted_at: string | null
 }
 
 interface ContactRow {
@@ -186,7 +187,7 @@ async function resolveVenue(
 
 type GuessSkip =
   | 'disabled' | 'no_zb_key' | 'no_website' | 'already_deliverable'
-  | 'out_of_credits' | 'zerobounce_error' | 'no_candidates'
+  | 'out_of_credits' | 'zerobounce_error' | 'no_candidates' | 'already_attempted'
 
 interface GuessResult {
   guessed_valid: number
@@ -284,6 +285,12 @@ async function guessVenue(
   if (!PATTERN_GUESS_ENABLED) return { ...empty, skipped: 'disabled' }
   if (!ZEROBOUNCE_API_KEY) return { ...empty, skipped: 'no_zb_key' }
   if (!v.website || v.website.trim().length === 0) return { ...empty, skipped: 'no_website' }
+
+  // Same idempotency the batch claim enforces (guess_attempted_at IS NULL),
+  // applied here so single-venue re-submits — or a single-venue call overlapping
+  // a batch — never re-bill ZeroBounce for identical candidates. Dry-run still
+  // previews (it spends nothing).
+  if (!dryRun && v.guess_attempted_at) return { ...empty, skipped: 'already_attempted' }
 
   // Already have a genuinely deliverable email? Nothing to guess.
   const alreadyDeliverable = contacts.some((c) =>
@@ -400,7 +407,7 @@ async function guessVenue(
 // Data access
 // ---------------------------------------------------------------------------
 
-const VENUE_COLS = 'id, org_id, name, suburb, website, phone, place_id, enrich_source'
+const VENUE_COLS = 'id, org_id, name, suburb, website, phone, place_id, enrich_source, guess_attempted_at'
 
 async function loadVenue(supabase: Supa, venueId: string): Promise<VenueRow | null> {
   const { data } = await supabase.from('venues').select(VENUE_COLS).eq('id', venueId).maybeSingle()
