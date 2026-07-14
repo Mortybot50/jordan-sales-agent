@@ -192,25 +192,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // through the SAME human chain every other lead uses: appear in the inbox →
     // Jordan clicks Approve → approve-lead runs verify → deal → enroll → tick →
     // step-1 draft lands in the review queue. We do NOT auto-approve or enrol
-    // here — doing so would bypass the human send gate. We only nudge a venue
-    // that has dropped OUT of the queue; a venue already 'pending' (still in the
-    // inbox) or 'approved' (already in active outreach) is left untouched.
+    // here — that would bypass the human send gate.
+    //
+    // The gate for "already in active outreach, leave it alone" is an OPEN deal
+    // (closed_at IS NULL — the same idempotency signal approve-lead uses), NOT
+    // review_status='approved'. approve-lead deliberately leaves a venue
+    // 'approved' with no deal in its "needs contact" terminal case, so gating on
+    // status alone would strand a later collected email on such a venue. A venue
+    // already 'pending' is in the inbox — no-op.
     const { data: venueRow } = await ctx.admin
       .from('venues')
       .select('review_status')
       .eq('id', stop.venue_id)
       .maybeSingle()
     const reviewStatus = (venueRow?.review_status as string | null) ?? null
-    if (reviewStatus !== 'pending' && reviewStatus !== 'approved') {
-      const { error: reviewErr } = await ctx.admin
-        .from('venues')
-        .update({ review_status: 'pending' })
-        .eq('id', stop.venue_id)
-        .eq('org_id', stop.org_id)
-      if (reviewErr) {
-        // Non-fatal: the contact is saved either way. The dominant case is a
-        // venue that's already 'pending', so this is usually a no-op anyway.
-        console.error('[route/mark-visited] collected_email venue re-surface', reviewErr)
+    if (reviewStatus !== 'pending') {
+      const { data: openDeal } = await ctx.admin
+        .from('deals')
+        .select('id')
+        .eq('venue_id', stop.venue_id)
+        .is('closed_at', null)
+        .limit(1)
+        .maybeSingle()
+      if (!openDeal) {
+        const { error: reviewErr } = await ctx.admin
+          .from('venues')
+          .update({
+            review_status: 'pending',
+            review_decided_at: null,
+            review_decided_by: null,
+          })
+          .eq('id', stop.venue_id)
+          .eq('org_id', stop.org_id)
+        if (reviewErr) {
+          // Non-fatal: the contact is saved either way. Worst case the venue
+          // isn't re-surfaced and Jordan re-approves it manually.
+          console.error('[route/mark-visited] collected_email venue re-surface', reviewErr)
+        }
       }
     }
   }
@@ -222,7 +240,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .insert({
       org_id: stop.org_id,
       user_id: ctx.user.id,
-      contact_id: null,
+      // Link to the collected contact so the trigger threads the activity onto
+      // the right contact + bumps its last_visited_at. null for every other
+      // outcome (collectedContactId is only ever set on the collected_email
+      // path); the trigger then falls back to the venue's primary contact.
+      contact_id: collectedContactId,
       venue_id: stop.venue_id,
       outcome,
       notes,
