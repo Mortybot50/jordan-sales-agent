@@ -232,7 +232,7 @@ async function writeVerifiedContact(
   supabase: Supa,
   row: Record<string, unknown>,
 ): Promise<string | null> {
-  const { data: updated, error: upErr } = await supabase.from('contacts')
+  const promote = () => supabase.from('contacts')
     .update({
       verification_status: row.verification_status,
       catch_all_flag: row.catch_all_flag,
@@ -242,14 +242,20 @@ async function writeVerifiedContact(
     .eq('venue_id', row.venue_id as string)
     .eq('email', row.email as string)
     .select('id')
+
+  const { data: updated, error: upErr } = await promote()
   if (upErr) return upErr.message
   if (updated && updated.length > 0) return null
 
   const { error: insErr } = await supabase.from('contacts').insert(row)
-  // A concurrent run may have inserted the same (org,venue,email) between our
-  // update and insert — a unique violation there is a benign race, not a failure.
-  if (insErr && insErr.code !== '23505') return insErr.message
-  return null
+  if (!insErr) return null
+  if (insErr.code !== '23505') return insErr.message
+
+  // A concurrent run inserted the same (org,venue,email) between our update and
+  // insert. That row won't carry our paid verdict, so promote it now — don't
+  // treat the race as success and strand the contact in pending.
+  const { error: retryErr } = await promote()
+  return retryErr ? retryErr.message : null
 }
 
 /** Pull a plausible person name off the venue's existing contacts, if any. */
