@@ -101,6 +101,55 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const voiceTranscript = body.voice_transcript == null ? null : String(body.voice_transcript).slice(0, 8000)
   const voiceAudioPath = body.voice_audio_path == null ? null : String(body.voice_audio_path).slice(0, 500)
 
+  // Loop-back: an email collected on a visit re-enters the normal pipeline via
+  // a contact at verification_status='pending' (the column default) so the
+  // verify-contacts cron picks it up → ZeroBounce → verify→draft. NEVER
+  // auto-sends — the human approve/send gate is untouched.
+  //
+  // This runs BEFORE the field_visit insert + stop link on purpose. If it ran
+  // after, a contact-insert failure would leave the visit recorded and the stop
+  // linked (field_visit_id set), so the retry would hit the 409-already-visited
+  // branch and the email would be silently lost with no recovery path. Doing it
+  // first means a failure returns a recoverable 502 with nothing linked, and the
+  // retry re-runs cleanly. The venue-scoped email lookup makes it idempotent:
+  // if a prior attempt created the contact but then died before linking, the
+  // retry finds the existing contact instead of duplicating it.
+  // rawEmail is already validated above (before any mutation).
+  let collectedContactId: string | null = null
+  if (outcome === 'collected_email' && rawEmail && stop.venue_id) {
+    const { data: existing } = await ctx.admin
+      .from('contacts')
+      .select('id')
+      .eq('org_id', stop.org_id)
+      .eq('venue_id', stop.venue_id)
+      .ilike('email', rawEmail)
+      .maybeSingle()
+
+    if (existing?.id) {
+      collectedContactId = existing.id
+    } else {
+      const fullName = (stop.venue_name_cached as string | null)?.trim() || 'Collected on visit'
+      const { data: contact, error: contactErr } = await ctx.admin
+        .from('contacts')
+        .insert({
+          org_id: stop.org_id,
+          venue_id: stop.venue_id,
+          full_name: fullName,
+          email: rawEmail,
+          source: 'manual',
+        })
+        .select('id')
+        .single()
+      if (contactErr) {
+        // Recoverable: nothing is linked yet, so a retry with the same body
+        // re-runs from scratch. Return 5xx so the client knows to retry.
+        console.error('[route/mark-visited] collected_email contact insert', contactErr)
+        return res.status(502).json({ error: 'Failed to save collected email — nothing recorded, please retry', detail: contactErr.message })
+      }
+      collectedContactId = contact.id
+    }
+  }
+
   // Insert the field_visit. The trigger threads the activity through the
   // venue's primary contact + bumps last_visited_at on venue/contact/deal.
   const { data: visit, error: visitErr } = await ctx.userClient
@@ -131,47 +180,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .eq('id', stopId)
   if (linkErr) {
     console.error('[route/mark-visited] route_stops link', linkErr)
-  }
-
-  // Loop-back: an email collected on a visit re-enters the normal pipeline.
-  // Create a contact at verification_status='pending' (the column default) so
-  // the verify-contacts cron picks it up → ZeroBounce → verify→draft. This
-  // NEVER auto-sends — the human approve/send gate is untouched.
-  // rawEmail is already validated above (before any mutation) when the outcome
-  // is collected_email. A missing venue_id means we can't attach a contact.
-  let collectedContactId: string | null = null
-  if (outcome === 'collected_email' && rawEmail && stop.venue_id) {
-    // Skip if this venue already has the same email (don't create duplicates).
-    const { data: existing } = await ctx.admin
-      .from('contacts')
-      .select('id')
-      .eq('org_id', stop.org_id)
-      .eq('venue_id', stop.venue_id)
-      .ilike('email', rawEmail)
-      .maybeSingle()
-
-    if (existing?.id) {
-      collectedContactId = existing.id
-    } else {
-      const fullName = (stop.venue_name_cached as string | null)?.trim() || 'Collected on visit'
-      const { data: contact, error: contactErr } = await ctx.admin
-        .from('contacts')
-        .insert({
-          org_id: stop.org_id,
-          venue_id: stop.venue_id,
-          full_name: fullName,
-          email: rawEmail,
-          source: 'manual',
-        })
-        .select('id')
-        .single()
-      if (contactErr) {
-        // Non-fatal: the visit + outcome are already recorded. Surface for logs.
-        console.error('[route/mark-visited] collected_email contact insert', contactErr)
-      } else {
-        collectedContactId = contact.id
-      }
-    }
   }
 
   return res.status(200).json({ field_visit_id: visit.id, collected_contact_id: collectedContactId })
