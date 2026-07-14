@@ -234,24 +234,22 @@ async function fetchPage(url: string, timeoutMs: number): Promise<string> {
     if (!resp.body) return ''
 
     const reader = resp.body.getReader()
-    const head: Uint8Array[] = []
+    // Preallocated fixed buffers. We COPY bytes into these (never retain the
+    // stream's own chunk buffers), so a single multi-MB read can't keep its
+    // whole backing ArrayBuffer alive — memory is bounded at HEAD+TAIL.
+    const headBuf = new Uint8Array(HEAD_BYTES)
     let headBytes = 0
-    // Fixed-size ring for the tail: a single preallocated buffer we write into
-    // circularly, so tail memory is exactly TAIL_BYTES no matter the chunk
-    // sizes the runtime hands us.
-    const tailBuf = new Uint8Array(TAIL_BYTES)
+    const tailBuf = new Uint8Array(TAIL_BYTES) // circular ring
     let tailWritten = 0 // total bytes ever routed to the tail (for wrap math)
-    let truncated = false
 
-    const pushTail = (bytes: Uint8Array) => {
-      // Only the last TAIL_BYTES matter; if a single chunk is bigger than the
-      // ring, keep just its final TAIL_BYTES.
-      let src = bytes
-      if (src.byteLength > TAIL_BYTES) src = src.subarray(src.byteLength - TAIL_BYTES)
-      for (let i = 0; i < src.byteLength; i++) {
-        tailBuf[(tailWritten + i) % TAIL_BYTES] = src[i]
+    const pushTail = (src: Uint8Array) => {
+      // Only the last TAIL_BYTES matter; if one chunk exceeds the ring, keep
+      // just its final TAIL_BYTES.
+      const from = src.byteLength > TAIL_BYTES ? src.byteLength - TAIL_BYTES : 0
+      for (let i = from; i < src.byteLength; i++) {
+        tailBuf[tailWritten % TAIL_BYTES] = src[i]
+        tailWritten++
       }
-      tailWritten += src.byteLength
     }
 
     try {
@@ -260,29 +258,25 @@ async function fetchPage(url: string, timeoutMs: number): Promise<string> {
         if (done) break
         if (!value || value.byteLength === 0) continue
         let chunk = value
-        // Fill the head up to exactly HEAD_BYTES, splitting the chunk if needed.
+        // Copy into the head up to exactly HEAD_BYTES, splitting if needed.
         if (headBytes < HEAD_BYTES) {
           const room = HEAD_BYTES - headBytes
-          if (chunk.byteLength <= room) {
-            head.push(chunk)
-            headBytes += chunk.byteLength
-            continue
-          }
-          head.push(chunk.subarray(0, room))
-          headBytes = HEAD_BYTES
-          chunk = chunk.subarray(room) // remainder overflows into the tail
+          const take = Math.min(room, chunk.byteLength)
+          headBuf.set(chunk.subarray(0, take), headBytes)
+          headBytes += take
+          if (take === chunk.byteLength) continue
+          chunk = chunk.subarray(take) // remainder overflows into the tail
         }
-        // Anything past the head goes to the bounded tail ring.
-        truncated = true
         pushTail(chunk)
       }
     } finally {
       try { await reader.cancel() } catch { /* already closed */ }
     }
 
-    // Reassemble the tail ring in chronological order.
+    // Truncated only if bytes actually overflowed past the head.
+    const truncated = tailWritten > 0
     let tail: Uint8Array
-    if (!truncated || tailWritten === 0) {
+    if (!truncated) {
       tail = new Uint8Array(0)
     } else if (tailWritten <= TAIL_BYTES) {
       tail = tailBuf.subarray(0, tailWritten)
@@ -292,16 +286,19 @@ async function fetchPage(url: string, timeoutMs: number): Promise<string> {
       tail.set(tailBuf.subarray(start))
       tail.set(tailBuf.subarray(0, start), TAIL_BYTES - start)
     }
+    const headView = headBuf.subarray(0, headBytes)
 
-    const decoder = new TextDecoder()
-    let html = ''
-    for (const c of head) html += decoder.decode(c, { stream: true })
-    html += decoder.decode() // flush head
-    if (truncated && tail.byteLength > 0) {
-      html += '\n<!-- crawl-venue-contacts: middle truncated -->\n'
-      html += new TextDecoder().decode(tail)
+    if (!truncated) {
+      // Whole page fit inside the head window — decode it as one contiguous
+      // buffer so nothing (email, href, or UTF-8 char) is ever split.
+      return new TextDecoder().decode(headView)
     }
-    return html
+    // Head and tail are non-contiguous slices of the document; decode each
+    // independently and separate them with an HTML comment marker so a
+    // boundary-straddling href/email can't splice into a false positive.
+    const headHtml = new TextDecoder().decode(headView)
+    const tailHtml = new TextDecoder().decode(tail)
+    return `${headHtml}\n<!-- crawl-venue-contacts: middle truncated -->\n${tailHtml}`
   } catch {
     return ''
   } finally {
