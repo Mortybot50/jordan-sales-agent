@@ -17,6 +17,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { classifyEmailTier } from '../_shared/email-tier.ts'
 import { requireServiceRoleAuth } from '../_shared/auth.ts'
 import { deriveContactName } from '../_shared/contact-name.ts'
+import { classifyVenueType } from '../_shared/venue-type-mapper.ts'
 
 // @ts-expect-error Deno globals
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -104,6 +105,9 @@ interface OutscraperVenue {
   emails_and_contacts?: OutscraperContact[]
   category?: string
   subtypes?: string
+  /** Full Google Places `types` array, preserved for the venue-type mapper.
+   * Outscraper doesn't return this; only `fetchGooglePlaces` populates it. */
+  place_types?: string[]
 }
 
 async function fetchOutscraper(
@@ -236,6 +240,7 @@ async function fetchGooglePlaces(
           website: detail?.website ?? r.website,
           phone: detail?.formatted_phone_number,
           category: (r.types ?? [])[0],
+          place_types: r.types,
           // Google Places doesn't return emails — contacts remain empty
           emails_and_contacts: [],
         }
@@ -273,6 +278,39 @@ async function fetchPlaceDetail(placeId: string): Promise<PlacesResult | null> {
 // ---------------------------------------------------------------------------
 // Suburb extraction from address string
 // ---------------------------------------------------------------------------
+
+/** Collect every category signal we have for the venue-type mapper. Outscraper
+ * gives us `category` + `subtypes` (a comma-separated string); Google Places
+ * gives the full `place_types` array via the adapter. Used in BOTH the insert
+ * and dedup-update branches so re-discovered venues also get classified. */
+function buildCategorySignals(raw: OutscraperVenue): Array<string | null | undefined> {
+  const signals: Array<string | null | undefined> = []
+  if (raw.category) signals.push(raw.category)
+  if (raw.subtypes) {
+    for (const piece of raw.subtypes.split(',')) {
+      const trimmed = piece.trim()
+      if (trimmed) signals.push(trimmed)
+    }
+  }
+  if (raw.place_types) {
+    for (const t of raw.place_types) {
+      if (t && t.trim().length > 0) signals.push(t)
+    }
+  }
+  return signals
+}
+
+function buildSourceDetails(
+  raw: OutscraperVenue,
+  signals: Array<string | null | undefined>,
+): Record<string, unknown> {
+  return {
+    category: raw.category ?? null,
+    subtypes: raw.subtypes ?? null,
+    place_types: raw.place_types ?? null,
+    category_signals: signals.length > 0 ? signals : null,
+  }
+}
 
 function extractSuburb(address: string | undefined): string | null {
   if (!address) return null
@@ -427,21 +465,45 @@ Deno.serve(async (req: Request) => {
           .maybeSingle()
 
         if (existing) {
-          // Update live fields only (don't overwrite name or manual edits)
+          // Re-fetch venue_type + source_details so we can backfill them
+          // on dedup-updates (the brief's morning-incident bug class: pre-
+          // 2026-06-09 inserts left both NULL, and the dedup path used to
+          // skip them forever). Only set if NULL — never overwrite a hand-
+          // classified venue_type or an existing source_details payload.
+          const { data: existingFull } = await supabase
+            .from('venues')
+            .select('id, venue_type, source_details')
+            .eq('id', existing.id)
+            .single()
+
+          const signalsForDedup = buildCategorySignals(raw)
+          const updatePayload: Record<string, unknown> = {
+            business_status: status,
+            rating: raw.rating ?? null,
+            review_count: raw.reviews ?? null,
+            updated_at: new Date().toISOString(),
+          }
+          if (existingFull?.source_details == null) {
+            updatePayload.source_details = buildSourceDetails(raw, signalsForDedup)
+          }
+          if (existingFull?.venue_type == null) {
+            const mapped = classifyVenueType(signalsForDedup)
+            if (mapped !== null) updatePayload.venue_type = mapped
+          }
+
           await supabase
             .from('venues')
-            .update({
-              business_status: status,
-              rating: raw.rating ?? null,
-              review_count: raw.reviews ?? null,
-              updated_at: new Date().toISOString(),
-            })
+            .update(updatePayload)
             .eq('id', existing.id)
           venueId = existing.id
         }
       }
 
       if (!venueId) {
+        const categorySignals = buildCategorySignals(raw)
+        const mappedVenueType = classifyVenueType(categorySignals)
+        const sourceDetails = buildSourceDetails(raw, categorySignals)
+
         // New venue — insert
         const { data: inserted, error: insErr } = await supabase
           .from('venues')
@@ -469,6 +531,8 @@ Deno.serve(async (req: Request) => {
             social_linkedin: raw.linkedin ?? null,
             social_twitter: raw.twitter ?? null,
             source: search.source_engine,
+            source_details: sourceDetails,
+            venue_type: mappedVenueType,
           })
           .select('id')
           .single()
