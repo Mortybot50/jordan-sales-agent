@@ -148,7 +148,14 @@ async function resolveVenue(
   if (!v.place_id && resolved.place_id) patch.place_id = resolved.place_id
   if (!v.phone && resolved.phone) patch.phone = resolved.phone
 
-  await supabase.from('venues').update(patch).eq('id', v.id)
+  // If the write fails we have NOT persisted the website — report an error so
+  // the venue stays in the queue (enrich_source still NULL) and is retried,
+  // rather than claiming a resolution the DB never recorded.
+  const { error: upErr } = await supabase.from('venues').update(patch).eq('id', v.id)
+  if (upErr) {
+    console.error(`enrich: venue update failed for ${v.id}: ${upErr.message}`)
+    return { outcome: 'error' }
+  }
 
   return { outcome: hasWebsite ? 'resolved_website' : 'match_no_website', website: resolved.website }
 }
@@ -436,20 +443,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     // step === 'guess' — venues with a website but no deliverable email yet.
-    // guess_attempted_at IS NULL drains a fresh slice each run: previously-
-    // attempted venues are skipped so ZeroBounce credits are never re-spent and
-    // the backlog past `limit` is never starved.
-    let gq = supabase.from('venues').select(VENUE_COLS)
-      .not('website', 'is', null)
-      .is('guess_attempted_at', null)
-      .neq('archived', true)
-      .neq('is_excluded', true)
-      .order('icp_score', { ascending: false, nullsFirst: false })
-      .limit(limit)
-    if (body.org_id) gq = gq.eq('org_id', body.org_id)
-
-    const { data: venues, error } = await gq
-    if (error) return json(500, { error: `venue read failed: ${error.message}` })
+    // Atomically CLAIM a slice via leadflow_claim_guess_venues (FOR UPDATE SKIP
+    // LOCKED + 15-min lease): this both reserves venues so overlapping runs never
+    // double-spend ZeroBounce credits on the same venue, AND drains a fresh slice
+    // each run (guess_attempted_at IS NULL) so the backlog past `limit` is never
+    // starved. A concluded attempt then stamps guess_attempted_at (terminal);
+    // an out-of-credits pause leaves it NULL so the lease expiry re-queues it.
+    const { data: venues, error } = await supabase
+      .rpc('leadflow_claim_guess_venues', { p_limit: limit, p_org: body.org_id ?? null })
+    if (error) return json(500, { error: `guess claim failed: ${error.message}` })
 
     const rows = ((venues as VenueRow[]) ?? []).filter((v) => v.website && v.website.trim().length > 0)
     const agg = {

@@ -279,15 +279,21 @@ export async function resolveVenueWebsite(
   const top = results.find((r) => nameMatches(name, r.name)) ?? null
   if (!top) return { status: 'no_match' }
 
+  // A null here is a transient/config Details failure (non-200, network,
+  // malformed JSON) — NOT "this place has no website". Surface it as an error
+  // so the caller retries instead of permanently marking the venue
+  // places_no_website and stranding a resolvable lead.
   const detail = await placeDetails(top.place_id)
+  if (detail === null) return { status: 'error', reason: 'DETAILS_FETCH_ERROR' }
+
   return {
     status: 'match',
     venue: {
       place_id: top.place_id,
       name: top.name,
-      website: detail?.website ?? undefined,
-      phone: detail?.formatted_phone_number ?? undefined,
-      business_status: detail?.business_status ?? top.business_status,
+      website: detail.website ?? undefined,
+      phone: detail.formatted_phone_number ?? undefined,
+      business_status: detail.business_status ?? top.business_status,
     },
   }
 }
