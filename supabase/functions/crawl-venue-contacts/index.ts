@@ -203,6 +203,22 @@ function extractEmails(html: string): Set<string> {
 // HTTP fetch
 // ---------------------------------------------------------------------------
 
+// Per-page memory bound. Some venue homepages ship multi-MB of inlined HTML /
+// base64 images; reading the whole body with resp.text() and then running
+// several global regexes over it was the cause of the edge function hitting
+// HTTP 546 WORKER_RESOURCE_LIMIT (OOM), so discovery found zero new emails.
+//
+// We can't just read the prefix: venues commonly put their email address and
+// contact links (/about, /team, /get-in-touch) in the FOOTER, at the end of the
+// document. So instead of buffering the whole page we keep a bounded HEAD +
+// TAIL window — the first HEAD_BYTES and the last TAIL_BYTES — and drop the
+// middle. Both header/nav and footer are scanned; total memory stays bounded
+// regardless of page size. For pages under the cap this returns the full page
+// unchanged. A visible marker is inserted where the middle was dropped so a
+// truncated <a href> can never accidentally splice into a valid-looking one.
+const HEAD_BYTES = 384 * 1024
+const TAIL_BYTES = 256 * 1024
+
 async function fetchPage(url: string, timeoutMs: number): Promise<string> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), timeoutMs)
@@ -215,7 +231,74 @@ async function fetchPage(url: string, timeoutMs: number): Promise<string> {
     if (!resp.ok) return ''
     const ct = resp.headers.get('content-type') ?? ''
     if (ct && !ct.includes('text/html') && !ct.includes('application/xhtml')) return ''
-    return await resp.text()
+    if (!resp.body) return ''
+
+    const reader = resp.body.getReader()
+    // Preallocated fixed buffers. We COPY bytes into these (never retain the
+    // stream's own chunk buffers), so a single multi-MB read can't keep its
+    // whole backing ArrayBuffer alive — memory is bounded at HEAD+TAIL.
+    const headBuf = new Uint8Array(HEAD_BYTES)
+    let headBytes = 0
+    const tailBuf = new Uint8Array(TAIL_BYTES) // circular ring
+    let tailWritten = 0 // total bytes ever routed to the tail (for wrap math)
+
+    const pushTail = (src: Uint8Array) => {
+      // Only the last TAIL_BYTES matter; if one chunk exceeds the ring, keep
+      // just its final TAIL_BYTES.
+      const from = src.byteLength > TAIL_BYTES ? src.byteLength - TAIL_BYTES : 0
+      for (let i = from; i < src.byteLength; i++) {
+        tailBuf[tailWritten % TAIL_BYTES] = src[i]
+        tailWritten++
+      }
+    }
+
+    try {
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        if (!value || value.byteLength === 0) continue
+        let chunk = value
+        // Copy into the head up to exactly HEAD_BYTES, splitting if needed.
+        if (headBytes < HEAD_BYTES) {
+          const room = HEAD_BYTES - headBytes
+          const take = Math.min(room, chunk.byteLength)
+          headBuf.set(chunk.subarray(0, take), headBytes)
+          headBytes += take
+          if (take === chunk.byteLength) continue
+          chunk = chunk.subarray(take) // remainder overflows into the tail
+        }
+        pushTail(chunk)
+      }
+    } finally {
+      try { await reader.cancel() } catch { /* already closed */ }
+    }
+
+    // Truncated only if bytes actually overflowed past the head.
+    const truncated = tailWritten > 0
+    let tail: Uint8Array
+    if (!truncated) {
+      tail = new Uint8Array(0)
+    } else if (tailWritten <= TAIL_BYTES) {
+      tail = tailBuf.subarray(0, tailWritten)
+    } else {
+      const start = tailWritten % TAIL_BYTES
+      tail = new Uint8Array(TAIL_BYTES)
+      tail.set(tailBuf.subarray(start))
+      tail.set(tailBuf.subarray(0, start), TAIL_BYTES - start)
+    }
+    const headView = headBuf.subarray(0, headBytes)
+
+    if (!truncated) {
+      // Whole page fit inside the head window — decode it as one contiguous
+      // buffer so nothing (email, href, or UTF-8 char) is ever split.
+      return new TextDecoder().decode(headView)
+    }
+    // Head and tail are non-contiguous slices of the document; decode each
+    // independently and separate them with an HTML comment marker so a
+    // boundary-straddling href/email can't splice into a false positive.
+    const headHtml = new TextDecoder().decode(headView)
+    const tailHtml = new TextDecoder().decode(tail)
+    return `${headHtml}\n<!-- crawl-venue-contacts: middle truncated -->\n${tailHtml}`
   } catch {
     return ''
   } finally {
