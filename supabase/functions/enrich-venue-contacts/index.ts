@@ -442,13 +442,56 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return json(200, { step: 'resolve', dry_run: dryRun, limit, ...counts })
     }
 
-    // step === 'guess' — venues with a website but no deliverable email yet.
-    // Atomically CLAIM a slice via leadflow_claim_guess_venues (FOR UPDATE SKIP
-    // LOCKED + 15-min lease): this both reserves venues so overlapping runs never
-    // double-spend ZeroBounce credits on the same venue, AND drains a fresh slice
-    // each run (guess_attempted_at IS NULL) so the backlog past `limit` is never
-    // starved. A concluded attempt then stamps guess_attempted_at (terminal);
-    // an out-of-credits pause leaves it NULL so the lease expiry re-queues it.
+    // step === 'guess'
+    // Dry-run: preview ONLY. Never claims (no lease burn), never calls
+    // ZeroBounce (no credit spend), never writes contacts, never stamps
+    // guess_attempted_at. A plain read of the same population the claim RPC
+    // targets, counting how many venues would be tried and how many candidate
+    // addresses would be generated.
+    if (dryRun) {
+      let pq = supabase.from('venues').select(VENUE_COLS)
+        .not('website', 'is', null)
+        .neq('website', '')
+        .is('guess_attempted_at', null)
+        .neq('archived', true)
+        .neq('is_excluded', true)
+        .order('icp_score', { ascending: false, nullsFirst: false })
+        .limit(limit)
+      if (body.org_id) pq = pq.eq('org_id', body.org_id)
+
+      const { data: preview, error: pErr } = await pq
+      if (pErr) return json(500, { error: `guess preview read failed: ${pErr.message}` })
+
+      const pRows = ((preview as VenueRow[]) ?? []).filter((v) => v.website && v.website.trim().length > 0)
+      let wouldTry = 0
+      let candidateEmails = 0
+      let skippedDeliverable = 0
+      for (const v of pRows) {
+        const contacts = await loadContacts(supabase, v.id)
+        const alreadyDeliverable = contacts.some((c) =>
+          !!c.email && c.verification_status === 'valid' &&
+          c.catch_all_flag !== true && c.role_based !== true,
+        )
+        if (alreadyDeliverable) { skippedDeliverable++; continue }
+        const n = buildCandidates(v.website!, pickPersonName(contacts, v.name), MAX_GUESS_CANDIDATES).length
+        if (n > 0) { wouldTry++; candidateEmails += n }
+      }
+      return json(200, {
+        step: 'guess', dry_run: true, limit,
+        scanned: pRows.length,
+        would_try: wouldTry,
+        candidate_emails: candidateEmails,
+        skipped_deliverable: skippedDeliverable,
+      })
+    }
+
+    // Live run — atomically CLAIM a slice via leadflow_claim_guess_venues (FOR
+    // UPDATE SKIP LOCKED + 15-min lease): this both reserves venues so overlapping
+    // runs never double-spend ZeroBounce credits on the same venue, AND drains a
+    // fresh slice each run (guess_attempted_at IS NULL) so the backlog past `limit`
+    // is never starved. A concluded attempt then stamps guess_attempted_at
+    // (terminal); an out-of-credits pause leaves it NULL so the lease expiry
+    // re-queues it.
     const { data: venues, error } = await supabase
       .rpc('leadflow_claim_guess_venues', { p_limit: limit, p_org: body.org_id ?? null })
     if (error) return json(500, { error: `guess claim failed: ${error.message}` })
