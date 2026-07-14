@@ -44,6 +44,10 @@ export interface Deal {
   // Temperature (added 2026-06-12 — Jordan's at-a-glance board)
   temperature: 'hot' | 'warm' | 'cold' | null
   temperature_source: 'auto' | 'manual'
+  // Proposal + held tracking (added 2026-06-30 — temperature-axis restructure)
+  proposal_sent_at: string | null
+  is_held: boolean
+  held_until: string | null
   /** PST mailbox import: {subject, last_body} of the original thread. */
   thread_excerpt: { subject?: string | null; last_body?: string | null } | null
   contact?: {
@@ -427,6 +431,22 @@ export function useUpdateDeal() {
         enrollment: _enr,
         ...dbUpdates
       } = updates
+
+      // Centralised: any move into Proposal Sent stamps proposal_sent_at the
+      // first time (so the kanban card's "proposal sent / follow-up" line
+      // appears) regardless of whether the move came from a drag or the
+      // drawer's Stage select. Don't overwrite an existing timestamp.
+      if (to_stage === 'Proposal Sent' && dbUpdates.proposal_sent_at === undefined) {
+        const { data: cur } = await supabase
+          .from('deals')
+          .select('proposal_sent_at')
+          .eq('id', id)
+          .single()
+        if (cur && !cur.proposal_sent_at) {
+          ;(dbUpdates as Partial<Deal>).proposal_sent_at = new Date().toISOString()
+        }
+      }
+
       const { data, error } = await supabase
         .from('deals')
         .update({ ...dbUpdates, updated_at: new Date().toISOString() })
@@ -452,6 +472,10 @@ export function useUpdateDeal() {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['deals'] })
       qc.invalidateQueries({ queryKey: ['activities'] })
+      // A stage/close-field change can move achieved ACV in or out of the
+      // monthly gate, so refresh the gate + dashboard caches too.
+      qc.invalidateQueries({ queryKey: ['monthly-gate'] })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
       if (vars.contact_id) {
         qc.invalidateQueries({ queryKey: ['deals', 'contact', vars.contact_id] })
       }
@@ -499,9 +523,13 @@ export function useUpdateDealStage() {
 }
 
 /**
- * Mark a deal as Won or Lost. Stamps outcome + final_value + closed_at, and
- * for won deals also seeds close_won_at to the chosen close date so the monthly
- * gate trigger picks the right month.
+ * Mark a deal as Won, Lost, or Installed.
+ *
+ * - won/lost: stamps outcome + final_value + closed_at; won also seeds
+ *   close_won_at so the monthly gate trigger picks the right month.
+ * - installed: a post-Closed fulfilment state. Persists outcome='won' (so it
+ *   still counts as won in dashboards) plus install_completed_at = the chosen
+ *   date — the moment commission is "earned".
  */
 export function useMarkDealOutcome() {
   const qc = useQueryClient()
@@ -514,23 +542,54 @@ export function useMarkDealOutcome() {
       closeDate,
       lostReason,
       stageId,
+      existingClosedAt = null,
+      existingCloseWonAt = null,
     }: {
       dealId: string
       orgId: string
-      outcome: 'won' | 'lost'
+      outcome: 'won' | 'lost' | 'installed'
       finalValue: number | null
       closeDate: string                      // ISO date (yyyy-MM-dd)
       lostReason?: string | null
       stageId?: string                       // optional stage_id to set in same write
+      existingClosedAt?: string | null       // preserved when marking Installed
+      existingCloseWonAt?: string | null     // preserved when marking Installed
     }) => {
       const closeIso = new Date(`${closeDate}T12:00:00`).toISOString()
+      const isInstalled = outcome === 'installed'
+      // Installed deals are recorded as 'won' in the outcome column.
+      const dbOutcome = isInstalled ? 'won' : outcome
+      // Installed is a post-Closed fulfilment state — the dialog's date is the
+      // INSTALL date, not the close date. Preserve the original close month so
+      // gate history isn't rewritten; only seed close fields if the deal was
+      // never closed (e.g. dragged straight to Installed).
+      const closedAt = isInstalled ? (existingClosedAt ?? closeIso) : closeIso
+      const closeWonAt = isInstalled
+        ? (existingCloseWonAt ?? closeIso)
+        : dbOutcome === 'won'
+          ? closeIso
+          : null
       const updates = {
-        outcome,
+        outcome: dbOutcome,
         final_value: finalValue,
-        closed_at: closeIso,
+        closed_at: closedAt,
         updated_at: new Date().toISOString(),
-        close_won_at: outcome === 'won' ? closeIso : null,
+        close_won_at: closeWonAt,
+        // Any confirmed outcome releases a "held for next month" flag — a
+        // closed/lost/installed deal can't also be parked for next month.
+        is_held: false,
+        held_until: null,
         ...(outcome === 'lost' ? { lost_reason: lostReason ?? null } : {}),
+        ...(isInstalled
+          ? { install_completed_at: closeIso }
+          : // Moving to Closed or Lost unwinds any install state, so a
+            // previously-installed deal doesn't keep stale install timestamps
+            // (and isn't double-counted as earned commission).
+            {
+              install_completed_at: null,
+              install_confirmed_at: null,
+              install_scheduled_for: null,
+            }),
         ...(stageId ? { stage_id: stageId } : {}),
       }
 
@@ -544,15 +603,20 @@ export function useMarkDealOutcome() {
       if (error) throw error
 
       // Activity row for the timeline
+      const subject =
+        outcome === 'installed' ? 'Marked Installed' : outcome === 'won' ? 'Marked Won' : 'Marked Lost'
+      const body =
+        outcome === 'lost'
+          ? `Lost${lostReason ? ` — ${lostReason}` : ''}`
+          : outcome === 'installed'
+            ? `Installed — commission earned${finalValue != null ? ` ($${finalValue.toFixed(2)})` : ''}`
+            : `Final value ${finalValue != null ? `$${finalValue.toFixed(2)}` : '—'}`
       await supabase.from('activities').insert({
         org_id: orgId,
         deal_id: dealId,
         activity_type: 'stage_change',
-        subject: outcome === 'won' ? 'Marked Won' : 'Marked Lost',
-        body:
-          outcome === 'won'
-            ? `Final value ${finalValue != null ? `$${finalValue.toFixed(2)}` : '—'}`
-            : `Lost${lostReason ? ` — ${lostReason}` : ''}`,
+        subject,
+        body,
       })
 
       return data
@@ -566,6 +630,41 @@ export function useMarkDealOutcome() {
     onError: (err: Error) => {
       toast.error(`Failed to update outcome: ${err.message}`)
     },
+  })
+}
+
+/**
+ * Set or clear a deal's "held for next month" flag. When held, the deal stays
+ * in its temperature column but shows a "Held for <month>" badge. `heldUntil`
+ * is the date the hold lapses (typically the first of next month); pass null
+ * to clear the hold.
+ */
+export function useSetDealHeld() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ dealId, isHeld, heldUntil }: {
+      dealId: string
+      isHeld: boolean
+      heldUntil?: string | null
+    }) => {
+      const { error } = await supabase
+        .from('deals')
+        .update({
+          is_held: isHeld,
+          held_until: isHeld ? (heldUntil ?? null) : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', dealId)
+      if (error) throw error
+      return { isHeld }
+    },
+    onSuccess: ({ isHeld }) => {
+      qc.invalidateQueries({ queryKey: ['deals'] })
+      qc.invalidateQueries({ queryKey: ['monthly-gate'] })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
+      toast.success(isHeld ? 'Held for next month' : 'Hold cleared')
+    },
+    onError: (err: Error) => toast.error(`Failed to update hold: ${err.message}`),
   })
 }
 
@@ -601,12 +700,34 @@ export function useMarkInstallConfirmed() {
 export function useMarkInstalled() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (dealId: string) => {
+    mutationFn: async ({
+      dealId,
+      stageId,
+      existingCloseWonAt,
+    }: {
+      dealId: string
+      stageId?: string
+      existingCloseWonAt?: string | null
+    }) => {
+      const nowIso = new Date().toISOString()
       const { error } = await supabase
         .from('deals')
         .update({
-          install_completed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          install_completed_at: nowIso,
+          // Installed is a won fulfilment state. Stamp the won outcome + a
+          // close_won_at so the deal is counted in won/earned + commission
+          // totals even if it reached the Installed stage without an explicit
+          // outcome tag. Preserve an existing close_won_at if there is one.
+          outcome: 'won',
+          close_won_at: existingCloseWonAt ?? nowIso,
+          // An installed deal is no longer held — clear the hold so it leaves
+          // its temperature column and counts toward gate/commission views.
+          is_held: false,
+          held_until: null,
+          updated_at: nowIso,
+          // Move into the Installed stage column so it leaves Closed (the
+          // kanban renders the Installed column from stage_id).
+          ...(stageId ? { stage_id: stageId } : {}),
         })
         .eq('id', dealId)
       if (error) throw error
@@ -614,6 +735,7 @@ export function useMarkInstalled() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['deals'] })
       qc.invalidateQueries({ queryKey: ['dashboard'] })
+      qc.invalidateQueries({ queryKey: ['monthly-gate'] })
       toast.success('Marked as installed — commission earned')
     },
     onError: (err: Error) => toast.error(err.message),

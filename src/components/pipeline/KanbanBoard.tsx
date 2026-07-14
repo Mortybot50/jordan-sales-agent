@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, type ReactNode } from 'react'
 import {
   DndContext,
   type DragEndEvent,
@@ -7,6 +7,7 @@ import {
   useSensor,
   useSensors,
   closestCenter,
+  useDroppable,
 } from '@dnd-kit/core'
 import {
   SortableContext,
@@ -29,7 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useDeals, useUpdateDeal, useCreateDeal, type Deal } from '@/lib/queries/deals'
-import { useStages } from '@/lib/queries/stages'
+import { useStages, type PipelineStage } from '@/lib/queries/stages'
 import { useContacts } from '@/lib/queries/contacts'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
@@ -46,6 +47,43 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { dealFormSchema, DEAL_VALUE_WARN, type DealFormValues } from '@/lib/schemas/deal'
 import { dealHeadlineValue, type DealFinancialRow } from '@/lib/queries/pipelineFinancials'
 import { cleanDealTitle } from '@/lib/dealTitle'
+
+// Hybrid column model: 3 virtual temperature columns + the discrete outcome
+// stages, left→right. Active leads live in their temperature column; once a
+// deal reaches an outcome stage it moves into that outcome column.
+const OUTCOME_STAGE_NAMES = ['Site Visit', 'Proposal Sent', 'Closed', 'Installed', 'Lost'] as const
+const TEMP_ORDER = ['cold', 'warm', 'hot'] as const
+type TempKey = (typeof TEMP_ORDER)[number]
+const TEMP_META: Record<TempKey, { label: string; color: string }> = {
+  cold: { label: 'Cold', color: '#60a5fa' },
+  warm: { label: 'Warm', color: '#f59e0b' },
+  hot: { label: 'Hot', color: '#ef4444' },
+}
+const tempColumnId = (t: TempKey) => `temp:${t}`
+
+type BoardColumn =
+  | { id: string; kind: 'temperature'; temp: TempKey; name: string; color: string }
+  | { id: string; kind: 'stage'; stage: PipelineStage; name: string; color: string | null }
+
+/** Droppable wrapper so cards can be dropped onto a column (incl. empty ones). */
+function DroppableColumn({
+  id,
+  className,
+  isOver,
+  children,
+}: {
+  id: string
+  className?: string
+  isOver?: (over: boolean) => string
+  children: ReactNode
+}) {
+  const { setNodeRef, isOver: over } = useDroppable({ id })
+  return (
+    <div ref={setNodeRef} className={cn(className, isOver?.(over))}>
+      {children}
+    </div>
+  )
+}
 
 export interface KanbanBoardProps {
   /** Filter kanban to a single stage column (deep-link from Pipeline Health). */
@@ -82,12 +120,12 @@ export function KanbanBoard({
   const [localDeals, setLocalDeals] = useState<Deal[] | null>(null)
   const [activeDeal, setActiveDeal] = useState<Deal | null>(null)
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null)
-  const [quickAddStageId, setQuickAddStageId] = useState<string | null>(null)
+  const [quickAddColumn, setQuickAddColumn] = useState<BoardColumn | null>(null)
   const [quickAddProductId, setQuickAddProductId] = useState<string | null>(null)
   const [quickAddProductTouched, setQuickAddProductTouched] = useState(false)
   const [outcomeIntent, setOutcomeIntent] = useState<{
     deal: Deal
-    initialOutcome: 'won' | 'lost'
+    initialOutcome: 'won' | 'lost' | 'installed'
     pendingStageId: string | null
   } | null>(null)
 
@@ -104,11 +142,68 @@ export function KanbanBoard({
     return rows
   }, [allDeals, dealIdAllowlist, contactIdAllowlist])
 
-  const visibleStages = useMemo(() => {
-    if (!stages) return []
-    if (!stageFilter) return stages
-    return stages.filter((s) => s.id === stageFilter)
-  }, [stages, stageFilter])
+  // Build the hybrid column list: 3 temperature columns then the outcome
+  // stages in canonical order.
+  const columns = useMemo<BoardColumn[]>(() => {
+    const tempCols: BoardColumn[] = TEMP_ORDER.map((t) => ({
+      id: tempColumnId(t),
+      kind: 'temperature',
+      temp: t,
+      name: TEMP_META[t].label,
+      color: TEMP_META[t].color,
+    }))
+    const outcomeCols: BoardColumn[] = (stages ?? [])
+      .filter((s) => (OUTCOME_STAGE_NAMES as readonly string[]).includes(s.name))
+      .sort(
+        (a, b) =>
+          OUTCOME_STAGE_NAMES.indexOf(a.name as (typeof OUTCOME_STAGE_NAMES)[number]) -
+          OUTCOME_STAGE_NAMES.indexOf(b.name as (typeof OUTCOME_STAGE_NAMES)[number]),
+      )
+      .map((s) => ({ id: s.id, kind: 'stage', stage: s, name: s.name, color: s.color }))
+    return [...tempCols, ...outcomeCols]
+  }, [stages])
+
+  // Set of stage ids that own their own outcome column.
+  const outcomeStageIds = useMemo(
+    () => new Set(columns.filter((c) => c.kind === 'stage').map((c) => c.id)),
+    [columns],
+  )
+
+  // A deal sits in its outcome stage column if it has one; otherwise its
+  // temperature bucket (NULL temperature → cold). Held deals are the
+  // exception: "held for next month" is a card flag, not a column, so a held
+  // deal always drops back to its temperature column (with a "Held" badge),
+  // even if it's sitting in an open outcome stage like Proposal Sent.
+  const columnIdForDeal = useMemo(() => {
+    return (d: Deal): string => {
+      if (!d.is_held && d.stage_id && outcomeStageIds.has(d.stage_id)) return d.stage_id
+      const t = (d.temperature ?? 'cold') as TempKey
+      return tempColumnId(TEMP_ORDER.includes(t) ? t : 'cold')
+    }
+  }, [outcomeStageIds])
+
+  // Deep-link stage filter (a real stage id from Pipeline Health). An
+  // outcome-stage id narrows to that single column. A non-outcome stage id
+  // (New/Contacted/Replied/Meeting Booked) has no column of its own — those
+  // deals live in their temperature columns — so show the temperature columns
+  // and let filteredDeals narrow the cards to that stage_id.
+  const visibleColumns = useMemo(() => {
+    if (!stageFilter) return columns
+    const outcomeMatch = columns.filter((c) => c.id === stageFilter)
+    if (outcomeMatch.length > 0) return outcomeMatch
+    return columns.filter((c) => c.kind === 'temperature')
+  }, [columns, stageFilter])
+
+  // Map a stage_id → the natural outreach stage a reopened deal should land in,
+  // so it renders in its temperature column again. Replied > Contacted > New.
+  function naturalStageId(d: Deal): string | null {
+    const want = d.has_replied ? 'Replied' : (d.last_contact_at ? 'Contacted' : 'New')
+    return (
+      stages?.find((s) => s.name === want)?.id ??
+      stages?.find((s) => s.name === 'New')?.id ??
+      null
+    )
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -120,15 +215,17 @@ export function KanbanBoard({
     resolver: zodResolver(dealFormSchema),
   })
 
-  // Board-level filters: temperature, outreach status, source.
-  const [tempFilter, setTempFilter] = useState<'all' | 'hot' | 'warm' | 'cold'>('all')
+  // Board-level filters: outreach status, source. (Heat filter removed —
+  // temperature now IS the column axis.)
   const [outreachFilter, setOutreachFilter] = useState<'all' | 'enrolled' | 'replied' | 'not_contacted'>('all')
   const [sourceFilter, setSourceFilter] = useState<'all' | 'pst' | 'other'>('all')
-  const filtersActive = tempFilter !== 'all' || outreachFilter !== 'all' || sourceFilter !== 'all'
+  const filtersActive = outreachFilter !== 'all' || sourceFilter !== 'all'
 
   const filteredDeals = useMemo(() => {
     return displayDeals.filter((d) => {
-      if (tempFilter !== 'all' && d.temperature !== tempFilter) return false
+      // Deep-link stage filter narrows cards to that stage_id (honours
+      // non-outcome stage links that have no column of their own).
+      if (stageFilter && d.stage_id !== stageFilter) return false
       if (outreachFilter === 'enrolled' && !(d.enrollment && (d.enrollment.status === 'active' || d.enrollment.status === 'paused'))) return false
       if (outreachFilter === 'replied' && !d.has_replied) return false
       if (outreachFilter === 'not_contacted' && (d.last_contact_at || d.has_replied || d.enrollment)) return false
@@ -137,22 +234,26 @@ export function KanbanBoard({
       if (sourceFilter === 'other' && isPst) return false
       return true
     })
-  }, [displayDeals, tempFilter, outreachFilter, sourceFilter])
+  }, [displayDeals, outreachFilter, sourceFilter, stageFilter])
 
-  const dealsByStage = useMemo(() => {
+  const dealsByColumn = useMemo(() => {
     const map: Record<string, Deal[]> = {}
-    for (const stage of stages ?? []) {
-      const cards = filteredDeals.filter((d) => d.stage_id === stage.id)
-      if (sortBy === 'stalest') {
-        cards.sort(
+    for (const c of columns) map[c.id] = []
+    for (const d of filteredDeals) {
+      const cid = columnIdForDeal(d)
+      if (!map[cid]) map[cid] = []
+      map[cid].push(d)
+    }
+    if (sortBy === 'stalest') {
+      for (const k of Object.keys(map)) {
+        map[k].sort(
           (a, b) =>
             (b.days_since_last_activity ?? 0) - (a.days_since_last_activity ?? 0),
         )
       }
-      map[stage.id] = cards
     }
     return map
-  }, [filteredDeals, stages, sortBy])
+  }, [filteredDeals, columns, columnIdForDeal, sortBy])
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
@@ -164,70 +265,115 @@ export function KanbanBoard({
     const movedDeal = displayDeals.find((d) => d.id === dealId)
     if (!movedDeal) return
 
-    // Determine target stage: over could be a stage id or deal id
-    let targetStageId: string | null = null
-
-    // Check if over.id is a stage id
-    if (stages?.find((s) => s.id === String(over.id))) {
-      targetStageId = String(over.id)
+    // Resolve the target column: over.id is either a column id or a deal id.
+    let targetColId: string | null = null
+    if (columns.find((c) => c.id === String(over.id))) {
+      targetColId = String(over.id)
     } else {
-      // over.id is a deal id — use its stage
       const overDeal = displayDeals.find((d) => d.id === String(over.id))
-      if (overDeal) targetStageId = overDeal.stage_id
+      if (overDeal) targetColId = columnIdForDeal(overDeal)
     }
+    if (!targetColId) return
 
-    if (!targetStageId || targetStageId === movedDeal.stage_id) return
+    const fromColId = columnIdForDeal(movedDeal)
+    if (targetColId === fromColId) return
+
+    const targetCol = columns.find((c) => c.id === targetColId)
+    if (!targetCol) return
 
     const fromStage = stages?.find((s) => s.id === movedDeal.stage_id)
-    const toStage = stages?.find((s) => s.id === targetStageId)
-    const toName = toStage?.name ?? ''
-    // Post-consolidation there are exactly two closed stages: Closed (won)
-    // and Lost — so "closed and not lost" IS the won column.
-    const isLostTarget = !!toStage?.is_closed && /lost/i.test(toName)
-    const isWonTarget = !!toStage?.is_closed && !isLostTarget
+    const wasOutcome = !!movedDeal.stage_id && outcomeStageIds.has(movedDeal.stage_id)
 
-    // Drop onto a Closed/Lost column: defer the stage move and open the
-    // outcome dialog so Jordan confirms final value + close date. The mutation
-    // commits the stage_id atomically with the outcome.
-    if (isWonTarget || isLostTarget) {
+    // ── Dropped onto a TEMPERATURE column ───────────────────────────────
+    // Changes the deal's temperature (manual, so the classifier won't clobber).
+    // If it was in an outcome column, also reopen it: reset to a natural
+    // outreach stage and clear any won/lost outcome.
+    if (targetCol.kind === 'temperature') {
+      const newTemp = targetCol.temp
+      const reopenStageId = wasOutcome ? naturalStageId(movedDeal) : movedDeal.stage_id
+      const dbUpdates: Partial<Deal> = {
+        temperature: newTemp,
+        temperature_source: 'manual',
+      }
+      if (wasOutcome) {
+        dbUpdates.stage_id = reopenStageId
+        if (movedDeal.outcome) {
+          dbUpdates.outcome = null
+          dbUpdates.closed_at = null
+          dbUpdates.close_won_at = null
+          // Reopening also unwinds the install lifecycle — an installed deal
+          // dragged back to a temperature column is no longer installed.
+          dbUpdates.install_completed_at = null
+          dbUpdates.install_confirmed_at = null
+          dbUpdates.install_scheduled_for = null
+        }
+      }
+
+      const snapshot = localDeals ?? deals ?? []
+      setLocalDeals(
+        snapshot.map((d) => (d.id === dealId ? { ...d, ...dbUpdates } : d)),
+      )
+      updateDeal.mutate(
+        { id: dealId, org_id: movedDeal.org_id, ...dbUpdates },
+        {
+          onError: () => setLocalDeals(snapshot),
+          onSuccess: () => setLocalDeals(null),
+        },
+      )
+      return
+    }
+
+    // ── Dropped onto an OUTCOME stage column ────────────────────────────
+    const toStage = targetCol.stage
+    const toName = toStage.name
+
+    // Closed / Lost / Installed all open the outcome dialog so Jordan confirms
+    // value + date; the mutation commits the stage_id atomically.
+    if (toName === 'Closed' || toName === 'Lost' || toName === 'Installed') {
       setOutcomeIntent({
         deal: movedDeal,
-        initialOutcome: isWonTarget ? 'won' : 'lost',
-        pendingStageId: targetStageId,
+        initialOutcome: toName === 'Lost' ? 'lost' : toName === 'Installed' ? 'installed' : 'won',
+        pendingStageId: toStage.id,
       })
       return
     }
 
-    // Optimistic update
+    // Site Visit / Proposal Sent — direct stage move. Proposal Sent stamps
+    // proposal_sent_at (if unset). Moving off a won/lost outcome clears it.
+    const dbUpdates: Partial<Deal> = { stage_id: toStage.id }
+    if (toName === 'Proposal Sent' && !movedDeal.proposal_sent_at) {
+      dbUpdates.proposal_sent_at = new Date().toISOString()
+    }
+    if (movedDeal.outcome) {
+      dbUpdates.outcome = null
+      dbUpdates.closed_at = null
+      dbUpdates.close_won_at = null
+      dbUpdates.install_completed_at = null
+      dbUpdates.install_confirmed_at = null
+      dbUpdates.install_scheduled_for = null
+    }
+
     const snapshot = localDeals ?? deals ?? []
     setLocalDeals(
-      snapshot.map((d) =>
-        d.id === dealId ? { ...d, stage_id: targetStageId } : d
-      )
+      snapshot.map((d) => (d.id === dealId ? { ...d, ...dbUpdates } : d)),
     )
-
     updateDeal.mutate(
       {
         id: dealId,
         org_id: movedDeal.org_id,
-        stage_id: targetStageId,
+        ...dbUpdates,
         from_stage: fromStage?.name,
-        to_stage: toStage?.name,
+        to_stage: toName,
       },
       {
-        onError: () => {
-          // Rollback
-          setLocalDeals(snapshot)
-        },
-        onSuccess: () => {
-          setLocalDeals(null)
-        },
-      }
+        onError: () => setLocalDeals(snapshot),
+        onSuccess: () => setLocalDeals(null),
+      },
     )
   }
 
   async function handleQuickAdd(values: DealFormValues) {
-    if (!user || !quickAddStageId) return
+    if (!user || !quickAddColumn) return
     if (!quickAddProductId) {
       setQuickAddProductTouched(true)
       toast.error('Pick a product to add the deal')
@@ -242,17 +388,44 @@ export function KanbanBoard({
     ) {
       return
     }
-    await createDeal.mutateAsync({
+    const col = quickAddColumn
+    // Temperature columns aren't real stages — new leads start in "New" and
+    // carry the column's temperature (manual).
+    const stageId =
+      col.kind === 'stage' ? col.id : (stages?.find((s) => s.name === 'New')?.id ?? null)
+    if (!stageId) {
+      toast.error('No stage available to add into')
+      return
+    }
+    const created = await createDeal.mutateAsync({
       org_id: user.org_id,
       // SOURCE FIX: strip any suffix patterns from user-typed titles
       // e.g. Jordan might paste "The Espy — Purezza intro" into the quick-add
       title: cleanDealTitle(values.title),
-      stage_id: quickAddStageId,
+      stage_id: stageId,
       contact_id: values.contact_id,
       contract_value: values.contract_value,
       product_id: quickAddProductId,
     })
-    setQuickAddStageId(null)
+    // Follow-up write for fields createDeal doesn't take directly: temperature
+    // columns carry their (manual) heat; the Proposal Sent column stamps the
+    // proposal date so quick-added proposals match dragged-in ones.
+    const followUp: Partial<Deal> = {}
+    if (col.kind === 'temperature') {
+      followUp.temperature = col.temp
+      followUp.temperature_source = 'manual'
+    }
+    if (col.kind === 'stage' && col.name === 'Proposal Sent') {
+      followUp.proposal_sent_at = new Date().toISOString()
+    }
+    if (created?.id && Object.keys(followUp).length > 0) {
+      await updateDeal.mutateAsync({
+        id: created.id,
+        org_id: user.org_id,
+        ...followUp,
+      })
+    }
+    setQuickAddColumn(null)
     setQuickAddProductId(null)
     setQuickAddProductTouched(false)
     form.reset({})
@@ -332,17 +505,6 @@ export function KanbanBoard({
       {/* Board-level filter row */}
       <div className="flex items-center gap-2 flex-wrap px-4 sm:px-6 pb-2">
         <FilterChipGroup
-          label="Heat"
-          value={tempFilter}
-          onChange={(v) => setTempFilter(v as typeof tempFilter)}
-          options={[
-            { value: 'all', label: 'All' },
-            { value: 'hot', label: '🔥 Hot' },
-            { value: 'warm', label: 'Warm' },
-            { value: 'cold', label: 'Cold' },
-          ]}
-        />
-        <FilterChipGroup
           label="Outreach"
           value={outreachFilter}
           onChange={(v) => setOutreachFilter(v as typeof outreachFilter)}
@@ -368,7 +530,6 @@ export function KanbanBoard({
             type="button"
             className="text-[11px] text-ink-muted underline hover:text-ink"
             onClick={() => {
-              setTempFilter('all')
               setOutreachFilter('all')
               setSourceFilter('all')
             }}
@@ -388,49 +549,47 @@ export function KanbanBoard({
         onDragEnd={handleDragEnd}
       >
         <div className="flex gap-4 overflow-x-auto pb-4 px-4 sm:px-6 h-full min-h-0">
-          {visibleStages.map((stage) => {
-            const stageDeals = dealsByStage[stage.id] ?? []
+          {visibleColumns.map((column) => {
+            const columnDeals = dealsByColumn[column.id] ?? []
             // NULL-valued deals contribute nothing to the column sum (KPI
             // integrity) — headline basis matches the dashboard (acv fallback).
-            const totalValue = stageDeals.reduce(
+            const totalValue = columnDeals.reduce(
               (sum, d) => sum + dealHeadlineValue(d as unknown as DealFinancialRow),
               0
             )
-            const isActiveTarget = activeDeal != null && activeDeal.stage_id !== stage.id
-            // "Hold for Next Month" is a utility column, not a pipeline stage —
-            // visually de-emphasised so the 8 real stages carry the eye.
-            const isUtilityColumn = stage.name === 'Hold for Next Month'
+            const activeFromCol = activeDeal ? columnIdForDeal(activeDeal) : null
+            const isActiveTarget = activeDeal != null && activeFromCol !== column.id
+            const dotColor = column.color ?? '#94a3b8'
 
             return (
-              <div
-                key={stage.id}
+              <DroppableColumn
+                key={column.id}
+                id={column.id}
+                isOver={(over) => (over ? 'border-brand bg-brand-soft' : '')}
                 className={cn(
                   // Notion-calm columns: soft grey bg, generous gutters, light border
                   'flex flex-col w-[280px] shrink-0 rounded-[10px] border bg-[#f7f7f6] dark:bg-surface-2 transition-colors',
                   isActiveTarget
                     ? 'border-brand bg-brand-soft'
                     : 'border-[#e8e8e8] dark:border-hairline',
-                  isUtilityColumn && !isActiveTarget && 'border-dashed opacity-65 hover:opacity-100',
                 )}
               >
-                {/* Column header — neutral, no per-stage colour wash.
-                 * Stage identity lives in the header text + dot only. */}
+                {/* Column header — neutral, no per-column colour wash.
+                 * Column identity lives in the header text + dot only. */}
                 <div
                   className="flex items-center justify-between gap-2 px-3.5 pt-3 pb-2.5 rounded-t-[10px] border-b border-hairline"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      {stage.color && (
-                        <span
-                          className="size-2 rounded-full shrink-0"
-                          style={{ backgroundColor: stage.color }}
-                        />
-                      )}
+                      <span
+                        className="size-2 rounded-full shrink-0"
+                        style={{ backgroundColor: dotColor }}
+                      />
                       <span className="text-[11px] uppercase tracking-[var(--jordan-tracking-label)] font-semibold text-ink truncate">
-                        {stage.name}
+                        {column.name}
                       </span>
                       <span className="ml-auto inline-flex h-[18px] min-w-[22px] items-center justify-center rounded-[4px] bg-surface-4 px-1 text-[10px] font-semibold jordan-tnum text-ink-muted">
-                        {stageDeals.length}
+                        {columnDeals.length}
                       </span>
                     </div>
                     <div className="mt-1 text-[11px] text-ink-faint">
@@ -441,29 +600,25 @@ export function KanbanBoard({
                     variant="ghost"
                     size="sm"
                     className="h-7 w-7 p-0 shrink-0"
-                    onClick={() => {
-                      setQuickAddStageId(stage.id)
-                      form.setValue('stage_id', stage.id)
-                    }}
+                    onClick={() => setQuickAddColumn(column)}
                     title="Add deal"
                   >
                     <Plus className="w-3.5 h-3.5" />
                   </Button>
                 </div>
 
-                {/* Cards */}
                 {/* Cards — vertical gap 12px (space-y-3) per Notion-calm brief */}
                 <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-[80px]">
                   <SortableContext
-                    items={stageDeals.map((d) => d.id)}
+                    items={columnDeals.map((d) => d.id)}
                     strategy={verticalListSortingStrategy}
                   >
-                    {stageDeals.length === 0 && (
+                    {columnDeals.length === 0 && (
                       <div className="rounded-[6px] border border-dashed border-hairline p-4 text-center">
                         <p className="text-[11px] text-ink-faint">No deals</p>
                       </div>
                     )}
-                    {stageDeals.map((deal) => (
+                    {columnDeals.map((deal) => (
                       <DealCard
                         key={deal.id}
                         deal={deal}
@@ -472,7 +627,7 @@ export function KanbanBoard({
                     ))}
                   </SortableContext>
                 </div>
-              </div>
+              </DroppableColumn>
             )
           })}
         </div>
@@ -509,10 +664,10 @@ export function KanbanBoard({
 
       {/* Quick-add dialog */}
       <Dialog
-        open={!!quickAddStageId}
+        open={!!quickAddColumn}
         onOpenChange={(v) => {
           if (!v) {
-            setQuickAddStageId(null)
+            setQuickAddColumn(null)
             setQuickAddProductId(null)
             setQuickAddProductTouched(false)
           }
@@ -521,7 +676,7 @@ export function KanbanBoard({
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              Add deal — {stages?.find((s) => s.id === quickAddStageId)?.name}
+              Add deal — {quickAddColumn?.name}
             </DialogTitle>
           </DialogHeader>
           <form
@@ -594,7 +749,7 @@ export function KanbanBoard({
                 variant="outline"
                 className="flex-1"
                 onClick={() => {
-                  setQuickAddStageId(null)
+                  setQuickAddColumn(null)
                   setQuickAddProductId(null)
                   setQuickAddProductTouched(false)
                 }}
