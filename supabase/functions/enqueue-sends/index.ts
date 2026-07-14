@@ -342,10 +342,13 @@ Deno.serve(async (req: Request) => {
     // Two distinct not-ready cases, handled differently so we never strand a
     // draft that could legitimately send later:
     //   • PERMANENTLY undeliverable — role-based inbox (deterministic, never
-    //     changes), OR a settled bad verdict (invalid/catch_all/disposable).
-    //     Park at 'suppressed' (terminal) + a 'failed' event.
-    //   • TEMPORARILY not decided — verification_status still 'pending'/'unknown'
-    //     (verdict not final, e.g. ZeroBounce hasn't drained yet). Leave the
+    //     changes), OR a settled bad verdict (invalid/catch_all/disposable),
+    //     OR 'unknown'. 'unknown' is terminal too: leadflow_claim_pending_contacts
+    //     only re-claims rows still at 'pending', so an 'unknown' verdict never
+    //     becomes 'valid' — leaving the draft approved would loop the cron on it
+    //     forever. Park at 'suppressed' (terminal) + a 'failed' event.
+    //   • TEMPORARILY not decided — verification_status still 'pending' (or null:
+    //     verdict not final, e.g. ZeroBounce hasn't drained yet). Leave the
     //     draft 'approved' and skip this tick — the same requeue pattern used
     //     for the daily-cap / sender-not-ready branches — so it re-enters the
     //     queue automatically once the contact verifies 'valid'.
@@ -359,7 +362,8 @@ Deno.serve(async (req: Request) => {
         contact.catch_all_flag === true ||
         contact.verification_status === 'invalid' ||
         contact.verification_status === 'catch_all' ||
-        contact.verification_status === 'disposable'
+        contact.verification_status === 'disposable' ||
+        contact.verification_status === 'unknown'
       if (permanentlyUndeliverable) {
         await supabase.from('email_drafts').update({
           status: 'suppressed',
@@ -378,7 +382,7 @@ Deno.serve(async (req: Request) => {
           },
         })
       }
-      // else: pending/unknown — leave 'approved', requeue next tick.
+      // else: still 'pending' (or null) — leave 'approved', requeue next tick.
       skipped++
       continue
     }
