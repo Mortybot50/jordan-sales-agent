@@ -99,7 +99,8 @@ interface ContactRow {
 // resolve — name → website via Places
 // ---------------------------------------------------------------------------
 
-type ResolveOutcome = 'resolved_website' | 'match_no_website' | 'dead_end' | 'has_website' | 'no_key'
+type ResolveOutcome =
+  | 'resolved_website' | 'match_no_website' | 'dead_end' | 'has_website' | 'no_key' | 'error'
 
 async function resolveVenue(
   supabase: Supa,
@@ -109,9 +110,14 @@ async function resolveVenue(
   if (!placesConfigured()) return { outcome: 'no_key' }
   if (v.website && v.website.trim().length > 0) return { outcome: 'has_website' }
 
-  const resolved = await resolveVenueWebsite(v.name, v.suburb)
+  const res = await resolveVenueWebsite(v.name, v.suburb)
 
-  if (!resolved) {
+  // Transient / config failure (REQUEST_DENIED, HTTP 4xx/5xx, network). Do NOT
+  // write enrich_source — leaving it NULL keeps the venue in the queue so it is
+  // retried once Places recovers, instead of being permanently dead-ended.
+  if (res.status === 'error') return { outcome: 'error' }
+
+  if (res.status === 'no_match') {
     if (!dryRun) {
       await supabase.from('venues')
         .update({ enrich_source: 'places_no_match', updated_at: new Date().toISOString() })
@@ -120,6 +126,7 @@ async function resolveVenue(
     return { outcome: 'dead_end' }
   }
 
+  const resolved = res.venue
   const hasWebsite = !!resolved.website && resolved.website.trim().length > 0
 
   if (dryRun) {
@@ -164,6 +171,19 @@ interface GuessResult {
   error?: string
 }
 
+/**
+ * Stamp guess_attempted_at so the guess batch stops re-selecting this venue and
+ * re-spending ZeroBounce credits. Called ONLY after an attempt actually
+ * concluded (verification ran, or there was nothing to try / already
+ * deliverable) — never after an out-of-credits or provider-error pause, which
+ * must leave the venue re-queued.
+ */
+async function markGuessAttempted(supabase: Supa, id: string): Promise<void> {
+  await supabase.from('venues')
+    .update({ guess_attempted_at: new Date().toISOString() })
+    .eq('id', id)
+}
+
 /** Pull a plausible person name off the venue's existing contacts, if any. */
 function pickPersonName(contacts: ContactRow[], venueName: string): string | null {
   const vn = venueName.trim().toLowerCase()
@@ -195,11 +215,17 @@ async function guessVenue(
     !!c.email && c.verification_status === 'valid' &&
     c.catch_all_flag !== true && c.role_based !== true,
   )
-  if (alreadyDeliverable) return { ...empty, skipped: 'already_deliverable' }
+  if (alreadyDeliverable) {
+    await markGuessAttempted(supabase, v.id)
+    return { ...empty, skipped: 'already_deliverable' }
+  }
 
   const personName = pickPersonName(contacts, v.name)
   const candidates = buildCandidates(v.website, personName, MAX_GUESS_CANDIDATES)
-  if (candidates.length === 0) return { ...empty, skipped: 'no_candidates' }
+  if (candidates.length === 0) {
+    await markGuessAttempted(supabase, v.id)
+    return { ...empty, skipped: 'no_candidates' }
+  }
 
   const roleCount = candidates.filter((c) => c.kind === 'role').length
   const personalCount = candidates.filter((c) => c.kind === 'personal').length
@@ -243,7 +269,7 @@ async function guessVenue(
       org_id: v.org_id,
       venue_id: v.id,
       email: r.email,
-      full_name: personName ?? null,
+      full_name: personName ?? v.name,
       source: 'pattern_guess',
       verification_status: 'valid',
       catch_all_flag: false,
@@ -259,7 +285,7 @@ async function guessVenue(
       org_id: v.org_id,
       venue_id: v.id,
       email: rep.email,
-      full_name: personName ?? null,
+      full_name: personName ?? v.name,
       source: 'pattern_guess',
       verification_status: 'catch_all',
       catch_all_flag: true,
@@ -278,6 +304,10 @@ async function guessVenue(
       return { ...empty, candidates: candidates.length, role_candidates: roleCount, personal_candidates: personalCount, skipped: 'zerobounce_error', error: error.message }
     }
   }
+
+  // Verification concluded for this venue (whether or not anything deliverable
+  // came back) — mark it so the batch moves on and never re-bills ZeroBounce.
+  await markGuessAttempted(supabase, v.id)
 
   return {
     guessed_valid: validRows.length,
@@ -391,12 +421,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
       if (error) return json(500, { error: `venue read failed: ${error.message}` })
 
       const rows = (venues as VenueRow[]) ?? []
-      const counts = { scanned: 0, resolved_website: 0, match_no_website: 0, dead_end: 0 }
+      const counts = { scanned: 0, resolved_website: 0, match_no_website: 0, dead_end: 0, errors: 0 }
       for (const v of rows) {
         counts.scanned++
         const { outcome } = await resolveVenue(supabase, v, dryRun)
         if (outcome === 'resolved_website') counts.resolved_website++
         else if (outcome === 'match_no_website') counts.match_no_website++
+        else if (outcome === 'error' || outcome === 'no_key') counts.errors++
         else counts.dead_end++
         await sleep(PLACES_RATE_LIMIT_MS)
       }
@@ -405,12 +436,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     // step === 'guess' — venues with a website but no deliverable email yet.
-    const { data: venues, error } = await supabase.from('venues').select(VENUE_COLS)
+    // guess_attempted_at IS NULL drains a fresh slice each run: previously-
+    // attempted venues are skipped so ZeroBounce credits are never re-spent and
+    // the backlog past `limit` is never starved.
+    let gq = supabase.from('venues').select(VENUE_COLS)
       .not('website', 'is', null)
+      .is('guess_attempted_at', null)
       .neq('archived', true)
       .neq('is_excluded', true)
       .order('icp_score', { ascending: false, nullsFirst: false })
       .limit(limit)
+    if (body.org_id) gq = gq.eq('org_id', body.org_id)
+
+    const { data: venues, error } = await gq
     if (error) return json(500, { error: `venue read failed: ${error.message}` })
 
     const rows = ((venues as VenueRow[]) ?? []).filter((v) => v.website && v.website.trim().length > 0)

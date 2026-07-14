@@ -202,6 +202,17 @@ export interface ResolvedVenue {
   business_status?: string
 }
 
+/**
+ * Discriminated resolve result so callers can tell a genuine "Places has no
+ * plausible match" (safe to record as a dead-end) apart from a transient /
+ * config failure (REQUEST_DENIED, HTTP 4xx/5xx, network) that MUST be retried
+ * rather than poisoning the venue's enrich_source permanently.
+ */
+export type ResolveVenueResult =
+  | { status: 'match'; venue: ResolvedVenue }
+  | { status: 'no_match' }
+  | { status: 'error'; reason: string }
+
 // Tokenise a venue name for a cheap similarity check. Drops generic hospitality
 // words that would otherwise let "The Wine Room" match "The Coffee Room".
 const NAME_STOPWORDS = new Set([
@@ -237,31 +248,46 @@ function nameMatches(queryName: string, resultName: string): boolean {
 
 /**
  * Resolve a name-only venue to its official website + phone via a single
- * Text Search + Details lookup. Returns null when Places has no plausible
- * match (true name-only dead-end) or when no key is configured.
+ * Text Search + Details lookup.
+ *
+ *   { status: 'match' }    — a plausible venue was found (website may still be
+ *                            absent; caller inspects venue.website)
+ *   { status: 'no_match' } — Places ran fine but returned no plausible match
+ *                            (a true name-only dead-end, safe to record)
+ *   { status: 'error' }    — no key, or a transient/config provider failure;
+ *                            caller must NOT mark the venue, so it retries
  *
  * Cost: 1 Text Search + at most 1 Details call per venue.
  */
 export async function resolveVenueWebsite(
   name: string,
   suburb: string | null,
-): Promise<ResolvedVenue | null> {
-  if (!GOOGLE_PLACES_API_KEY || !name?.trim()) return null
+): Promise<ResolveVenueResult> {
+  if (!GOOGLE_PLACES_API_KEY || !name?.trim()) return { status: 'error', reason: 'NO_KEY_OR_NAME' }
 
   const query = [name, suburb, 'Victoria', 'Australia'].filter(Boolean).join(' ')
-  const { results } = await placeTextSearch(query)
-  if (results.length === 0) return null
+  const { results, status } = await placeTextSearch(query)
 
-  // Take the highest-ranked plausible match.
+  // Only 'OK' and 'ZERO_RESULTS' are genuine provider verdicts. Anything else
+  // (REQUEST_DENIED, HTTP_4xx/5xx, FETCH_ERROR, NO_KEY) is transient/config and
+  // must be surfaced as an error so the venue is retried, never dead-ended.
+  if (status !== 'OK' && status !== 'ZERO_RESULTS') return { status: 'error', reason: status }
+  if (results.length === 0) return { status: 'no_match' }
+
+  // Take the highest-ranked plausible match. No confident match is a real
+  // no-match, not a transient error.
   const top = results.find((r) => nameMatches(name, r.name)) ?? null
-  if (!top) return null
+  if (!top) return { status: 'no_match' }
 
   const detail = await placeDetails(top.place_id)
   return {
-    place_id: top.place_id,
-    name: top.name,
-    website: detail?.website ?? undefined,
-    phone: detail?.formatted_phone_number ?? undefined,
-    business_status: detail?.business_status ?? top.business_status,
+    status: 'match',
+    venue: {
+      place_id: top.place_id,
+      name: top.name,
+      website: detail?.website ?? undefined,
+      phone: detail?.formatted_phone_number ?? undefined,
+      business_status: detail?.business_status ?? top.business_status,
+    },
   }
 }
