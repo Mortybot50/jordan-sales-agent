@@ -9,9 +9,14 @@
  * Logic mirrors the proven Python POC against Carlton venues:
  *   1. Load venue by id; bail if no website.
  *   2. Fetch homepage with browser UA, 10s timeout.
- *   3. Parse <a href> for paths matching common contact-page slugs.
+ *   3. Parse <a href> for paths matching common contact-page slugs (incl.
+ *      hospitality pages: bookings/functions/events/private-dining/careers).
  *   4. Always include /contact + /contact-us as fallbacks.
- *   5. Fetch up to 4 additional candidate pages (5 pages total), 8s timeout.
+ *   5. Fetch up to 6 additional candidate pages (7 pages total), 8s timeout.
+ *   5b. Capture social profile links (FB/IG/LinkedIn/Twitter) from the
+ *      homepage; when the on-site crawl found 0 emails, fetch the IG/FB bio
+ *      page(s) (bounded reader, ≤2 pages) and extract any published email,
+ *      dropping platform-owned/no-reply domains.
  *   6. Extract emails via mailto: + raw-text regex.
  *   7. Junk filter — drop asset filenames, tracking pixels, CDN domains.
  *   8. Domain-match — strip TLDs from email + website apex; brand roots
@@ -62,11 +67,15 @@ const CONTACT_PATHS = [
   'about', 'about-us', 'get-in-touch',
   'team', 'our-team', 'staff',
   'info', 'enquiries', 'find-us', 'visit', 'reservations', 'bookings',
+  // Hospitality-specific pages that commonly carry a bookings/events inbox.
+  'book', 'book-now', 'function', 'functions', 'events', 'private-dining',
+  'private-events', 'catering', 'group-bookings', 'venue-hire', 'hire',
+  'work-with-us', 'careers', 'hello',
 ] as const
 
 const FALLBACK_PATHS = ['contact', 'contact-us'] as const
 
-const MAX_CANDIDATE_PAGES = 4   // homepage + this = 5 pages total
+const MAX_CANDIDATE_PAGES = 6   // homepage + this = 7 pages total
 const MAX_ACCEPTED_EMAILS = 4
 const HOMEPAGE_TIMEOUT_MS = 10_000
 const SUBPAGE_TIMEOUT_MS = 8_000
@@ -80,6 +89,31 @@ const TRACKING_DOMAINS = [
   'sentry.io', 'wixpress.com', 'wordpress.com', 'sentry-cdn',
   'googleusercontent.com',
 ]
+
+// --- Social handles -------------------------------------------------------
+// Extracted from the homepage so a venue that only publishes an email in its
+// Instagram/Facebook bio can still be reached. The handle regexes capture the
+// first path segment; EXCLUDE sets drop the platform's own utility paths
+// (share dialogs, post permalinks, login) that are not a venue's profile.
+const IG_RE = /(?:https?:\/\/)?(?:www\.)?instagram\.com\/([A-Za-z0-9_.]+)/gi
+const FB_RE = /(?:https?:\/\/)?(?:www\.)?facebook\.com\/([A-Za-z0-9_.\-]+)/gi
+const LI_RE = /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/(company|in)\/([A-Za-z0-9_.\-]+)/gi
+const TW_RE = /(?:https?:\/\/)?(?:www\.)?(?:twitter|x)\.com\/([A-Za-z0-9_]+)/gi
+
+const IG_EXCLUDE = new Set(['p', 'reel', 'reels', 'explore', 'stories', 'tv', 'accounts', 'about', 'developer', 'directory', 'legal'])
+const FB_EXCLUDE = new Set(['sharer', 'sharer.php', 'plugins', 'dialog', 'tr', 'tr.php', 'login', 'login.php', 'profile.php', 'pages', 'groups', 'events', 'watch', 'marketplace', 'gaming', 'help', 'policies'])
+const TW_EXCLUDE = new Set(['intent', 'share', 'home', 'hashtag', 'search', 'i', 'settings', 'privacy', 'tos', 'login'])
+
+// Free-mail + platform-owned domains. Emails on these are never a venue's own
+// address when scraped from a social bio (they're the platform's, or generic
+// no-reply), so we drop them before storing bio-sourced contacts.
+const SOCIAL_OWN_DOMAINS = [
+  'instagram.com', 'facebook.com', 'fb.com', 'fbcdn.net', 'meta.com',
+  'cdninstagram.com', 'twitter.com', 'x.com', 'linkedin.com', 'licdn.com',
+  'sentry.io', 'example.com',
+]
+
+const MAX_SOCIAL_PAGES = 2   // IG + FB bio pages, bounded like every other fetch
 
 // ---------------------------------------------------------------------------
 // URL + domain helpers
@@ -195,6 +229,102 @@ function extractEmails(html: string): Set<string> {
   }
   for (const m of html.matchAll(EMAIL_REGEX)) {
     out.add(m[0].toLowerCase())
+  }
+  return out
+}
+
+export interface VenueSocials {
+  facebook?: string
+  instagram?: string
+  linkedin?: string
+  twitter?: string
+}
+
+/**
+ * Pull the first plausible profile URL for each platform out of homepage HTML.
+ * Returns canonical `https://<platform>/<handle>` URLs (www + query stripped),
+ * skipping the platform's own utility paths via the EXCLUDE sets. Best-effort:
+ * a platform with no match is simply omitted.
+ */
+function extractSocials(html: string): VenueSocials {
+  const out: VenueSocials = {}
+
+  for (const m of html.matchAll(IG_RE)) {
+    const h = m[1].toLowerCase()
+    if (IG_EXCLUDE.has(h)) continue
+    out.instagram = `https://instagram.com/${m[1]}`
+    break
+  }
+  for (const m of html.matchAll(FB_RE)) {
+    const h = m[1].toLowerCase()
+    if (FB_EXCLUDE.has(h)) continue
+    out.facebook = `https://facebook.com/${m[1]}`
+    break
+  }
+  for (const m of html.matchAll(LI_RE)) {
+    out.linkedin = `https://linkedin.com/${m[1].toLowerCase()}/${m[2]}`
+    break
+  }
+  for (const m of html.matchAll(TW_RE)) {
+    const h = m[1].toLowerCase()
+    if (TW_EXCLUDE.has(h)) continue
+    out.twitter = `https://twitter.com/${m[1]}`
+    break
+  }
+
+  return out
+}
+
+function isSocialOwnDomain(emailDomain: string): boolean {
+  const d = emailDomain.toLowerCase()
+  return SOCIAL_OWN_DOMAINS.some((own) => d === own || d.endsWith('.' + own))
+}
+
+// Minimal unescape for values pulled out of the embedded JSON model (\/ → /,
+// @ → @, \n → space). Enough to recover an email that JSON-escaped its
+// separators without pulling in a full JSON parser.
+function unescapeJsonish(s: string): string {
+  return s
+    .replace(/\\u0040/gi, '@')
+    .replace(/\\\//g, '/')
+    .replace(/\\n/g, ' ')
+    .replace(/\\"/g, '"')
+}
+
+/**
+ * Instagram/Facebook profile HTML is mostly NOT the profile owner: recommended
+ * accounts, adverts, embedded metadata and login/support chrome all carry their
+ * own email addresses. Scanning the whole document attributes those strangers'
+ * emails to the venue. So restrict extraction to regions that ARE owner-owned:
+ *   • the og:description meta (the human bio line both platforms render), and
+ *   • the profile's own JSON fields — biography, public_email, business_email,
+ *     and the generic email field pro accounts expose.
+ * Only emails appearing inside those windows are treated as venue-owned.
+ *
+ * NB: deliberately NO generic `"email"` JSON field — Instagram/Facebook embed
+ * recommended-account and advert objects that also carry an `"email"` key, so a
+ * generic match attributes strangers' addresses to the venue. og:description is
+ * page-owner by the Open Graph spec; biography / public_email / business_email
+ * are the profile owner's own fields.
+ */
+function extractSocialBioEmails(html: string): Set<string> {
+  const windows: string[] = []
+
+  const og = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']*)["']/i)
+  if (og) windows.push(og[1])
+
+  const jsonFields = [
+    /"biography":"((?:[^"\\]|\\.)*)"/gi,
+    /"public_email":"((?:[^"\\]|\\.)*)"/gi,
+    /"business_email":"((?:[^"\\]|\\.)*)"/gi,
+  ]
+  for (const re of jsonFields) {
+    for (const m of html.matchAll(re)) windows.push(unescapeJsonish(m[1]))
+  }
+
+  const out = new Set<string>()
+  for (const w of windows) {
+    for (const e of extractEmails(w)) out.add(e)
   }
   return out
 }
@@ -360,12 +490,20 @@ async function hunterDomainSearch(apex: string): Promise<string[]> {
 
 interface CrawlResult {
   emails: Map<string, string>  // email -> source page url
+  socials: VenueSocials
+  socialEmailUsed: boolean
   pagesChecked: number
   homepageOk: boolean
 }
 
 async function crawlVenue(rawWebsite: string): Promise<CrawlResult> {
-  const result: CrawlResult = { emails: new Map(), pagesChecked: 0, homepageOk: false }
+  const result: CrawlResult = {
+    emails: new Map(),
+    socials: {},
+    socialEmailUsed: false,
+    pagesChecked: 0,
+    homepageOk: false,
+  }
 
   const website = normaliseWebsite(rawWebsite)
   if (!website) return result
@@ -393,6 +531,10 @@ async function crawlVenue(rawWebsite: string): Promise<CrawlResult> {
 
   consider(homepage, website)
 
+  // Capture social profile links from the homepage regardless of whether we
+  // found emails — the handles are independently useful and get persisted.
+  result.socials = extractSocials(homepage)
+
   // Build candidate-path list: linked-from-home first, then fallbacks.
   const linked = findLinkedPaths(homepage)
   const candidates: string[] = [...linked]
@@ -405,6 +547,37 @@ async function crawlVenue(rawWebsite: string): Promise<CrawlResult> {
     const pageUrl = `${base}/${path}`
     const html = await fetchPage(pageUrl, SUBPAGE_TIMEOUT_MS)
     if (html) consider(html, pageUrl)
+  }
+
+  // Social-bio fallback: only when the on-site crawl surfaced nothing. Many
+  // small venues publish just an Instagram/Facebook bio email and no website
+  // address. Fetch the profile page(s) with the same bounded reader, extract
+  // emails, and drop platform-owned/no-reply domains. Domain-match is NOT
+  // required here (bio emails are frequently free-mail), so these still flow
+  // through ZeroBounce verification downstream like every other contact.
+  if (result.emails.size === 0) {
+    const socialUrls = [result.socials.instagram, result.socials.facebook]
+      .filter((u): u is string => Boolean(u))
+      .slice(0, MAX_SOCIAL_PAGES)
+    for (const socialUrl of socialUrls) {
+      if (result.emails.size >= MAX_ACCEPTED_EMAILS) break
+      const html = await fetchPage(socialUrl, SUBPAGE_TIMEOUT_MS)
+      if (!html) continue
+      result.pagesChecked++
+      // Owner-bio-scoped only — never the whole profile document, which is full
+      // of unrelated (recommended-account / advert / chrome) email addresses.
+      for (const email of extractSocialBioEmails(html)) {
+        if (result.emails.size >= MAX_ACCEPTED_EMAILS) break
+        if (isJunk(email)) continue
+        const atIdx = email.indexOf('@')
+        if (atIdx < 0) continue
+        if (isSocialOwnDomain(email.slice(atIdx + 1))) continue
+        if (!result.emails.has(email)) {
+          result.emails.set(email, socialUrl)
+          result.socialEmailUsed = true
+        }
+      }
+    }
   }
 
   return result
@@ -452,7 +625,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: venue, error: vErr } = await supabase
     .from('venues')
-    .select('id, org_id, name, website')
+    .select('id, org_id, name, website, social_facebook, social_instagram, social_linkedin, social_twitter')
     .eq('id', venueId)
     .single()
 
@@ -558,12 +731,20 @@ Deno.serve(async (req: Request) => {
     console.error(`crawl-venue-contacts: homepage fetch failed for ${venueId} (${venue.website}), hunter yielded nothing`)
   }
 
+  // Only fill social columns that are currently empty — never overwrite a
+  // handle that arrived from a richer source (Outscraper, manual entry).
+  const venueUpdate: Record<string, unknown> = {
+    contact_enrichment_status: status,
+    last_crawled_at: new Date().toISOString(),
+  }
+  if (crawl.socials.facebook && !venue.social_facebook) venueUpdate.social_facebook = crawl.socials.facebook
+  if (crawl.socials.instagram && !venue.social_instagram) venueUpdate.social_instagram = crawl.socials.instagram
+  if (crawl.socials.linkedin && !venue.social_linkedin) venueUpdate.social_linkedin = crawl.socials.linkedin
+  if (crawl.socials.twitter && !venue.social_twitter) venueUpdate.social_twitter = crawl.socials.twitter
+
   await supabase
     .from('venues')
-    .update({
-      contact_enrichment_status: status,
-      last_crawled_at: new Date().toISOString(),
-    })
+    .update(venueUpdate)
     .eq('id', venueId)
 
   return jsonResp({
@@ -571,6 +752,8 @@ Deno.serve(async (req: Request) => {
     emails_added: emailsAdded,
     emails_found: emailSources.size,
     crawl_emails: crawl.emails.size,
+    social_email_used: crawl.socialEmailUsed,
+    socials_captured: Object.keys(crawl.socials).length,
     hunter_used: hunterUsed,
     pages_checked: crawl.pagesChecked,
     status,

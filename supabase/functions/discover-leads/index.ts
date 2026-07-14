@@ -17,6 +17,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { classifyEmailTier } from '../_shared/email-tier.ts'
 import { requireServiceRoleAuth } from '../_shared/auth.ts'
 import { deriveContactName } from '../_shared/contact-name.ts'
+import { placeTextSearch, placeDetails } from '../_shared/places.ts'
 
 // @ts-expect-error Deno globals
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -168,25 +169,13 @@ async function pollOutscraperJob(jobId: string): Promise<OutscraperVenue[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Google Places adapter
+// Google Places adapter — delegates all HTTP to the shared _shared/places.ts
+// client (placeTextSearch + placeDetails) so there is exactly one Places
+// implementation across discover-leads and enrich-venue-contacts.
 // ---------------------------------------------------------------------------
 
-interface PlacesResult {
-  place_id: string
-  name: string
-  formatted_address?: string
-  geometry?: { location: { lat: number; lng: number } }
-  rating?: number
-  user_ratings_total?: number
-  business_status?: string
-  types?: string[]
-  website?: string
-  formatted_phone_number?: string
-  opening_hours?: { periods?: unknown[] }
-}
-
 async function fetchGooglePlaces(
-  query: string,
+  _query: string,
   suburb: string | null,
   categories: string[],
   limit: number,
@@ -196,34 +185,21 @@ async function fetchGooglePlaces(
 
   for (const category of categories) {
     const searchQuery = [category, suburb, 'Victoria', 'Australia'].filter(Boolean).join(' ')
-    const params = new URLSearchParams({
-      query: searchQuery,
-      key: GOOGLE_PLACES_API_KEY,
-      language: 'en',
-      region: 'au',
-    })
 
     let pageToken: string | undefined
 
     do {
-      if (pageToken) params.set('pagetoken', pageToken)
-      const resp = await fetch(
-        `https://maps.googleapis.com/maps/api/place/textsearch/json?${params}`,
+      const { results: page, nextPageToken } = await placeTextSearch(
+        searchQuery,
+        pageToken ? { pageToken } : undefined,
       )
-      if (!resp.ok) break
 
-      const data = await resp.json() as {
-        results?: PlacesResult[]
-        next_page_token?: string
-        status: string
-      }
-
-      for (const r of data.results ?? []) {
+      for (const r of page) {
         if (seen.has(r.place_id)) continue
         seen.add(r.place_id)
 
         // Fetch details for phone + website
-        const detail = await fetchPlaceDetail(r.place_id)
+        const detail = await placeDetails(r.place_id)
         const venue: OutscraperVenue = {
           place_id: r.place_id,
           name: r.name,
@@ -233,7 +209,7 @@ async function fetchGooglePlaces(
           rating: detail?.rating ?? r.rating,
           reviews: detail?.user_ratings_total ?? r.user_ratings_total,
           business_status: detail?.business_status ?? r.business_status,
-          website: detail?.website ?? r.website,
+          website: detail?.website ?? undefined,
           phone: detail?.formatted_phone_number,
           category: (r.types ?? [])[0],
           // Google Places doesn't return emails — contacts remain empty
@@ -243,7 +219,7 @@ async function fetchGooglePlaces(
         if (results.length >= limit) break
       }
 
-      pageToken = data.next_page_token
+      pageToken = nextPageToken
       if (pageToken) await new Promise((r) => setTimeout(r, 2000))
     } while (pageToken && results.length < limit)
 
@@ -251,23 +227,6 @@ async function fetchGooglePlaces(
   }
 
   return results
-}
-
-async function fetchPlaceDetail(placeId: string): Promise<PlacesResult | null> {
-  const params = new URLSearchParams({
-    place_id: placeId,
-    fields: 'name,formatted_phone_number,website,business_status,rating,user_ratings_total',
-    key: GOOGLE_PLACES_API_KEY,
-  })
-  try {
-    const resp = await fetch(
-      `https://maps.googleapis.com/maps/api/place/details/json?${params}`,
-    )
-    const data = await resp.json() as { result?: PlacesResult }
-    return data.result ?? null
-  } catch {
-    return null
-  }
 }
 
 // ---------------------------------------------------------------------------
