@@ -97,7 +97,7 @@ Deno.serve(async (req: Request) => {
   // ── 1. Crawl (only when no contacts exist) ────────────────────────────
   const { data: existingContacts } = await supabase
     .from('contacts')
-    .select('id, email, email_tier, verification_status, full_name')
+    .select('id, email, email_tier, verification_status, full_name, catch_all_flag, role_based')
     .eq('venue_id', venue.id)
 
   let contacts = existingContacts ?? []
@@ -118,7 +118,7 @@ Deno.serve(async (req: Request) => {
       const crawlBody = await r.json().catch(() => ({}))
       const { data: after } = await supabase
         .from('contacts')
-        .select('id, email, email_tier, verification_status, full_name')
+        .select('id, email, email_tier, verification_status, full_name, catch_all_flag, role_based')
         .eq('venue_id', venue.id)
       contacts = after ?? []
       steps.push({
@@ -141,15 +141,21 @@ Deno.serve(async (req: Request) => {
     if (c.verification_status && c.verification_status !== 'pending') continue
     try {
       const v = await provider.verify(c.email)
+      // The internal provider returns 'valid'|'risky'|'invalid', but the
+      // contacts_verification_status_check only allows pending|valid|invalid|
+      // catch_all|disposable|unknown. 'risky' (role address / MX lookup failed)
+      // must map to 'unknown' — writing it raw silently violates the CHECK and
+      // leaves the contact stranded at 'pending'.
+      const status = v.result === 'risky' ? 'unknown' : v.result
       await supabase
         .from('contacts')
         .update({
-          verification_status: v.result,
+          verification_status: status,
           email_tier: v.tier,
           verified_at: new Date().toISOString(),
         })
         .eq('id', c.id)
-      c.verification_status = v.result
+      c.verification_status = status
       c.email_tier = v.tier
       verified++
     } catch (e) {
@@ -162,16 +168,27 @@ Deno.serve(async (req: Request) => {
     detail: contacts.length === 0 ? 'No contacts to verify' : `${verified} contact(s) verified (internal: syntax/MX/role/tier)`,
   })
 
-  // No contact → approved + flagged. Chain ends cleanly.
+  // Send gate (Jordan's rule): a contact is only enrollable — i.e. eligible to
+  // enter the outbound sequence — when it is GENUINELY DELIVERABLE:
+  //   verification_status = 'valid' AND NOT catch_all_flag AND NOT role_based.
+  // 'pending' / 'unknown' / 'catch_all' / role inboxes (info@, bookings@ …) are
+  // NEVER auto-enrolled — they need a human to make the call. This is the
+  // machine half of the human-review gate; the draft still lands in the review
+  // queue for sign-off before anything is sent.
   const usable = contacts
-    .filter((c) => c.email && c.verification_status !== 'invalid')
+    .filter((c) =>
+      !!c.email &&
+      c.verification_status === 'valid' &&
+      c.catch_all_flag !== true &&
+      c.role_based !== true,
+    )
     .sort((a, b) => (a.email_tier ?? 3) - (b.email_tier ?? 3))
   if (usable.length === 0) {
     await supabase
       .from('venues')
-      .update({ review_notes: 'needs contact — crawl found no usable email' })
+      .update({ review_notes: 'needs contact — no verified-deliverable email (need valid, not catch-all, not role-based)' })
       .eq('id', venue.id)
-    steps.push({ step: 'deal', status: 'skipped', detail: 'No usable contact — venue flagged "needs contact"' })
+    steps.push({ step: 'deal', status: 'skipped', detail: 'No verified-deliverable contact (valid, not catch-all, not role-based) — venue flagged "needs contact"' })
     return json(200, { ok: true, needs_contact: true, steps })
   }
   const best = usable[0]

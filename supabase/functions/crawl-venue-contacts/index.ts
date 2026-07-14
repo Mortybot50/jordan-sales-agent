@@ -19,12 +19,17 @@
  *   9. Cap at 4 accepted emails per venue.
  *  10. Insert into contacts with source='website_crawl', dedup'd via the
  *      (org_id, venue_id, email) unique index.
+ *  10b. Hunter.io fallback — ONLY when the crawl found 0 emails AND a website
+ *      exists AND HUNTER_API_KEY is set: domain-search the apex, keep
+ *      confidence>=50 + domain-matched addresses, insert as source=
+ *      'hunter_enrich'. Absent key ⇒ silent no-op, crawl-only behaviour intact.
  *  11. Update venue: contact_enrichment_status + last_crawled_at.
  *
  * POST body: { venue_id: uuid }
  * Caller: service-role only (cron drainer). No user-facing UI surface.
  *
  * Required env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
+ * Optional env: HUNTER_API_KEY (enables the domain-search fallback above).
  */
 
 // @ts-expect-error Deno edge runtime
@@ -37,6 +42,14 @@ import { deriveContactName } from '../_shared/contact-name.ts'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 // @ts-expect-error Deno globals
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+// Optional enrichment fallback. When the page crawl finds 0 emails but the
+// venue has a website, we ask Hunter.io's domain-search for published
+// addresses on that apex. Absent key ⇒ the fallback is a silent no-op, so the
+// function stays fully operational without it (crawl-only behaviour unchanged).
+// @ts-expect-error Deno globals
+const HUNTER_API_KEY = Deno.env.get('HUNTER_API_KEY') ?? ''
+const HUNTER_MIN_CONFIDENCE = 50   // drop low-confidence guesses Hunter returns
+const HUNTER_MAX_EMAILS = 4
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
@@ -209,6 +222,54 @@ async function fetchPage(url: string, timeoutMs: number): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
+// Hunter.io domain-search fallback
+// ---------------------------------------------------------------------------
+
+/**
+ * Ask Hunter.io for published addresses on `apex` when the page crawl found
+ * nothing. Returns junk-filtered, domain-matched, confidence-gated emails
+ * (deduped, lower-cased, capped). Any failure — missing key, non-200, network,
+ * malformed JSON — resolves to [] so the caller degrades to "still empty"
+ * rather than throwing. Never spends a call when HUNTER_API_KEY is unset.
+ */
+async function hunterDomainSearch(apex: string): Promise<string[]> {
+  if (!HUNTER_API_KEY || !apex) return []
+  const url =
+    `https://api.hunter.io/v2/domain-search?domain=${encodeURIComponent(apex)}` +
+    `&limit=10&api_key=${encodeURIComponent(HUNTER_API_KEY)}`
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), SUBPAGE_TIMEOUT_MS)
+  try {
+    const resp = await fetch(url, { signal: ctrl.signal })
+    if (!resp.ok) {
+      console.warn(`crawl-venue-contacts: hunter HTTP ${resp.status} for ${apex}`)
+      return []
+    }
+    const data = await resp.json() as {
+      data?: { emails?: Array<{ value?: string; confidence?: number }> }
+    }
+    const out = new Set<string>()
+    for (const e of data.data?.emails ?? []) {
+      const email = (e.value ?? '').toLowerCase().trim()
+      if (!email) continue
+      if ((e.confidence ?? 0) < HUNTER_MIN_CONFIDENCE) continue
+      if (isJunk(email)) continue
+      const atIdx = email.indexOf('@')
+      if (atIdx < 0) continue
+      if (!domainMatch(email.slice(atIdx + 1), apex)) continue
+      out.add(email)
+      if (out.size >= HUNTER_MAX_EMAILS) break
+    }
+    return [...out]
+  } catch (e) {
+    console.warn(`crawl-venue-contacts: hunter fetch threw for ${apex}: ${String(e)}`)
+    return []
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Crawl one venue
 // ---------------------------------------------------------------------------
 
@@ -357,15 +418,36 @@ Deno.serve(async (req: Request) => {
     return jsonResp({ venue_id: venueId, emails_added: 0, pages_checked: 0, status: 'failed' }, 200)
   }
 
+  // Assemble the accepted emails with their discovery source. The page crawl
+  // wins; only when it returns nothing do we fall back to Hunter.io (and only
+  // if a key is configured). Hunter rows are tagged source='hunter_enrich' so
+  // the provenance stays honest in reporting and the (org,venue,email) unique
+  // index still dedupes across both paths.
+  const emailSources = new Map<string, 'website_crawl' | 'hunter_enrich'>()
+  for (const email of crawl.emails.keys()) emailSources.set(email, 'website_crawl')
+
+  let hunterUsed = false
+  if (emailSources.size === 0 && HUNTER_API_KEY) {
+    const apex = apexDomain(venue.website)
+    const hunterEmails = await hunterDomainSearch(apex)
+    hunterUsed = true
+    for (const email of hunterEmails) {
+      if (!emailSources.has(email)) emailSources.set(email, 'hunter_enrich')
+    }
+    if (hunterEmails.length > 0) {
+      console.log(`crawl-venue-contacts: hunter fallback found ${hunterEmails.length} email(s) for ${venueId} (${apex})`)
+    }
+  }
+
   let emailsAdded = 0
-  if (crawl.emails.size > 0) {
-    const rows = [...crawl.emails.keys()].map((email) => ({
+  if (emailSources.size > 0) {
+    const rows = [...emailSources.entries()].map(([email, source]) => ({
       org_id: venue.org_id,
       venue_id: venue.id,
       full_name: deriveContactName({ email, venueName: venue.name }),
       email,
       email_tier: classifyEmailTier(email),
-      source: 'website_crawl',
+      source,
       verification_status: 'pending',
     }))
 
@@ -384,10 +466,10 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  // We "found" emails if the crawler produced any candidates, even if every
+  // We "found" emails if either path produced any candidates, even if every
   // row was already in contacts (idempotent re-runs shouldn't flip the
   // status back to crawled_empty).
-  const status = crawl.emails.size > 0 ? 'crawled_found' : 'crawled_empty'
+  const status = emailSources.size > 0 ? 'crawled_found' : 'crawled_empty'
 
   await supabase
     .from('venues')
@@ -400,7 +482,9 @@ Deno.serve(async (req: Request) => {
   return jsonResp({
     venue_id: venueId,
     emails_added: emailsAdded,
-    emails_found: crawl.emails.size,
+    emails_found: emailSources.size,
+    crawl_emails: crawl.emails.size,
+    hunter_used: hunterUsed,
     pages_checked: crawl.pagesChecked,
     status,
   }, 200)

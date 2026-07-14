@@ -7,6 +7,12 @@
  *
  *   1. Suppression-list filter — drafts to suppressed addresses are marked
  *      status='suppressed' and skipped, no queue row.
+ *   1b. Verified-deliverable gate — the contact's STORED verdict must be
+ *      verification_status='valid' AND NOT catch_all_flag AND NOT role_based,
+ *      else the draft is parked at 'suppressed' (reason='not_verified_
+ *      deliverable') with a 'failed' event. This mirrors the approve-lead
+ *      enrolment gate as defence in depth: every send passes through here, so a
+ *      draft from any creation path is re-checked against the honest verdict.
  *   2. Email verification — calls NeverBounce / ZeroBounce (configurable via
  *      EMAIL_VERIFICATION_PROVIDER) BEFORE enqueueing. status != 'valid'
  *      results in the draft being parked at 'suppressed' + a 'failed' event
@@ -171,7 +177,7 @@ Deno.serve(async (req: Request) => {
   const contactIds = Array.from(new Set(fresh.map((d) => d.contact_id).filter(Boolean) as string[]))
   const { data: contacts } = await supabase
     .from('contacts')
-    .select('id, email, org_id')
+    .select('id, email, org_id, verification_status, catch_all_flag, role_based')
     .in('id', contactIds)
   const contactMap = new Map((contacts ?? []).map((c) => [c.id, c]))
 
@@ -316,6 +322,40 @@ Deno.serve(async (req: Request) => {
         status: 'suppressed',
         suppression_reason: 'suppression_list',
       }).eq('id', draft.id)
+      skipped++
+      continue
+    }
+
+    // Verified-deliverable gate (defence in depth). approve-lead only enrols a
+    // contact when it's valid AND not catch-all AND not role-based, but that's
+    // a single chokepoint at enrolment time — a draft can also arrive here from
+    // generate-draft or a manually-created row, and a contact's stored verdict
+    // can lapse after enrolment. Every send passes through enqueue-sends, so we
+    // re-assert the same rule here against the STORED ZeroBounce verdict:
+    // outreach-ready ⇔ verification_status='valid' AND NOT catch_all_flag AND
+    // NOT role_based. Anything else is parked (not deleted) so it re-enters the
+    // queue automatically if the contact later verifies clean.
+    const storedOk =
+      contact.verification_status === 'valid' &&
+      contact.catch_all_flag !== true &&
+      contact.role_based !== true
+    if (!storedOk) {
+      await supabase.from('email_drafts').update({
+        status: 'suppressed',
+        suppression_reason: 'not_verified_deliverable',
+      }).eq('id', draft.id)
+      await supabase.from('email_send_events').insert({
+        org_id: draft.org_id,
+        draft_id: draft.id,
+        event_type: 'failed',
+        metadata: {
+          reason: 'not_verified_deliverable',
+          verification_status: contact.verification_status ?? null,
+          catch_all_flag: contact.catch_all_flag ?? null,
+          role_based: contact.role_based ?? null,
+          to_hashed: await redactEmail(recipient),
+        },
+      })
       skipped++
       continue
     }

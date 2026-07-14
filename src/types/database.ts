@@ -401,6 +401,7 @@ export type Database = {
           org_id: string
           phone: string | null
           role: string | null
+          role_based: boolean | null
           signal_reopening: Json | null
           source: string | null
           updated_at: string | null
