@@ -117,6 +117,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // rawEmail is already validated above (before any mutation).
   let collectedContactId: string | null = null
   if (outcome === 'collected_email' && rawEmail && stop.venue_id) {
+    // Escape LIKE metacharacters (% _ \) so an email like `a_b@x.com` matches
+    // literally under ilike instead of treating `_`/`%` as wildcards (which
+    // could match a DIFFERENT contact at the venue). ilike keeps it
+    // case-insensitive so a case-variant of the same address still dedupes.
+    const emailPattern = rawEmail.replace(/([\\%_])/g, '\\$1')
     // .limit(1) makes .maybeSingle() safe: a venue can hold multiple contacts
     // sharing an email (no venue/email unique constraint), and an unbounded
     // .maybeSingle() would ERROR on >1 row. Order deterministically so the same
@@ -126,7 +131,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .select('id, verification_status')
       .eq('org_id', stop.org_id)
       .eq('venue_id', stop.venue_id)
-      .ilike('email', rawEmail)
+      .ilike('email', emailPattern)
       .order('created_at', { ascending: true })
       .limit(1)
       .maybeSingle()
@@ -200,34 +205,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 'approved' with no deal in its "needs contact" terminal case, so gating on
     // status alone would strand a later collected email on such a venue. A venue
     // already 'pending' is in the inbox — no-op.
-    const { data: venueRow } = await ctx.admin
+    const { data: venueRow, error: venueErr } = await ctx.admin
       .from('venues')
       .select('review_status')
       .eq('id', stop.venue_id)
       .maybeSingle()
-    const reviewStatus = (venueRow?.review_status as string | null) ?? null
-    if (reviewStatus !== 'pending') {
-      const { data: openDeal } = await ctx.admin
-        .from('deals')
-        .select('id')
-        .eq('venue_id', stop.venue_id)
-        .is('closed_at', null)
-        .limit(1)
-        .maybeSingle()
-      if (!openDeal) {
-        const { error: reviewErr } = await ctx.admin
-          .from('venues')
-          .update({
-            review_status: 'pending',
-            review_decided_at: null,
-            review_decided_by: null,
-          })
-          .eq('id', stop.venue_id)
-          .eq('org_id', stop.org_id)
-        if (reviewErr) {
-          // Non-fatal: the contact is saved either way. Worst case the venue
-          // isn't re-surfaced and Jordan re-approves it manually.
-          console.error('[route/mark-visited] collected_email venue re-surface', reviewErr)
+    // If we can't read the venue's current state, DON'T guess. A transient read
+    // failure surfacing as null would make the venue look non-pending, and we'd
+    // fall through to the open-deal check + reset. Skip the whole re-surface on
+    // error — the contact is already saved, worst case Jordan re-approves.
+    if (venueErr) {
+      console.error('[route/mark-visited] collected_email venue read', venueErr)
+    } else {
+      const reviewStatus = (venueRow?.review_status as string | null) ?? null
+      if (reviewStatus !== 'pending') {
+        const { data: openDeal, error: dealErr } = await ctx.admin
+          .from('deals')
+          .select('id')
+          .eq('venue_id', stop.venue_id)
+          .is('closed_at', null)
+          .limit(1)
+          .maybeSingle()
+        // Same reasoning: a failed open-deal read makes an ACTIVE venue look
+        // dealless, so we'd wrongly reset it to pending. Only reset when we've
+        // positively confirmed there's no open deal.
+        if (dealErr) {
+          console.error('[route/mark-visited] collected_email open-deal read', dealErr)
+        } else if (!openDeal) {
+          const { error: reviewErr } = await ctx.admin
+            .from('venues')
+            .update({
+              review_status: 'pending',
+              review_decided_at: null,
+              review_decided_by: null,
+            })
+            .eq('id', stop.venue_id)
+            .eq('org_id', stop.org_id)
+          if (reviewErr) {
+            // Non-fatal: the contact is saved either way. Worst case the venue
+            // isn't re-surfaced and Jordan re-approves it manually.
+            console.error('[route/mark-visited] collected_email venue re-surface', reviewErr)
+          }
         }
       }
     }
