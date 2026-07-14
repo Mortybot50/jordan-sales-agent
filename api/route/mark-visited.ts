@@ -66,6 +66,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(422).json({ error: 'lat/lng must be numeric' })
   }
 
+  // Validate the collected email BEFORE any DB mutation. Otherwise a malformed
+  // (or empty) email records the visit + links the stop, then 422s — and the
+  // retry hits the already-visited 409, so the contact is never created and
+  // there's no recovery path.
+  const rawEmail = body.collected_email == null ? '' : String(body.collected_email).trim().toLowerCase()
+  if (outcome === 'collected_email') {
+    if (!rawEmail) {
+      return res.status(422).json({ error: 'collected_email is required when outcome is collected_email' })
+    }
+    if (!EMAIL_RE.test(rawEmail) || rawEmail.length > 320) {
+      return res.status(422).json({ error: 'collected_email is not a valid email address' })
+    }
+  }
+
   // Confirm the stop belongs to the caller (RLS handles this implicitly via
   // the join to route_days.user_id, but we want a 404 vs a silent zero-row).
   const { data: stop, error: stopErr } = await ctx.userClient
@@ -123,12 +137,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Create a contact at verification_status='pending' (the column default) so
   // the verify-contacts cron picks it up → ZeroBounce → verify→draft. This
   // NEVER auto-sends — the human approve/send gate is untouched.
+  // rawEmail is already validated above (before any mutation) when the outcome
+  // is collected_email. A missing venue_id means we can't attach a contact.
   let collectedContactId: string | null = null
-  const rawEmail = body.collected_email == null ? '' : String(body.collected_email).trim().toLowerCase()
   if (outcome === 'collected_email' && rawEmail && stop.venue_id) {
-    if (!EMAIL_RE.test(rawEmail) || rawEmail.length > 320) {
-      return res.status(422).json({ error: 'collected_email is not a valid email address', field_visit_id: visit.id })
-    }
     // Skip if this venue already has the same email (don't create duplicates).
     const { data: existing } = await ctx.admin
       .from('contacts')
