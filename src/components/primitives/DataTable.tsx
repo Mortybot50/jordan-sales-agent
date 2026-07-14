@@ -86,36 +86,50 @@ export function DataTable<T>({
   className,
   ...rest
 }: DataTableProps<T>) {
-  // The header row and each body row are SEPARATE grid containers that must
-  // resolve to identical column tracks. A content-sized track (`1fr` or
-  // `minmax(min, 1fr)`) resolves its `max-content` contribution from ITS OWN
-  // content, so under the table's `min-width: max-content` overflow the header
-  // (short label) and body (longer cell) size a flexible track differently —
-  // shifting every value one column right of its header on narrow viewports.
-  // Fix: flexible columns get an explicit fixed width so every track is
-  // deterministic and identical across both grids. Content truncates within.
-  // Header and body are SEPARATE grid containers, so their column tracks must
-  // resolve to the exact same widths. A content-flexible track (`1fr` or
-  // `minmax(min, Nfr)`) resolves partly from its OWN content, so under the
-  // table's `min-width: max-content` overflow the header (short label) and body
-  // (longer cell) size that track differently — shifting every value one column
-  // right of its header on narrow viewports (the reported bug). Only
-  // deterministic (fr-free) tracks are guaranteed identical in both grids.
+  // Header row and body rows are SEPARATE grid containers that share one
+  // `gridTemplateColumns` string. They stay aligned ONLY while every grid
+  // resolves its tracks to the same widths.
   //
-  // normalizeTrack strips flexibility so alignment is bulletproof for every
-  // consumer, without each page having to remember to avoid `fr`:
-  //   - no width           -> fixed 220px
-  //   - 'minmax(min, Nfr)'  -> fixed `min` (the floor becomes the width)
-  //   - any 'Nfr'           -> fixed 200px fallback
-  //   - explicit fixed len  -> unchanged (e.g. '110px', '64px')
-  const normalizeTrack = (w: string | undefined): string => {
-    if (!w) return '220px'
-    const mm = w.match(/minmax\(\s*([^,]+?)\s*,\s*[^)]*fr\s*\)/i)
-    if (mm) return mm[1].trim()
-    if (/\bfr\b/i.test(w)) return '200px'
+  // The previous `min-width: max-content` on each grid broke that: it sized
+  // every grid to ITS OWN content, so a flexible track (`1fr`/`minmax(min,Nfr)`)
+  // grew wider in the body (long venue name) than in the header (short label),
+  // shifting every value one column right of its header on narrow viewports.
+  //
+  // Fix: give the flexible columns a fixed MIN floor (so content has room and
+  // the table can still scroll horizontally when the sum of floors exceeds the
+  // viewport), and set that shared floor-sum as ONE `min-width` on both grids
+  // instead of per-grid `max-content`. Flexible tracks keep their `1fr` growth
+  // for wide viewports (no truncation-with-room regression), and because both
+  // grids share the same explicit min-width + same track string, they resolve
+  // identical widths at every viewport. `minmax(0, ...)` floors are bumped to a
+  // real floor so the intended min is honoured on narrow screens.
+  const withFloor = (w: string | undefined): string => {
+    if (!w) return 'minmax(180px, 1fr)'
+    // minmax(0, Nfr) has no real floor → give it one so it can't collapse.
+    const zeroFloor = w.match(/^minmax\(\s*0\w*\s*,\s*([^)]*fr)\s*\)$/i)
+    if (zeroFloor) return `minmax(160px, ${zeroFloor[1].trim()})`
     return w
   }
-  const gridCols = columns.map((c) => normalizeTrack(c.width)).join(' ')
+  const gridCols = columns.map((c) => withFloor(c.width)).join(' ')
+  // Sum the fixed floors (fixed px widths + the min side of each minmax/flex)
+  // to get one shared min-width both grids use. This replaces per-grid
+  // `max-content`, which was the source of the header/body drift.
+  const floorPx = (w: string | undefined): number => {
+    if (!w) return 180
+    const mm = w.match(/minmax\(\s*([\d.]+)px/i)
+    if (mm) return parseFloat(mm[1])
+    if (/^0\w*$/.test(w.trim()) || /^minmax\(\s*0/i.test(w)) return 160
+    const px = w.match(/^([\d.]+)px$/i)
+    if (px) return parseFloat(px[1])
+    if (/\bfr\b/i.test(w)) return 160
+    return 120
+  }
+  const GRID_GAP_PX = 12 // gap-3
+  const H_PAD_PX = 24 // px-3 both sides
+  const minTableWidth =
+    columns.reduce((sum, c) => sum + floorPx(c.width), 0) +
+    GRID_GAP_PX * Math.max(0, columns.length - 1) +
+    H_PAD_PX
   const rowHeight = rowHeightVar[density]
 
   return (
@@ -144,7 +158,7 @@ export function DataTable<T>({
       <div
         role="row"
         className="sticky top-0 z-[1] grid items-center gap-3 border-b border-hairline bg-surface-2 px-3"
-        style={{ gridTemplateColumns: gridCols, height: rowHeight, minWidth: 'max-content' }}
+        style={{ gridTemplateColumns: gridCols, height: rowHeight, minWidth: minTableWidth }}
       >
         {columns.map((col) => {
           const dir: SortDirection = sort?.columnId === col.id ? sort.direction : null
@@ -175,7 +189,7 @@ export function DataTable<T>({
       </div>
 
       {/* Body */}
-      <div role="rowgroup" aria-label={ariaLabel} aria-busy={loading} style={{ minWidth: 'max-content' }}>
+      <div role="rowgroup" aria-label={ariaLabel} aria-busy={loading} style={{ minWidth: minTableWidth }}>
         {error ? (
           <div className="p-3">
             <ErrorAlert error={error} onRetry={onRetry ?? undefined} title="Couldn't load" />
@@ -207,7 +221,7 @@ export function DataTable<T>({
                   'last:border-b-0',
                   onRowClick && 'cursor-pointer hover:bg-surface-3 focus-within:bg-surface-3',
                 )}
-                style={{ gridTemplateColumns: gridCols, minHeight: rowHeight, minWidth: 'max-content' }}
+                style={{ gridTemplateColumns: gridCols, minHeight: rowHeight, minWidth: minTableWidth }}
               >
                 {columns.map((col) => {
                   const alignCls =
