@@ -300,6 +300,12 @@ function unescapeJsonish(s: string): string {
  *   • the profile's own JSON fields — biography, public_email, business_email,
  *     and the generic email field pro accounts expose.
  * Only emails appearing inside those windows are treated as venue-owned.
+ *
+ * NB: deliberately NO generic `"email"` JSON field — Instagram/Facebook embed
+ * recommended-account and advert objects that also carry an `"email"` key, so a
+ * generic match attributes strangers' addresses to the venue. og:description is
+ * page-owner by the Open Graph spec; biography / public_email / business_email
+ * are the profile owner's own fields.
  */
 function extractSocialBioEmails(html: string): Set<string> {
   const windows: string[] = []
@@ -311,7 +317,6 @@ function extractSocialBioEmails(html: string): Set<string> {
     /"biography":"((?:[^"\\]|\\.)*)"/gi,
     /"public_email":"((?:[^"\\]|\\.)*)"/gi,
     /"business_email":"((?:[^"\\]|\\.)*)"/gi,
-    /"email":"((?:[^"\\]|\\.)*)"/gi,
   ]
   for (const re of jsonFields) {
     for (const m of html.matchAll(re)) windows.push(unescapeJsonish(m[1]))
