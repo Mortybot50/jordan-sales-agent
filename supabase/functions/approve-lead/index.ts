@@ -141,12 +141,25 @@ Deno.serve(async (req: Request) => {
     if (c.verification_status && c.verification_status !== 'pending') continue
     try {
       const v = await provider.verify(c.email)
-      // The internal provider returns 'valid'|'risky'|'invalid', but the
-      // contacts_verification_status_check only allows pending|valid|invalid|
-      // catch_all|disposable|unknown. 'risky' (role address / MX lookup failed)
-      // must map to 'unknown' — writing it raw silently violates the CHECK and
-      // leaves the contact stranded at 'pending'.
-      const status = v.result === 'risky' ? 'unknown' : v.result
+      // The internal provider returns 'valid'|'risky'|'invalid'. It's only a
+      // cheap first filter (syntax/MX/role/tier); ZeroBounce (the
+      // leadflow-verify-contacts cron) is the authoritative verdict and it only
+      // claims rows still at 'pending'. So we persist ONLY a confident internal
+      // verdict (valid/invalid). 'risky' (role address / inconclusive MX) is
+      // left at 'pending' — unwritten — so the contact stays in the ZeroBounce
+      // backlog rather than being stranded at a terminal 'unknown' that no
+      // drainer ever revisits (and 'risky' isn't in
+      // contacts_verification_status_check anyway). We still stamp the tier,
+      // which is useful regardless of the verdict.
+      if (v.result === 'risky') {
+        await supabase
+          .from('contacts')
+          .update({ email_tier: v.tier })
+          .eq('id', c.id)
+        c.email_tier = v.tier
+        continue
+      }
+      const status = v.result
       await supabase
         .from('contacts')
         .update({

@@ -19,10 +19,12 @@
  *   9. Cap at 4 accepted emails per venue.
  *  10. Insert into contacts with source='website_crawl', dedup'd via the
  *      (org_id, venue_id, email) unique index.
- *  10b. Hunter.io fallback — ONLY when the crawl found 0 emails AND a website
+ *  10b. Hunter.io fallback — whenever the crawl found 0 emails AND a website
  *      exists AND HUNTER_API_KEY is set: domain-search the apex, keep
  *      confidence>=50 + domain-matched addresses, insert as source=
- *      'hunter_enrich'. Absent key ⇒ silent no-op, crawl-only behaviour intact.
+ *      'hunter_enrich'. Runs even when the homepage fetch failed (a valid
+ *      domain with a bot-blocked/timed-out homepage is exactly the
+ *      domain-enrichment case). Absent key ⇒ silent no-op, crawl-only intact.
  *  11. Update venue: contact_enrichment_status + last_crawled_at.
  *
  * POST body: { venue_id: uuid }
@@ -406,23 +408,16 @@ Deno.serve(async (req: Request) => {
     return jsonResp({ venue_id: venueId, emails_added: 0, pages_checked: 0, status: 'failed' }, 200)
   }
 
-  if (!crawl.homepageOk) {
-    console.error(`crawl-venue-contacts: homepage fetch failed for ${venueId} (${venue.website})`)
-    await supabase
-      .from('venues')
-      .update({
-        contact_enrichment_status: 'failed',
-        last_crawled_at: new Date().toISOString(),
-      })
-      .eq('id', venueId)
-    return jsonResp({ venue_id: venueId, emails_added: 0, pages_checked: 0, status: 'failed' }, 200)
-  }
-
   // Assemble the accepted emails with their discovery source. The page crawl
   // wins; only when it returns nothing do we fall back to Hunter.io (and only
   // if a key is configured). Hunter rows are tagged source='hunter_enrich' so
   // the provenance stays honest in reporting and the (org,venue,email) unique
   // index still dedupes across both paths.
+  //
+  // NOTE: a failed homepage fetch (bot-block, timeout, non-HTML) is NOT
+  // terminal — a venue with a valid website domain but an unreachable homepage
+  // is exactly the domain-enrichment case, so Hunter still runs below. Only if
+  // Hunter also comes back empty does a homepage failure resolve to 'failed'.
   const emailSources = new Map<string, 'website_crawl' | 'hunter_enrich'>()
   for (const email of crawl.emails.keys()) emailSources.set(email, 'website_crawl')
 
@@ -468,8 +463,17 @@ Deno.serve(async (req: Request) => {
 
   // We "found" emails if either path produced any candidates, even if every
   // row was already in contacts (idempotent re-runs shouldn't flip the
-  // status back to crawled_empty).
-  const status = emailSources.size > 0 ? 'crawled_found' : 'crawled_empty'
+  // status back to crawled_empty). If nothing was found AND the homepage never
+  // loaded, the run is 'failed' (unreachable site) rather than a genuine
+  // 'crawled_empty' (site loaded, no emails published).
+  const status = emailSources.size > 0
+    ? 'crawled_found'
+    : crawl.homepageOk
+      ? 'crawled_empty'
+      : 'failed'
+  if (!crawl.homepageOk && emailSources.size === 0) {
+    console.error(`crawl-venue-contacts: homepage fetch failed for ${venueId} (${venue.website}), hunter yielded nothing`)
+  }
 
   await supabase
     .from('venues')
