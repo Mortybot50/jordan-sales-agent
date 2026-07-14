@@ -23,6 +23,7 @@
 // @ts-expect-error Deno edge runtime import
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { requireServiceRoleAuth } from '../_shared/auth.ts'
+import { zeroBounceValidateBatch, type ZbVerdict } from '../_shared/zerobounce.ts'
 
 // @ts-expect-error Deno globals
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -42,13 +43,6 @@ const corsHeaders = {
 
 type VerificationStatus =
   | 'valid' | 'invalid' | 'catch_all' | 'disposable' | 'unknown'
-
-interface ZbResult {
-  email_address?: string
-  address?: string
-  status?: string
-  sub_status?: string
-}
 
 /**
  * Map a ZeroBounce verdict onto our CHECK-constrained vocabulary.
@@ -87,50 +81,6 @@ function mapZeroBounce(status: string | undefined, subStatus: string | undefined
     default:
       return 'unknown'
   }
-}
-
-async function zeroBounceBatch(emails: string[]): Promise<Map<string, ZbResult>> {
-  // bulkapi.zerobounce.net is DEPRECATED — it now serves a Cloudflare-WAF 403
-  // ("Access Restricted") for every request. The batch endpoint lives on the
-  // main API host. Confirmed 13/07/2026 when the verify cron 403'd on launch.
-  const resp = await fetch('https://api.zerobounce.net/v2/validatebatch', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      api_key: ZEROBOUNCE_API_KEY,
-      email_batch: emails.map((e) => ({ email_address: e, ip_address: '' })),
-    }),
-  })
-
-  if (!resp.ok) {
-    throw new Error(`ZeroBounce HTTP ${resp.status}: ${(await resp.text()).slice(0, 200)}`)
-  }
-
-  const json = await resp.json() as {
-    email_batch?: ZbResult[]
-    errors?: { error?: string; email_address?: string }[]
-  }
-
-  // The migrated endpoint reports key/credit problems as HTTP 200 with an
-  // `errors` array and an empty batch — fail loud instead of silently marking
-  // nothing, so a dead key surfaces in the cron log rather than a stalled queue.
-  if ((json.email_batch ?? []).length === 0 && (json.errors ?? []).length > 0) {
-    throw new Error(`ZeroBounce rejected batch: ${JSON.stringify(json.errors).slice(0, 200)}`)
-  }
-
-  const out = new Map<string, ZbResult>()
-  const rawCounts: Record<string, number> = {}
-  for (const r of json.email_batch ?? []) {
-    const key = (r.address ?? r.email_address ?? '').toLowerCase().trim()
-    if (key) out.set(key, r)
-    const combo = `${r.status ?? '?'}:${r.sub_status || '-'}`
-    rawCounts[combo] = (rawCounts[combo] ?? 0) + 1
-  }
-  // Raw verdict distribution (status:sub_status) — sub_status isn't persisted
-  // on contacts, so this log line is the only audit trail of WHY each batch
-  // landed in its buckets (e.g. do_not_mail:role_based vs do_not_mail:toxic).
-  console.log(`verify-contacts: zerobounce verdicts ${JSON.stringify(rawCounts)}`)
-  return out
 }
 
 function json(status: number, body: unknown): Response {
@@ -179,12 +129,30 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // De-dupe emails for the ZeroBounce call (multiple contacts can share one).
   const emails = Array.from(new Set(rows.map((r) => r.email!.toLowerCase().trim())))
 
-  let verdicts: Map<string, ZbResult>
-  try {
-    verdicts = await zeroBounceBatch(emails)
-  } catch (e) {
-    return json(502, { error: `ZeroBounce call failed: ${String(e)}`, checked: rows.length, updated: 0 })
+  const outcome = await zeroBounceValidateBatch(ZEROBOUNCE_API_KEY, emails)
+  if (!outcome.ok) {
+    // Out-of-credits is the known steady state — no-op cleanly, leave the
+    // whole batch pending (the claim lease expires and they re-queue), and
+    // return 200 so the cron log shows a benign pause rather than a crash.
+    // Any OTHER failure surfaces as 502 so a genuinely dead key is loud.
+    if (outcome.outOfCredits) {
+      console.log(`verify-contacts: zerobounce out of credits — leaving ${rows.length} pending`)
+      return json(200, { checked: rows.length, updated: 0, out_of_credits: true, message: 'zerobounce out of credits — left pending' })
+    }
+    console.error(`verify-contacts: zerobounce failed: ${outcome.error}`)
+    return json(502, { error: `ZeroBounce call failed: ${outcome.error}`, checked: rows.length, updated: 0 })
   }
+  const verdicts: Map<string, ZbVerdict> = outcome.verdicts
+
+  // Raw verdict distribution (status:sub_status) — sub_status isn't persisted
+  // on contacts, so this log line is the only audit trail of WHY each batch
+  // landed in its buckets (e.g. do_not_mail:role_based vs do_not_mail:toxic).
+  const rawCounts: Record<string, number> = {}
+  for (const v of verdicts.values()) {
+    const combo = `${v.status || '?'}:${v.sub_status || '-'}`
+    rawCounts[combo] = (rawCounts[combo] ?? 0) + 1
+  }
+  console.log(`verify-contacts: zerobounce verdicts ${JSON.stringify(rawCounts)}`)
 
   const now = new Date().toISOString()
   const counts: Record<string, number> = {}
